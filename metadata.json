@@ -1,0 +1,6 @@
+{
+  "name": "Proyecty",
+  "description": "Plataforma de gestión de proyectos, convenios, presupuestos, comprobantes e historial.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
