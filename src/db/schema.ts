@@ -201,7 +201,7 @@ export const indicators = pgTable('indicators', {
   targetValue: doublePrecision('target_value').notNull(),
   currentValue: doublePrecision('current_value').notNull().default(0),
   unit: text('unit').notNull(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
 });
 
 // --- AUDIT LOGS ---
@@ -283,7 +283,7 @@ export const tasks = pgTable('tasks', {
   estimatedHours: doublePrecision('estimated_hours'),
   position: integer('position').notNull().default(0), // Orden dentro de la columna Kanban
   createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
 });
 
 export const taskDependencies = pgTable('task_dependencies', {

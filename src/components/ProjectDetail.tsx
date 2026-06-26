@@ -785,6 +785,7 @@ export default function ProjectDetail({
             project={project}
             isEditable={isEditable}
             refreshProject={loadProjectDetails}
+            token={token}
           />
         )}
 

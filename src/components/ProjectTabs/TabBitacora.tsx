@@ -15,9 +15,10 @@ interface TabBitacoraProps {
   project: ProjectFull;
   isEditable: boolean;
   refreshProject: () => void;
+  token: string;
 }
 
-export default function TabBitacora({ project, isEditable, refreshProject }: TabBitacoraProps) {
+export default function TabBitacora({ project, isEditable, refreshProject, token }: TabBitacoraProps) {
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,6 @@ export default function TabBitacora({ project, isEditable, refreshProject }: Tab
 
   const fetchLogs = async () => {
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/projects/${project.id}/logs`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -50,23 +50,43 @@ export default function TabBitacora({ project, isEditable, refreshProject }: Tab
     if (!newLogContent.trim()) return;
 
     setIsSubmitting(true);
+    setError(null);
+    
+    // Optimistic UI update
+    const tempId = -Date.now();
+    const optimisticLog: Log = {
+      id: tempId,
+      type: newLogType,
+      content: newLogContent,
+      date: new Date().toISOString(),
+      authorId: 0,
+      authorName: 'Guardando...'
+    };
+    
+    const previousLogs = [...logs];
+    setLogs([optimisticLog, ...logs]);
+    setNewLogContent('');
+
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/projects/${project.id}/logs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ type: newLogType, content: newLogContent })
+        body: JSON.stringify({ type: newLogType, content: optimisticLog.content })
       });
+      
       if (!res.ok) throw new Error('Error al registrar novedad');
       
       const addedLog = await res.json();
-      setLogs([addedLog, ...logs]);
-      setNewLogContent('');
+      // Replace optimistic log with real one
+      setLogs(currentLogs => currentLogs.map(log => log.id === tempId ? addedLog : log));
     } catch (err: any) {
+      // Rollback on error
+      setLogs(previousLogs);
       setError(err.message);
+      setNewLogContent(optimisticLog.content); // Restore input
     } finally {
       setIsSubmitting(false);
     }
