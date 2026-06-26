@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { db } from './src/db/index.ts';
@@ -19,6 +21,8 @@ import {
   auditLogs,
   users,
   roles,
+  donors,
+  budgetVersions,
 } from './src/db/schema.ts';
 import { eq, desc, and, inArray, ilike, sql } from 'drizzle-orm';
 
@@ -105,11 +109,20 @@ app.get('/api/projects', requireAuth, async (req: AuthRequest, res) => {
     if (riskLevel) conditions.push(eq(projects.riskLevel, riskLevel as string));
     if (search) conditions.push(ilike(projects.name, `%${search}%`));
 
-    const allProjects = await db.select().from(projects)
+    const rawProjects = await db.select({
+      project: projects,
+      donorName: donors.name
+    }).from(projects)
+      .leftJoin(donors, eq(projects.donorId, donors.id))
       .where(and(...conditions))
       .orderBy(desc(projects.createdAt))
       .limit(limitNum)
       .offset(offset);
+
+    const allProjects = rawProjects.map(r => ({
+      ...r.project,
+      donor: r.donorName
+    }));
 
     const totalCountRes = await db.select({ count: sql`count(*)` }).from(projects).where(and(...conditions));
     const totalItems = Number(totalCountRes[0].count);
@@ -143,54 +156,86 @@ app.post('/api/projects', requireAuth, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Los campos Código, Nombre, Donante y Presupuesto son requeridos.' });
     }
 
-    const newProject = await db.insert(projects).values({
-      tenantId: req.user!.tenantId,
-      code,
-      name,
-      donorId: parseInt(donor),
-      status: 'PLANIFICACIÓN',
-      riskLevel: 'Bajo',
-      approvedBudget: parseFloat(approvedBudget),
-      physicalProgress: physicalProgress ? parseInt(physicalProgress) : 0,
-      financialProgress: financialProgress ? parseInt(financialProgress) : 0,
-      nextMilestoneDate: nextMilestoneDate || 'Por definir',
-      nextMilestoneTitle: nextMilestoneTitle || 'Inicio de proyecto',
-      score: score ? parseInt(score) : 100,
-      description: description || '',
-    }).returning();
+    try {
+      const createdProject = await db.transaction(async (tx) => {
+        let finalDonorId: number | null = null;
+        if (donor) {
+          const existingDonor = await tx.select().from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
+          if (existingDonor.length > 0) {
+            finalDonorId = existingDonor[0].id;
+          } else {
+            const newDonor = await tx.insert(donors).values({
+              tenantId: req.user!.tenantId,
+              name: donor,
+              type: 'Externo',
+            }).returning();
+            finalDonorId = newDonor[0].id;
+          }
+        }
 
-    const createdProject = newProject[0];
+        const newProject = await tx.insert(projects).values({
+          tenantId: req.user!.tenantId,
+          code,
+          name,
+          donorId: finalDonorId,
+          status: 'PLANIFICACIÓN',
+          riskLevel: 'Bajo',
+          approvedBudget: parseFloat(approvedBudget),
+          physicalProgress: physicalProgress ? parseInt(physicalProgress) : 0,
+          financialProgress: financialProgress ? parseInt(financialProgress) : 0,
+          nextMilestoneDate: nextMilestoneDate || 'Por definir',
+          nextMilestoneTitle: nextMilestoneTitle || 'Inicio de proyecto',
+          score: score ? parseInt(score) : 100,
+          description: description || '',
+        }).returning();
 
-    const defaultBudgetItem = await db.insert(budgetLines).values({
-      projectId: createdProject.id,
-      budgetVersionId: 1,
-      code: '1000',
-      category: 'Operación General',
-      subcategory: 'Gasto Administrativo Inicial',
-      approvedAmount: createdProject.approvedBudget,
-      reformulatedAmount: createdProject.approvedBudget,
-      executedAmount: 0,
-      balance: createdProject.approvedBudget,
-      progress: 0,
-      status: 'NORMAL'
-    }).returning();
+        const cp = newProject[0];
 
-    // Auto-create a basic Agreement placeholder
-    await db.insert(agreements).values({
-      projectId: createdProject.id,
-      counterparty: String(donor),
-      signedDate: new Date(),
-      amount: createdProject.approvedBudget,
-      durationMonths: 12,
-      startDate: new Date(),
-      endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
-      remainingDays: 365,
-      status: 'Activo'
-    });
+        // Create default budget version
+        const newBudgetVersion = await tx.insert(budgetVersions).values({
+          projectId: cp.id,
+          versionName: 'V1 - Inicial',
+          isApproved: true,
+        }).returning();
+        const budgetVersionId = newBudgetVersion[0].id;
 
-    await logActivity(createdProject.id, userName, `Creó el proyecto "${name}" (Código: ${code}) con un presupuesto aprobado de $${approvedBudget.toLocaleString()}`);
+        await tx.insert(budgetLines).values({
+          projectId: cp.id,
+          budgetVersionId: budgetVersionId,
+          code: '1000',
+          category: 'Operación General',
+          subcategory: 'Gasto Administrativo Inicial',
+          approvedAmount: cp.approvedBudget,
+          reformulatedAmount: cp.approvedBudget,
+          executedAmount: 0,
+          balance: cp.approvedBudget,
+          progress: 0,
+          status: 'NORMAL'
+        });
 
-    res.status(201).json(createdProject);
+        // Auto-create a basic Agreement placeholder
+        await tx.insert(agreements).values({
+          projectId: cp.id,
+          counterparty: String(donor),
+          signedDate: new Date(),
+          amount: cp.approvedBudget,
+          durationMonths: 12,
+          startDate: new Date(),
+          endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+          remainingDays: 365,
+          status: 'Activo'
+        });
+
+        return cp;
+      });
+
+      await logActivity(createdProject.id, userName, `Creó el proyecto "${name}" (Código: ${code}) con un presupuesto aprobado de $${approvedBudget.toLocaleString()}`);
+
+      res.status(201).json(createdProject);
+    } catch (txErr: any) {
+      console.error('Project creation transaction failed:', txErr);
+      throw txErr; // Forward to the outer catch block
+    }
   } catch (err: any) {
     console.error('Error creating project:', err);
     if (err.message?.includes('projects_code_unique')) {
@@ -296,12 +341,21 @@ app.get('/api/projects/:id', requireAuth, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'ID de proyecto inválido' });
     }
 
-    const projectResult = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.tenantId, req.user!.tenantId)));
+    const projectResult = await db.select({
+      project: projects,
+      donorName: donors.name
+    }).from(projects)
+      .leftJoin(donors, eq(projects.donorId, donors.id))
+      .where(and(eq(projects.id, projectId), eq(projects.tenantId, req.user!.tenantId)));
+      
     if (projectResult.length === 0) {
       return res.status(404).json({ error: 'Proyecto no encontrado' });
     }
 
-    const project = projectResult[0];
+    const project = {
+      ...projectResult[0].project,
+      donor: projectResult[0].donorName
+    };
 
     // Fetch relational datasets
     const projectAgreements = await db.select().from(agreements).where(eq(agreements.projectId, projectId));
@@ -1137,6 +1191,48 @@ app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
 // 8. USER MANAGEMENT & MONITORING ENDPOINTS
 // ==========================================
 
+function mapRoleNameToEnum(name: string): string {
+  if (name === 'Director' || name === 'SuperAdmin Tech' || name === 'Admin de Organización') return 'DIRECTOR';
+  if (name === 'Coordinador de Proyecto') return 'MANAGER';
+  if (name === 'Administrativo / Finanzas') return 'FINANCE';
+  if (name === 'Auditor') return 'AUDITOR';
+  if (name === 'Donante / Financiador') return 'FINANCIADOR';
+  return 'DIRECTOR';
+}
+
+function mapEnumToRoleName(roleEnum: string): string {
+  if (roleEnum === 'DIRECTOR') return 'Director';
+  if (roleEnum === 'MANAGER') return 'Coordinador de Proyecto';
+  if (roleEnum === 'FINANCE') return 'Administrativo / Finanzas';
+  if (roleEnum === 'AUDITOR') return 'Auditor';
+  if (roleEnum === 'FINANCIADOR') return 'Donante / Financiador';
+  return 'Director';
+}
+
+// Public demo users endpoint
+app.get('/api/public/demo-users', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Endpoint not available in production' });
+  }
+  try {
+    const rawUsers = await db.select({
+      user: users,
+      roleName: roles.name
+    }).from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .orderBy(users.id);
+      
+    const mapped = rawUsers.map(r => ({
+      ...r.user,
+      role: mapRoleNameToEnum(r.roleName || '')
+    }));
+    res.json(mapped);
+  } catch (err) {
+    console.error('Error fetching demo users', err);
+    res.status(500).json({ error: 'Failed to fetch demo users' });
+  }
+});
+
 // List all users with activity log counts and last active status (DIRECTOR only)
 app.get('/api/users', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -1145,10 +1241,18 @@ app.get('/api/users', requireAuth, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director / SuperAdmin para gestionar usuarios.' });
     }
 
-    const allUsers = await db.select().from(users).where(eq(users.tenantId, req.user!.tenantId)).orderBy(desc(users.createdAt));
+    const allUsers = await db.select({
+      user: users,
+      roleName: roles.name
+    }).from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.tenantId, req.user!.tenantId))
+      .orderBy(desc(users.createdAt));
+      
     const allLogs = await db.select().from(auditLogs).where(eq(auditLogs.tenantId, req.user!.tenantId)).orderBy(desc(auditLogs.createdAt));
 
-    const enriched = allUsers.map(u => {
+    const enriched = allUsers.map(r => {
+      const u = r.user;
       const userLogs = allLogs.filter(l => l.userId === u.id);
       return {
         ...u,
@@ -1158,7 +1262,8 @@ app.get('/api/users', requireAuth, async (req: AuthRequest, res) => {
           id: l.id,
           actionDescription: l.action,
           createdAt: l.createdAt
-        }))
+        })),
+        role: mapRoleNameToEnum(r.roleName || '')
       };
     });
 
@@ -1169,40 +1274,107 @@ app.get('/api/users', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Update a user role (DIRECTOR only)
+// Create a new user (DIRECTOR only)
+app.post('/api/users', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role: requesterRole, name: userName, tenantId } = req.user!;
+    if (requesterRole !== 'DIRECTOR') {
+      return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director / SuperAdmin.' });
+    }
+
+    const { name, email, role } = req.body;
+
+    if (!name || !email || !role) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios (name, email, role).' });
+    }
+
+    if (!['DIRECTOR', 'MANAGER', 'FINANCE', 'AUDITOR', 'FINANCIADOR'].includes(role)) {
+      return res.status(400).json({ error: 'El rol especificado es inválido o no existe.' });
+    }
+
+    const roleStringName = mapEnumToRoleName(role);
+    const roleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
+    if (roleObj.length === 0) return res.status(400).json({ error: 'Rol no encontrado en la base de datos' });
+
+    const uid = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    const newUser = await db.insert(users)
+      .values({
+        tenantId,
+        uid,
+        name,
+        email,
+        roleId: roleObj[0].id,
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
+        isActive: true,
+      })
+      .returning();
+
+    await logActivity(null, userName, `Creó el nuevo usuario "${name}" con rol ${role}`);
+
+    res.status(201).json(newUser[0]);
+  } catch (err: any) {
+    console.error('Error creating user:', err);
+    res.status(500).json({ error: 'Error al crear el nuevo usuario.' });
+  }
+});
+
+// Update a user (DIRECTOR only)
 app.patch('/api/users/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { role: requesterRole, name: userName } = req.user!;
+    const { role: requesterRole, name: userName, uid: requesterUid } = req.user!;
     if (requesterRole !== 'DIRECTOR') {
       return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director / SuperAdmin.' });
     }
 
     const userId = parseInt(req.params.id);
-    const { role: newRole } = req.body;
-
-    if (!newRole || !['DIRECTOR', 'MANAGER', 'FINANCE', 'AUDITOR', 'FINANCIADOR'].includes(newRole)) {
-      return res.status(400).json({ error: 'El rol especificado es inválido o no existe.' });
-    }
+    const { name, email, role, isActive } = req.body;
 
     const userToUpdate = await db.select().from(users).where(eq(users.id, userId));
     if (userToUpdate.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
 
-    const newRoleObj = await db.select().from(roles).where(eq(roles.name, newRole));
-    if (newRoleObj.length === 0) return res.status(400).json({ error: 'Rol no encontrado' });
+    // Protect against self-deactivation
+    if (isActive === false && userToUpdate[0].uid === requesterUid) {
+      return res.status(400).json({ error: 'No puedes desactivar tu propia cuenta.' });
+    }
+
+    const updates: any = {};
+    if (name !== undefined) updates.name = name;
+    if (email !== undefined) updates.email = email;
+    if (isActive !== undefined) updates.isActive = isActive;
+
+    if (role !== undefined) {
+      if (!['DIRECTOR', 'MANAGER', 'FINANCE', 'AUDITOR', 'FINANCIADOR'].includes(role)) {
+        return res.status(400).json({ error: 'El rol especificado es inválido o no existe.' });
+      }
+      const roleStringName = mapEnumToRoleName(role);
+      const newRoleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
+      if (newRoleObj.length === 0) return res.status(400).json({ error: 'Rol no encontrado en la base de datos' });
+      updates.roleId = newRoleObj[0].id;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No se enviaron campos para actualizar.' });
+    }
 
     const updated = await db.update(users)
-      .set({ roleId: newRoleObj[0].id })
+      .set(updates)
       .where(eq(users.id, userId))
       .returning();
 
-    await logActivity(null, userName, `Modificó el rol de acceso del usuario "${userToUpdate[0].name}"`);
+    let actionMsg = `Modificó los datos del usuario "${userToUpdate[0].name}"`;
+    if (isActive !== undefined && isActive !== userToUpdate[0].isActive) {
+      actionMsg = isActive ? `Reactivó al usuario "${userToUpdate[0].name}"` : `Suspendió al usuario "${userToUpdate[0].name}"`;
+    }
+    
+    await logActivity(null, userName, actionMsg);
 
     res.json(updated[0]);
   } catch (err: any) {
-    console.error('Error patching user role:', err);
-    res.status(500).json({ error: 'Error al actualizar el rol del usuario.' });
+    console.error('Error patching user:', err);
+    res.status(500).json({ error: 'Error al actualizar el usuario.' });
   }
 });
 
@@ -1246,10 +1418,20 @@ async function initializeViteAndListen() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    // ESM safe way to get __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    // In production, server.js is bundled inside the dist/ folder
+    const clientDist = __dirname;
+    
+    app.use('/assets', express.static(path.join(clientDist, 'assets')));
+    app.use(express.static(clientDist));
+    
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      if (req.path.startsWith('/assets')) return next();
+      res.sendFile(path.join(clientDist, 'index.html'));
     });
   }
 
