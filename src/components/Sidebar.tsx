@@ -59,7 +59,7 @@ export default function Sidebar({
   return (
     <div
       id="app-sidebar"
-      className="w-64 bg-[#0F172A] text-slate-300 flex flex-col justify-between h-screen sticky top-0 flex-shrink-0 select-none shadow-xl border-r border-slate-800"
+      className="hidden md:flex w-64 bg-[#0F172A] text-slate-300 flex-col justify-between h-screen sticky top-0 flex-shrink-0 select-none shadow-xl border-r border-slate-800"
     >
       <div>
         {/* Logo Brand Section */}

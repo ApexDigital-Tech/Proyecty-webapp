@@ -11,6 +11,7 @@ import Reports from './components/Reports.tsx';
 import ErrorBoundary from './components/common/ErrorBoundary.tsx';
 import { Project, ActivityLog, UserRole } from './types.ts';
 import { hasPermission } from './lib/rbac.ts';
+import { LayoutDashboard, FolderGit2, FileSpreadsheet, History, Users } from 'lucide-react';
 
 export default function App() {
   const [token, setToken] = React.useState<string | null>(() => localStorage.getItem('proyecty_token'));
@@ -151,10 +152,13 @@ export default function App() {
           currentTab={currentTab}
           selectedProjectName={selectedProjectName}
           onClearSelectedProject={() => setSelectedProjectId(null)}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onRoleSwitch={handleRoleSwitch}
         />
 
         {/* Dynamic Route Screen Swapper */}
-        <main className="flex-grow">
+        <main className="flex-grow pb-20 md:pb-0">
           <ErrorBoundary moduleName="Vista Principal">
             {selectedProjectId !== null ? (
               <ProjectDetail
@@ -209,6 +213,36 @@ export default function App() {
           )}
           </ErrorBoundary>
         </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around z-50 h-16 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-safe">
+        {['dashboard', 'portfolio', 'reports', 'audit', 'users'].filter(id => {
+          if (id === 'dashboard') return hasPermission(currentUser.role, 'canViewDashboard');
+          if (id === 'portfolio') return hasPermission(currentUser.role, 'canViewPortfolio');
+          if (id === 'reports') return hasPermission(currentUser.role, 'canViewReports');
+          if (id === 'audit') return hasPermission(currentUser.role, 'canViewAudit');
+          if (id === 'users') return hasPermission(currentUser.role, 'canViewUsers');
+          return false;
+        }).map(id => {
+          let Icon = LayoutDashboard;
+          let label = 'Inicio';
+          if (id === 'portfolio') { Icon = FolderGit2; label = 'Proyectos'; }
+          if (id === 'reports') { Icon = FileSpreadsheet; label = 'Reportes'; }
+          if (id === 'audit') { Icon = History; label = 'Bitácora'; }
+          if (id === 'users') { Icon = Users; label = 'Usuarios'; }
+          const isActive = currentTab === id && selectedProjectId === null;
+          return (
+            <button
+              key={id}
+              onClick={() => { setTab(id); setSelectedProjectId(null); }}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${isActive ? 'text-[#2563EB]' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? 'scale-110 transition-transform' : ''}`} />
+              <span className={`text-[10px] font-medium ${isActive ? 'font-bold' : ''}`}>{label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   );

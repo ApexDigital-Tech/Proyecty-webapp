@@ -9,6 +9,16 @@ interface LoginProps {
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [demoUsers, setDemoUsers] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    fetch('/api/public/demo-users')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setDemoUsers(data);
+      })
+      .catch(err => console.error('Error fetching demo users', err));
+  }, []);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -29,28 +39,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const handleDemoLogin = (role: UserRole) => {
+  const handleDemoLogin = (user: any) => {
     setLoading(true);
-    // Use simulated token headers
-    let name = 'Luis Morales';
-    let email = 'director@proyecty.org';
-    
-    if (role === 'MANAGER') {
-      name = 'Rodrigo G. (Manager)';
-      email = 'rodrigo@proyecty.org';
-    } else if (role === 'FINANCE') {
-      name = 'Karla Martínez (Finanzas)';
-      email = 'karla.finanzas@proyecty.org';
-    } else if (role === 'AUDITOR') {
-      name = 'Andrés Peña (Auditor Externo)';
-      email = 'andres.auditor@proyecty.org';
-    } else if (role === 'FINANCIADOR') {
-      name = 'Representante USAID (Donante)';
-      email = 'donante.usaid@proyecty.org';
-    }
-
     setTimeout(() => {
-      onLoginSuccess(`demo-${role.toLowerCase()}`, { name, email, role });
+      onLoginSuccess(`demo-${user.role.toLowerCase()}`, { name: user.name, email: user.email, role: user.role });
       setLoading(false);
     }, 400);
   };
@@ -100,97 +92,71 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           {/* Quick Demo Accounts for RBAC Simulation */}
           <div id="demo-roles-panel" className="space-y-2">
             {/* Director occupying full width */}
-            <button
-              id="demo-role-director"
-              onClick={() => handleDemoLogin('DIRECTOR')}
-              disabled={loading}
-              className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group"
-            >
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded flex items-center justify-center border border-emerald-100 flex-shrink-0">
-                  <Award className="w-4.5 h-4.5" />
+            {demoUsers.filter(u => u.role === 'DIRECTOR').map(u => (
+              <button
+                key={u.id}
+                onClick={() => handleDemoLogin(u)}
+                disabled={loading}
+                className="w-full flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded flex items-center justify-center border border-emerald-100 flex-shrink-0">
+                    <Award className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <div className="font-sans font-bold text-xs text-slate-800">{u.name}</div>
+                    <div className="text-[10px] font-sans text-slate-400">Director Operativo</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-sans font-bold text-xs text-slate-800">Luis Morales</div>
-                  <div className="text-[10px] font-sans text-slate-400">Director Operativo (Admin total)</div>
-                </div>
-              </div>
-              <span className="text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.2 rounded">DIRECTOR</span>
-            </button>
+                <span className="text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.2 rounded">DIRECTOR</span>
+              </button>
+            ))}
 
             {/* Grid of 2 columns for other roles */}
             <div className="grid grid-cols-2 gap-2">
-              <button
-                id="demo-role-manager"
-                onClick={() => handleDemoLogin('MANAGER')}
-                disabled={loading}
-                className="flex flex-col justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 bg-blue-50 text-blue-600 rounded flex items-center justify-center border border-blue-100 flex-shrink-0">
-                    <FolderGit2 className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="font-sans font-bold text-[11px] text-slate-800 truncate">Rodrigo G.</div>
-                    <div className="text-[9px] font-sans text-slate-400 truncate">Project Manager</div>
-                  </div>
-                </div>
-                <span className="text-[8px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.2 rounded self-start">MANAGER</span>
-              </button>
+              {demoUsers.filter(u => u.role !== 'DIRECTOR').map(u => {
+                let Icon = Eye;
+                let bgClass = "bg-slate-50 text-slate-600 border-slate-100";
+                let labelClass = "bg-slate-50 text-slate-700 border-slate-100";
+                
+                if (u.role === 'MANAGER') {
+                  Icon = FolderGit2;
+                  bgClass = "bg-blue-50 text-blue-600 border-blue-100";
+                  labelClass = "bg-blue-50 text-blue-700 border-blue-100";
+                } else if (u.role === 'FINANCE') {
+                  Icon = CreditCard;
+                  bgClass = "bg-rose-50 text-rose-600 border-rose-100";
+                  labelClass = "bg-rose-50 text-rose-700 border-rose-100";
+                } else if (u.role === 'AUDITOR') {
+                  Icon = Eye;
+                  bgClass = "bg-indigo-50 text-indigo-600 border-indigo-100";
+                  labelClass = "bg-indigo-50 text-indigo-700 border-indigo-100";
+                } else if (u.role === 'FINANCIADOR') {
+                  Icon = Globe;
+                  bgClass = "bg-amber-50 text-amber-600 border-amber-100";
+                  labelClass = "bg-amber-50 text-amber-700 border-amber-100";
+                }
 
-              <button
-                id="demo-role-finance"
-                onClick={() => handleDemoLogin('FINANCE')}
-                disabled={loading}
-                className="flex flex-col justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 bg-rose-50 text-rose-600 rounded flex items-center justify-center border border-rose-100 flex-shrink-0">
-                    <CreditCard className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="font-sans font-bold text-[11px] text-slate-800 truncate">Karla Martínez</div>
-                    <div className="text-[9px] font-sans text-slate-400 truncate">Finanzas</div>
-                  </div>
-                </div>
-                <span className="text-[8px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-100 px-1.5 py-0.2 rounded self-start">FINANCE</span>
-              </button>
-
-              <button
-                id="demo-role-auditor"
-                onClick={() => handleDemoLogin('AUDITOR')}
-                disabled={loading}
-                className="flex flex-col justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center border border-indigo-100 flex-shrink-0">
-                    <Eye className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="font-sans font-bold text-[11px] text-slate-800 truncate">Andrés Peña</div>
-                    <div className="text-[9px] font-sans text-slate-400 truncate">Auditor Externo</div>
-                  </div>
-                </div>
-                <span className="text-[8px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.2 rounded self-start">AUDITOR</span>
-              </button>
-
-              <button
-                id="demo-role-financiador"
-                onClick={() => handleDemoLogin('FINANCIADOR')}
-                disabled={loading}
-                className="flex flex-col justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 bg-amber-50 text-amber-600 rounded flex items-center justify-center border border-amber-100 flex-shrink-0">
-                    <Globe className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="font-sans font-bold text-[11px] text-slate-800 truncate">USAID Rep.</div>
-                    <div className="text-[9px] font-sans text-slate-400 truncate">Donante / Financiador</div>
-                  </div>
-                </div>
-                <span className="text-[8px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.2 rounded self-start">DONANTE</span>
-              </button>
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => handleDemoLogin(u)}
+                    disabled={loading}
+                    className="flex flex-col justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition-all text-left cursor-pointer group space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-7 h-7 rounded flex items-center justify-center border flex-shrink-0 ${bgClass}`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="font-sans font-bold text-[11px] text-slate-800 truncate">{u.name}</div>
+                        <div className="text-[9px] font-sans text-slate-400 truncate">{u.email.split('@')[0]}</div>
+                      </div>
+                    </div>
+                    <span className={`text-[8px] font-mono font-bold border px-1.5 py-0.2 rounded self-start ${labelClass}`}>{u.role}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
