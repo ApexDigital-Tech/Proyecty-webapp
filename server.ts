@@ -1211,8 +1211,8 @@ function mapEnumToRoleName(roleEnum: string): string {
 
 // Public demo users endpoint
 app.get('/api/public/demo-users', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Endpoint not available in production' });
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_LOGIN !== 'true') {
+    return res.status(403).json({ error: 'Endpoint not available in production without feature flag' });
   }
   try {
     const rawUsers = await db.select({
