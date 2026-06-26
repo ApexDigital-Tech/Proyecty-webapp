@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, boolean, doublePrecision, jsonb } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, doublePrecision, jsonb, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // --- TENANT & ORG ---
@@ -258,3 +258,75 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
 }));
 
 // Added relationships for the rest can be defined here similarly...
+
+// --- SAAS PHASE 1: ENUMS ---
+export const taskStatusEnum = pgEnum('task_status', ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE']);
+export const taskPriorityEnum = pgEnum('task_priority', ['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
+export const logTypeEnum = pgEnum('log_type', ['DECISION', 'ISSUE', 'MILESTONE', 'NOTE']);
+export const eventTypeEnum = pgEnum('event_type', ['MEETING', 'FIELD_VISIT', 'DEADLINE']);
+
+// --- SAAS PHASE 1: TASKS & EXECUTION ---
+export const tasks = pgTable('tasks', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  parentId: integer('parent_id'), // Para subtareas (Self-reference)
+  title: text('title').notNull(),
+  description: text('description'),
+  status: taskStatusEnum('status').notNull().default('TODO'),
+  priority: taskPriorityEnum('priority').notNull().default('MEDIUM'),
+  assigneeId: integer('assignee_id').references(() => users.id),
+  createdBy: integer('created_by').references(() => users.id).notNull(),
+  startDate: timestamp('start_date'),
+  dueDate: timestamp('due_date'),
+  completedAt: timestamp('completed_at'),
+  estimatedHours: doublePrecision('estimated_hours'),
+  position: integer('position').notNull().default(0), // Orden dentro de la columna Kanban
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const taskDependencies = pgTable('task_dependencies', {
+  taskId: integer('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  dependsOnId: integer('depends_on_id').references(() => tasks.id, { onDelete: 'cascade' }),
+});
+
+export const taskComments = pgTable('task_comments', {
+  id: serial('id').primaryKey(),
+  taskId: integer('task_id').references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// --- SAAS PHASE 1: BITÁCORA OPERATIVA ---
+export const projectLogs = pgTable('project_logs', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  authorId: integer('author_id').references(() => users.id).notNull(),
+  type: logTypeEnum('type').notNull(), // 'DECISION', 'ISSUE', 'MILESTONE', 'NOTE'
+  content: text('content').notNull(),
+  date: timestamp('date').defaultNow().notNull(),
+});
+
+// --- SAAS PHASE 1: CALENDAR & EVENTS ---
+export const events = pgTable('events', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  ownerId: integer('owner_id').references(() => users.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time').notNull(),
+  location: text('location'),
+  type: eventTypeEnum('type').notNull().default('MEETING'),
+});
+
+export const eventAttendees = pgTable('event_attendees', {
+  eventId: integer('event_id').references(() => events.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').default('PENDING'), // 'ACCEPTED', 'DECLINED', 'PENDING'
+});
+

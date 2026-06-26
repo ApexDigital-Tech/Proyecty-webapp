@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Layers,
   AlertOctagon,
+  BookOpen,
 } from 'lucide-react';
 import TabResumen from './ProjectTabs/TabResumen.tsx';
 import TabConvenio from './ProjectTabs/TabConvenio.tsx';
@@ -26,6 +27,7 @@ import TabPresupuesto from './ProjectTabs/TabPresupuesto.tsx';
 import TabComprobantes from './ProjectTabs/TabComprobantes.tsx';
 import TabDocumentos from './ProjectTabs/TabDocumentos.tsx';
 import TabReporteAI from './ProjectTabs/TabReporteAI.tsx';
+import TabBitacora from './ProjectTabs/TabBitacora.tsx';
 import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
@@ -44,7 +46,7 @@ export default function ProjectDetail({
   token,
 }: ProjectDetailProps) {
   const [project, setProject] = React.useState<any>(null);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte'>('resumen');
+  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states for various tabs
@@ -622,6 +624,7 @@ export default function ProjectDetail({
           { id: 'presupuesto', label: 'Control Presupuestario', icon: FileSpreadsheet },
           { id: 'comprobantes', label: 'Comprobantes (Compliance)', icon: DollarSign },
           { id: 'documentos', label: 'Expediente Digital', icon: FileText },
+          { id: 'bitacora', label: 'Bitácora Operativa', icon: BookOpen },
           { id: 'reporte', label: 'Asistente de Reportes AI', icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -773,6 +776,15 @@ export default function ProjectDetail({
             handleGenerateAIReport={handleGenerateAIReport}
             aiLoading={aiLoading}
             aiReportOutput={aiReportOutput}
+          />
+        )}
+
+        {/* TAB 7: BITÁCORA OPERATIVA */}
+        {activeTab === 'bitacora' && (
+          <TabBitacora
+            project={project}
+            isEditable={isEditable}
+            refreshProject={loadProjectDetails}
           />
         )}
 

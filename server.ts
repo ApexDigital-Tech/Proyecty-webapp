@@ -23,6 +23,9 @@ import {
   roles,
   donors,
   budgetVersions,
+  tasks,
+  projectLogs,
+  events,
 } from './src/db/schema.ts';
 import { eq, desc, and, inArray, ilike, sql } from 'drizzle-orm';
 
@@ -1208,6 +1211,82 @@ function mapEnumToRoleName(roleEnum: string): string {
   if (roleEnum === 'FINANCIADOR') return 'Donante / Financiador';
   return 'Director';
 }
+
+// --- SAAS PHASE 1: TASKS & LOGS ---
+app.get('/api/projects/:id/logs', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const tenantId = req.user!.tenantId;
+    
+    const isValid = await verifyProjectTenant(projectId, tenantId);
+    if (!isValid) return res.status(403).json({ error: 'Access denied' });
+
+    const logs = await db.select({
+      id: projectLogs.id,
+      type: projectLogs.type,
+      content: projectLogs.content,
+      date: projectLogs.date,
+      authorId: projectLogs.authorId,
+      authorName: users.name
+    }).from(projectLogs)
+      .leftJoin(users, eq(projectLogs.authorId, users.id))
+      .where(and(eq(projectLogs.projectId, projectId), eq(projectLogs.tenantId, tenantId)))
+      .orderBy(desc(projectLogs.date));
+
+    res.json(logs);
+  } catch (err) {
+    console.error('Error fetching logs:', err);
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+app.post('/api/projects/:id/logs', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const tenantId = req.user!.tenantId;
+    const authorId = req.user!.userId;
+    const { type, content } = req.body;
+    
+    const isValid = await verifyProjectTenant(projectId, tenantId);
+    if (!isValid) return res.status(403).json({ error: 'Access denied' });
+
+    const newLog = await db.insert(projectLogs).values({
+      tenantId,
+      projectId,
+      authorId,
+      type,
+      content,
+      date: new Date()
+    }).returning();
+
+    await logActivity(tenantId, authorId, `Added project log (${type}) to project ID ${projectId}`);
+    res.json({
+      ...newLog[0],
+      authorName: req.user!.name // O cualquier nombre disponible
+    });
+  } catch (err) {
+    console.error('Error creating log:', err);
+    res.status(500).json({ error: 'Failed to create log' });
+  }
+});
+
+app.get('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { projectId } = req.query;
+
+    let conditions: any = eq(tasks.tenantId, tenantId);
+    if (projectId) {
+      conditions = and(conditions, eq(tasks.projectId, parseInt(projectId as string)));
+    }
+
+    const tasksData = await db.select().from(tasks).where(conditions).orderBy(tasks.position);
+    res.json(tasksData);
+  } catch (err) {
+    console.error('Error fetching tasks:', err);
+    res.status(500).json({ error: 'Failed to fetch tasks' });
+  }
+});
 
 // Public demo users endpoint
 app.get('/api/public/demo-users', async (req, res) => {
