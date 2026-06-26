@@ -26,7 +26,7 @@ import TabPresupuesto from './ProjectTabs/TabPresupuesto.tsx';
 import TabComprobantes from './ProjectTabs/TabComprobantes.tsx';
 import TabDocumentos from './ProjectTabs/TabDocumentos.tsx';
 import TabReporteAI from './ProjectTabs/TabReporteAI.tsx';
-import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons.tsx';
+import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
   projectId: number;

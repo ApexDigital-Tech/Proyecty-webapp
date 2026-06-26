@@ -75,11 +75,21 @@ export const requireAuth = async (
     // Assign a default role if not registered yet.
     const dbUser = await getOrCreateUser(uid, email, name, 'MANAGER');
     
+    const mapRoleToEnum = (r: string) => {
+      const upper = r.toUpperCase();
+      if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
+      if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
+      if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
+      if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
+      if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
+      return 'MANAGER';
+    };
+
     req.user = {
       uid,
       email,
       name,
-      role: dbUser.role || 'Project Manager',
+      role: mapRoleToEnum(dbUser.role || 'Project Manager'),
       tenantId: dbUser.tenantId,
       id: dbUser.id,
     };
