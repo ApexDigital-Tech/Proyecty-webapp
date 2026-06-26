@@ -11,7 +11,8 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
       name: users.name,
       tenantId: users.tenantId,
       roleId: users.roleId,
-      roleName: roles.name
+      roleName: roles.name,
+      isActive: users.isActive
     }).from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(users.uid, uid));
@@ -59,6 +60,7 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
         roleId,
         tenantId: orgId,
         avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
+        isActive: true,
       })
       .returning();
 
@@ -81,7 +83,8 @@ export async function getUserByUid(uid: string) {
       name: users.name,
       tenantId: users.tenantId,
       roleId: users.roleId,
-      roleName: roles.name
+      roleName: roles.name,
+      isActive: users.isActive
     }).from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(users.uid, uid));

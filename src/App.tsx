@@ -15,10 +15,31 @@ import { LayoutDashboard, FolderGit2, FileSpreadsheet, History, Users } from 'lu
 
 export default function App() {
   const [token, setToken] = React.useState<string | null>(() => localStorage.getItem('proyecty_token'));
-  const [currentUser, setCurrentUser] = React.useState<{ name: string; email: string; role: UserRole; tenantId?: string } | null>(() => {
+  const [currentUser, setCurrentUser] = React.useState<{ name: string; email: string; role: UserRole; tenantId?: string; uid?: string } | null>(() => {
     const cached = localStorage.getItem('proyecty_user');
     return cached ? JSON.parse(cached) : null;
   });
+
+  React.useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 403) {
+        try {
+          const cloned = response.clone();
+          const data = await cloned.json();
+          if (data?.code === 'USER_SUSPENDED') {
+            handleLogout();
+            alert("Acceso denegado: Usuario suspendido");
+          }
+        } catch(e) {}
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   React.useEffect(() => {
     import('./lib/supabase.ts').then(({ supabase }) => {
@@ -54,12 +75,26 @@ export default function App() {
   const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = React.useState(false);
 
-  // Load activity logs when authenticated
+  // Load activity logs and validate session when authenticated or changing tabs
   React.useEffect(() => {
     if (token) {
+      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (res) => {
+          if (res.status === 403 || res.status === 401) {
+            try {
+              const data = await res.json();
+              if (data?.code === 'USER_SUSPENDED' || res.status === 401) {
+                handleLogout();
+                alert("Acceso denegado: Sesión inválida o usuario suspendido");
+              }
+            } catch(e) {}
+          }
+        })
+        .catch(() => {});
+      
       fetchAuditLogs();
     }
-  }, [token]);
+  }, [token, currentTab]);
 
   const fetchAuditLogs = async () => {
     if (!token) return;
@@ -102,8 +137,16 @@ export default function App() {
     const updatedUser = { ...currentUser, role: newRole };
     
     // If it's a demo token, switch token suffix to let backend sync roles correctly
-    const updatedToken = token.startsWith('demo-') ? `demo-${newRole.toLowerCase()}` : token;
-    
+    let updatedToken = token;
+    if (token.startsWith('demo-uid-')) {
+       const uidMatch = token.match(/demo-uid-([^-]+)/);
+       if (uidMatch) {
+         updatedToken = `demo-uid-${uidMatch[1]}-role-${newRole.toUpperCase()}`;
+       }
+    } else if (token.startsWith('demo-')) {
+       updatedToken = `demo-${newRole.toLowerCase()}`;
+    }
+
     localStorage.setItem('proyecty_token', updatedToken);
     localStorage.setItem('proyecty_user', JSON.stringify(updatedUser));
     

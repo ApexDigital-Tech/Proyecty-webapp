@@ -26,36 +26,45 @@ export const requireAuth = async (
 
   const token = authHeader.split('Bearer ')[1];
 
-  // Support for Demo Roles in AI Studio preview to allow fully testing RBAC and CRUD
-  if (token.startsWith('demo-')) {
-    const roleType = token.replace('demo-', '').toUpperCase(); // 'DIRECTOR', 'MANAGER', 'FINANCE'
-    let name = 'Director Operativo';
-    let email = 'director@proyecty.org';
-    let uid = 'demo_director_uid';
-
-    if (roleType === 'MANAGER') {
-      name = 'Rodrigo G. (Manager)';
-      email = 'rodrigo@proyecty.org';
-      uid = 'demo_manager_uid';
-    } else if (roleType === 'FINANCE') {
-      name = 'Karla Martínez (Finanzas)';
-      email = 'karla.finanzas@proyecty.org';
-      uid = 'demo_finance_uid';
-    }
+  // Support for Demo Roles using actual DB users via UID
+  if (token.startsWith('demo-uid-')) {
+    const parts = token.split('-role-');
+    const uidPart = parts[0].replace('demo-uid-', '');
+    const simulatedRole = parts.length > 1 ? parts[1].toUpperCase() : null;
 
     try {
-      const dbUser = await getOrCreateUser(uid, email, name, roleType);
+      const { getUserByUid } = await import('../db/users.ts');
+      const dbUser = await getUserByUid(uidPart);
+      
+      if (!dbUser) {
+        return res.status(401).json({ error: 'Usuario demo no encontrado' });
+      }
+      
+      if (dbUser.isActive === false) {
+        return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
+      }
+
+      const mapRoleToEnum = (r: string) => {
+        const upper = r.toUpperCase();
+        if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
+        if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
+        if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
+        if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
+        if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
+        return 'MANAGER';
+      };
+
       req.user = {
-        uid,
-        email,
-        name,
-        role: roleType,
+        uid: dbUser.uid,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: simulatedRole || mapRoleToEnum(dbUser.roleName || ''),
         tenantId: dbUser.tenantId,
         id: dbUser.id,
       };
       return next();
     } catch (err) {
-      console.error('Error synchronizing demo user:', err);
+      console.error('Error fetching demo user:', err);
       return res.status(500).json({ error: 'Error al sincronizar usuario de prueba' });
     }
   }
@@ -75,6 +84,10 @@ export const requireAuth = async (
     // Assign a default role if not registered yet.
     const dbUser = await getOrCreateUser(uid, email, name, 'MANAGER');
     
+    if (dbUser.isActive === false) {
+      return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
+    }
+
     const mapRoleToEnum = (r: string) => {
       const upper = r.toUpperCase();
       if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';

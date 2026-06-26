@@ -39,12 +39,24 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const handleDemoLogin = (user: any) => {
+  const handleDemoLogin = async (user: any) => {
     setLoading(true);
-    setTimeout(() => {
-      onLoginSuccess(`demo-${user.role.toLowerCase()}`, { name: user.name, email: user.email, role: user.role });
-      setLoading(false);
-    }, 400);
+    try {
+      const demoToken = `demo-uid-${user.uid}`;
+      const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${demoToken}` } });
+      if (res.status === 403) {
+        const data = await res.json();
+        if (data?.code === 'USER_SUSPENDED') {
+          setError('Acceso denegado: Usuario suspendido.');
+          setLoading(false);
+          return;
+        }
+      }
+      onLoginSuccess(demoToken, { name: user.name, email: user.email, role: user.role, uid: user.uid });
+    } catch (e) {
+      setError('Error al iniciar sesión demo.');
+    }
+    setLoading(false);
   };
 
   return (

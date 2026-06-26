@@ -1220,6 +1220,7 @@ app.get('/api/public/demo-users', async (req, res) => {
       roleName: roles.name
     }).from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.isActive, true))
       .orderBy(users.id);
       
     const mapped = rawUsers.map(r => ({
@@ -1231,6 +1232,12 @@ app.get('/api/public/demo-users', async (req, res) => {
     console.error('Error fetching demo users', err);
     res.status(500).json({ error: 'Failed to fetch demo users' });
   }
+});
+
+// Validate session and get current user profile
+app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res) => {
+  // If requireAuth succeeds, the user is active (we already check isActive there)
+  res.json({ user: req.user });
 });
 
 // List all users with activity log counts and last active status (DIRECTOR only)
