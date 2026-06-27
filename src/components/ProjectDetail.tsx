@@ -20,6 +20,7 @@ import {
   Layers,
   AlertOctagon,
   BookOpen,
+  CheckSquare,
 } from 'lucide-react';
 import TabResumen from './ProjectTabs/TabResumen.tsx';
 import TabConvenio from './ProjectTabs/TabConvenio.tsx';
@@ -28,6 +29,7 @@ import TabComprobantes from './ProjectTabs/TabComprobantes.tsx';
 import TabDocumentos from './ProjectTabs/TabDocumentos.tsx';
 import TabReporteAI from './ProjectTabs/TabReporteAI.tsx';
 import TabBitacora from './ProjectTabs/TabBitacora.tsx';
+import TabTareas from './ProjectTabs/TabTareas.tsx';
 import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
@@ -46,7 +48,7 @@ export default function ProjectDetail({
   token,
 }: ProjectDetailProps) {
   const [project, setProject] = React.useState<any>(null);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora'>('resumen');
+  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states for various tabs
@@ -620,11 +622,12 @@ export default function ProjectDetail({
       <div className="border-b border-slate-200 flex flex-wrap gap-1">
         {[
           { id: 'resumen', label: 'Resumen General', icon: Layers },
+          { id: 'tareas', label: 'Tareas y Ejecución', icon: CheckSquare },
+          { id: 'bitacora', label: 'Bitácora Operativa', icon: BookOpen },
           { id: 'convenio', label: 'Convenios y Desembolsos', icon: FileCheck2 },
           { id: 'presupuesto', label: 'Control Presupuestario', icon: FileSpreadsheet },
           { id: 'comprobantes', label: 'Comprobantes (Compliance)', icon: DollarSign },
           { id: 'documentos', label: 'Expediente Digital', icon: FileText },
-          { id: 'bitacora', label: 'Bitácora Operativa', icon: BookOpen },
           { id: 'reporte', label: 'Asistente de Reportes AI', icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -789,6 +792,14 @@ export default function ProjectDetail({
           />
         )}
 
+        {/* TAB 8: TAREAS Y EJECUCIÓN */}
+        {activeTab === 'tareas' && (
+          <TabTareas
+            project={project}
+            isEditable={isEditable}
+            token={token}
+          />
+        )}
       </div>
 
     </div>

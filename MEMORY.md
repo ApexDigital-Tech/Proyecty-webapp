@@ -20,11 +20,20 @@
 3. **Manejo de Errores Global (UI):** Se implementó un esquema de `ErrorBoundary` por módulos para que un fallo en un componente no rompa el _Shell_ global de la aplicación.
 4. **Build Productivo:** El servidor (`server.ts`) fue refactorizado (uso de IIFEs y eliminación de `top-level await`) para compilar de manera limpia como módulo CJS (`server.cjs`) a través de `esbuild`.
 
-## 4. Próxima Sesión: "Pruebas Operativas"
-Para la siguiente interacción, el foco estará en la retroalimentación de las validaciones funcionales post-despliegue:
-- Pruebas del entorno real (Producción / Staging).
-- Monitoreo de comportamientos operativos con usuarios de prueba.
-- Ajustes finos de configuración en entorno productivo (Logs, observabilidad, backups y variables de entorno finales).
+## 4. Estado del Despliegue en Producción (Render)
+Se ha estabilizado el entorno productivo en Render (`proyecty-webapp.onrender.com`):
+1. **Frontend & Assets:** Se resolvió el conflicto de `import.meta.env` (CJS vs ESM) aislando el build de cliente (Vite) del de backend y configurando Express para servir los assets estáticos correctamente sin romper los tipos MIME.
+2. **Corrección Module Resolution:** Se eliminaron las extensiones `.tsx` en importaciones de componentes compartidos (`Skeletons`) previniendo fallas de empaquetado y de tiempo de ejecución (ej. `TableSkeleton is not defined`).
+3. **Autenticación Demo & Real:**
+   - La API de usuarios demo está protegida mediante un feature flag `ENABLE_DEMO_LOGIN`.
+   - Se ha consolidado la función `mapRoleToEnum` en `auth.ts` para que los inicios de sesión mediante Google Auth resuelvan correctamente roles de DB (ej. `"Director"`) hacia los Enum de validación (`"DIRECTOR"`), corrigiendo accesos `403` en endpoints administrativos.
+4. **Data Seed (Idempotente):** Se implementaron `scripts/seed-prod-data.ts` y `scripts/rollback-demo-data.ts` accesibles vía `npm run` en el entorno Render, diseñados para inyectar datos demo `[DEMO VOSERDEM]` de forma segura sin contaminar a los usuarios reales y garantizando la limpieza de usuarios demo duplicados.
 
----
-*Fin de registro del Handoff Técnico - Preparados para Pruebas Operativas.*
+## 5. Próximas Tareas y Pendientes (Priorizados)
+1. **Verificación Operativa de Usuarios:**
+   - Confirmar comportamiento en UI real: Creación de un usuario `pending`, su edición, suspensión, reactivación y trazas de auditoría correspondientes.
+   - Asegurar que no existan comportamientos indeseados (auto-eliminación/desactivación del propio usuario).
+2. **Edición de Nombres de Proyecto:**
+   - Confirmar y/o habilitar la capacidad de modificar el nombre de los proyectos directamente desde el UI del detalle de proyecto (PUT `/api/projects/:id`).
+3. **Validación Visual de Datos Demo:**
+   - Correr en Render Shell el comando `npm run db:seed:demo` y validar los datos en los módulos del portafolio, bitácora y presupuesto (dashboard).

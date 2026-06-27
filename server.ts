@@ -1288,6 +1288,113 @@ app.get('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+app.post('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { projectId, title, description, status, priority, assigneeId, dueDate, position } = req.body;
+
+    if (!projectId || !title) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const [newTask] = await db.insert(tasks).values({
+      tenantId,
+      projectId,
+      title,
+      description,
+      status: status || 'TODO',
+      priority: priority || 'MEDIUM',
+      assigneeId,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      position: position || 0,
+      createdBy: req.user!.id,
+    }).returning();
+
+    // Log the action
+    await db.insert(auditLogs).values({
+      tenantId,
+      userId: req.user!.id,
+      action: 'TASK_CREATED',
+      entity: 'task',
+      entityId: newTask.id,
+      details: `Created task: ${title} for project ${projectId}`
+    });
+
+    res.status(201).json(newTask);
+  } catch (err) {
+    console.error('Error creating task:', err);
+    res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+app.patch('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const taskId = parseInt(req.params.id);
+    const updates = req.body;
+
+    // Verify task belongs to tenant
+    const existing = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId))).limit(1);
+    if (existing.length === 0) return res.status(404).json({ error: 'Task not found' });
+
+    // Filter allowed updates
+    const updateData: any = {};
+    if (updates.title !== undefined) updateData.title = updates.title;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.priority !== undefined) updateData.priority = updates.priority;
+    if (updates.assigneeId !== undefined) updateData.assigneeId = updates.assigneeId;
+    if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
+    if (updates.position !== undefined) updateData.position = updates.position;
+
+    const [updatedTask] = await db.update(tasks)
+      .set(updateData)
+      .where(eq(tasks.id, taskId))
+      .returning();
+
+    await db.insert(auditLogs).values({
+      tenantId,
+      userId: req.user!.id,
+      action: 'TASK_UPDATED',
+      entity: 'task',
+      entityId: taskId,
+      details: `Updated task ${taskId}: ${Object.keys(updateData).join(', ')}`
+    });
+
+    res.json(updatedTask);
+  } catch (err) {
+    console.error('Error updating task:', err);
+    res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
+app.delete('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const taskId = parseInt(req.params.id);
+
+    // Verify task belongs to tenant
+    const existing = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId))).limit(1);
+    if (existing.length === 0) return res.status(404).json({ error: 'Task not found' });
+
+    await db.delete(tasks).where(eq(tasks.id, taskId));
+
+    await db.insert(auditLogs).values({
+      tenantId,
+      userId: req.user!.id,
+      action: 'TASK_DELETED',
+      entity: 'task',
+      entityId: taskId,
+      details: `Deleted task ${taskId}`
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting task:', err);
+    res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
 // Public demo users endpoint
 app.get('/api/public/demo-users', async (req, res) => {
   if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_LOGIN !== 'true') {

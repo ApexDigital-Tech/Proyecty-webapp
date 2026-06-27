@@ -4,6 +4,7 @@ import { projects } from './src/db/schema.ts';
 import express from 'express';
 import { requireAuth } from './src/middleware/auth.ts';
 import { eq, and } from 'drizzle-orm';
+import { organizations } from './src/db/schema.ts';
 
 const app = express();
 app.use(express.json());
@@ -29,24 +30,26 @@ app.post('/api/projects/:projectId/agreements', requireAuth, async (req: any, re
 async function runTest() {
   console.log('1. Conectando a Base de Datos (Supabase)...');
   
-  // Create an organization for Tenant 2 to satisfy FK constraints
-  const { organizations } = await import('./src/db/schema.ts');
   let newOrg = (await db.select().from(organizations).where(eq(organizations.name, 'Organización Enemiga')).limit(1))[0];
   if (!newOrg) {
     [newOrg] = await db.insert(organizations).values({
-      name: 'Organización Enemiga'
+      name: 'Organización Enemiga',
+      subscriptionPlan: 'FREE',
+      isActive: true
     }).returning();
   }
 
-  // Create a project for Tenant 2 to ensure it exists
-  const [newProject] = await db.insert(projects).values({
-    tenantId: newOrg.id,
-    name: 'Breach Test Project (Tenant Ajeno)',
-    code: 'SEC-403',
-    status: 'PLANIFICACIÓN',
-    riskLevel: 'BAJO',
-    approvedBudget: 0
-  }).returning();
+  let newProject = (await db.select().from(projects).where(eq(projects.code, 'SEC-403')).limit(1))[0];
+  if (!newProject) {
+    [newProject] = await db.insert(projects).values({
+      tenantId: newOrg.id,
+      name: 'Breach Test Project (Tenant Ajeno)',
+      code: 'SEC-403',
+      status: 'PLANIFICACIÓN',
+      riskLevel: 'BAJO',
+      approvedBudget: 0
+    }).returning();
+  }
   
   console.log(`2. Creado Proyecto Objetivo [ID: ${newProject.id}] perteneciente al Tenant 2.`);
 
