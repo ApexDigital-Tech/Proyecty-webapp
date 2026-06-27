@@ -1244,7 +1244,7 @@ app.post('/api/projects/:id/logs', requireAuth, async (req: AuthRequest, res) =>
   try {
     const projectId = parseInt(req.params.id);
     const tenantId = req.user!.tenantId;
-    const authorId = req.user!.userId;
+    const authorId = req.user!.id;
     const { type, content } = req.body;
     
     const isValid = await verifyProjectTenant(projectId, tenantId);
@@ -1291,7 +1291,7 @@ app.get('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
 app.post('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
   try {
     const tenantId = req.user!.tenantId;
-    const { projectId, title, description, status, priority, assigneeId, dueDate, position } = req.body;
+    const { projectId, title, description, status, priority, assigneeId, startDate, dueDate, position } = req.body;
 
     if (!projectId || !title) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1305,6 +1305,7 @@ app.post('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
       status: status || 'TODO',
       priority: priority || 'MEDIUM',
       assigneeId,
+      startDate: startDate ? new Date(startDate) : null,
       dueDate: dueDate ? new Date(dueDate) : null,
       position: position || 0,
       createdBy: req.user!.id,
@@ -1315,7 +1316,7 @@ app.post('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
       tenantId,
       userId: req.user!.id,
       action: 'TASK_CREATED',
-      entity: 'task',
+      entityType: 'Task',
       entityId: newTask.id,
       details: `Created task: ${title} for project ${projectId}`
     });
@@ -1344,6 +1345,7 @@ app.patch('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
     if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.priority !== undefined) updateData.priority = updates.priority;
     if (updates.assigneeId !== undefined) updateData.assigneeId = updates.assigneeId;
+    if (updates.startDate !== undefined) updateData.startDate = updates.startDate ? new Date(updates.startDate) : null;
     if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? new Date(updates.dueDate) : null;
     if (updates.position !== undefined) updateData.position = updates.position;
 
@@ -1356,7 +1358,7 @@ app.patch('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
       tenantId,
       userId: req.user!.id,
       action: 'TASK_UPDATED',
-      entity: 'task',
+      entityType: 'Task',
       entityId: taskId,
       details: `Updated task ${taskId}: ${Object.keys(updateData).join(', ')}`
     });
@@ -1383,7 +1385,7 @@ app.delete('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
       tenantId,
       userId: req.user!.id,
       action: 'TASK_DELETED',
-      entity: 'task',
+      entityType: 'Task',
       entityId: taskId,
       details: `Deleted task ${taskId}`
     });
@@ -1597,6 +1599,174 @@ app.delete('/api/users/:id', requireAuth, async (req: AuthRequest, res) => {
   } catch (err: any) {
     console.error('Error deleting user:', err);
     res.status(500).json({ error: 'Error al eliminar el usuario del sistema.' });
+  }
+});
+
+// ==========================================
+// SAAS PHASE 3: EVENTS & AGENDA
+// ==========================================
+app.get('/api/projects/:id/events', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const projectId = parseInt(req.params.id);
+    const eventsData = await db.select().from(events)
+      .where(and(eq(events.tenantId, tenantId), eq(events.projectId, projectId)))
+      .orderBy(events.startTime);
+    res.json(eventsData);
+  } catch (err) {
+    console.error('Error fetching project events:', err);
+    res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+app.post('/api/events', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { projectId, title, description, startTime, endTime, type, location } = req.body;
+    
+    if (!title || !startTime || !endTime) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const [newEvent] = await db.insert(events).values({
+      tenantId,
+      projectId: projectId || null,
+      ownerId: req.user!.id,
+      title,
+      description,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      type: type || 'MEETING',
+      location
+    }).returning();
+
+    await logActivity(tenantId, req.user!.id, `Created event: ${title}`);
+    res.json(newEvent);
+  } catch (err) {
+    console.error('Error creating event:', err);
+    res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+app.patch('/api/events/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const eventId = parseInt(req.params.id);
+    const updates = req.body;
+
+    const existing = await db.select().from(events).where(and(eq(events.id, eventId), eq(events.tenantId, tenantId))).limit(1);
+    if (existing.length === 0) return res.status(404).json({ error: 'Event not found' });
+
+    const updateData: any = {};
+    if (updates.title !== undefined) updateData.title = updates.title;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.startTime !== undefined) updateData.startTime = new Date(updates.startTime);
+    if (updates.endTime !== undefined) updateData.endTime = new Date(updates.endTime);
+    if (updates.type !== undefined) updateData.type = updates.type;
+    if (updates.location !== undefined) updateData.location = updates.location;
+
+    const [updatedEvent] = await db.update(events).set(updateData).where(eq(events.id, eventId)).returning();
+    await logActivity(tenantId, req.user!.id, `Updated event: ${updatedEvent.title}`);
+    res.json(updatedEvent);
+  } catch (err) {
+    console.error('Error updating event:', err);
+    res.status(500).json({ error: 'Failed to update event' });
+  }
+});
+
+app.delete('/api/events/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const eventId = parseInt(req.params.id);
+
+    const existing = await db.select().from(events).where(and(eq(events.id, eventId), eq(events.tenantId, tenantId))).limit(1);
+    if (existing.length === 0) return res.status(404).json({ error: 'Event not found' });
+
+    await db.delete(events).where(eq(events.id, eventId));
+    await logActivity(tenantId, req.user!.id, `Deleted event ${eventId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting event:', err);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
+// Agenda Aggregator Endpoint
+app.get('/api/agenda', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { start, end, projectId, assigneeId } = req.query;
+    
+    // Convert dates if provided, else reasonable defaults (e.g., +/- 1 year is too big, let's just use what frontend asks)
+    const startDate = start ? new Date(start as string) : new Date(new Date().setMonth(new Date().getMonth() - 1));
+    const endDate = end ? new Date(end as string) : new Date(new Date().setMonth(new Date().getMonth() + 2));
+
+    // Fetch Tasks
+    let taskConditions: any = and(
+      eq(tasks.tenantId, tenantId),
+      sql`${tasks.dueDate} IS NOT NULL OR ${tasks.startDate} IS NOT NULL`
+    );
+    if (projectId) taskConditions = and(taskConditions, eq(tasks.projectId, parseInt(projectId as string)));
+    if (assigneeId) taskConditions = and(taskConditions, eq(tasks.assigneeId, parseInt(assigneeId as string)));
+    
+    const tasksList = await db.select({
+      id: tasks.id,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      priority: tasks.priority,
+      startDate: tasks.startDate,
+      dueDate: tasks.dueDate,
+      projectId: tasks.projectId,
+      assigneeId: tasks.assigneeId,
+      projectCode: projects.code,
+      projectName: projects.name
+    })
+    .from(tasks)
+    .leftJoin(projects, eq(tasks.projectId, projects.id))
+    .where(taskConditions);
+
+    // Fetch Events
+    let eventConditions: any = eq(events.tenantId, tenantId);
+    if (projectId) eventConditions = and(eventConditions, eq(events.projectId, parseInt(projectId as string)));
+    if (assigneeId) eventConditions = and(eventConditions, eq(events.ownerId, parseInt(assigneeId as string))); // Treating owner as assignee for filtering
+    
+    const eventsList = await db.select({
+      id: events.id,
+      title: events.title,
+      description: events.description,
+      startTime: events.startTime,
+      endTime: events.endTime,
+      ownerId: events.ownerId,
+      projectId: events.projectId,
+      projectCode: projects.code,
+      projectName: projects.name
+    })
+    .from(events)
+    .leftJoin(projects, eq(events.projectId, projects.id))
+    .where(eventConditions);
+
+    // Combine and format
+    const agenda = [
+      ...tasksList.map(t => ({
+        ...t,
+        sourceType: 'task',
+        // Map fields to common calendar fields
+        start: t.startDate || t.dueDate,
+        end: t.dueDate || t.startDate
+      })),
+      ...eventsList.map(e => ({
+        ...e,
+        sourceType: 'event',
+        start: e.startTime,
+        end: e.endTime
+      }))
+    ];
+
+    res.json(agenda);
+  } catch (err) {
+    console.error('Error fetching agenda:', err);
+    res.status(500).json({ error: 'Failed to fetch agenda' });
   }
 });
 

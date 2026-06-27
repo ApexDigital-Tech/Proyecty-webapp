@@ -10,6 +10,7 @@ import {
   UserCheck,
   Building,
   Users,
+  CalendarDays,
 } from 'lucide-react';
 import { UserRole } from '../types.ts';
 import { hasPermission } from '../lib/rbac.ts';
@@ -36,6 +37,7 @@ export default function Sidebar({
   }
   if (hasPermission(currentUser.role, 'canViewPortfolio')) {
     menuItems.push({ id: 'portfolio', label: 'Portafolio de Proyectos', icon: FolderGit2 });
+    menuItems.push({ id: 'global-agenda', label: 'Agenda Global', icon: CalendarDays });
   }
   if (hasPermission(currentUser.role, 'canViewReports')) {
     menuItems.push({ id: 'reports', label: 'Reportes y Analítica', icon: FileSpreadsheet });

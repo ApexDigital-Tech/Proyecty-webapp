@@ -9,6 +9,11 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'dayjs/plugin/isBetween': path.resolve(__dirname, 'src/dummy.js'),
+        'dayjs/plugin/isSameOrAfter': path.resolve(__dirname, 'src/dummy.js'),
+        'dayjs/plugin/isSameOrBefore': path.resolve(__dirname, 'src/dummy.js'),
+        'dayjs/plugin/isLeapYear': path.resolve(__dirname, 'src/dummy.js'),
+        '@popperjs/core/lib/modifiers/preventOverflow': path.resolve(__dirname, 'src/dummy.js')
       },
     },
     server: {

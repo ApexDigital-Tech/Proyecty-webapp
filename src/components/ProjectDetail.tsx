@@ -21,6 +21,7 @@ import {
   AlertOctagon,
   BookOpen,
   CheckSquare,
+  BarChart,
 } from 'lucide-react';
 import TabResumen from './ProjectTabs/TabResumen.tsx';
 import TabConvenio from './ProjectTabs/TabConvenio.tsx';
@@ -30,6 +31,8 @@ import TabDocumentos from './ProjectTabs/TabDocumentos.tsx';
 import TabReporteAI from './ProjectTabs/TabReporteAI.tsx';
 import TabBitacora from './ProjectTabs/TabBitacora.tsx';
 import TabTareas from './ProjectTabs/TabTareas.tsx';
+import TabCalendario from './ProjectTabs/TabCalendario.tsx';
+import TabCronograma from './ProjectTabs/TabCronograma.tsx';
 import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
@@ -48,7 +51,7 @@ export default function ProjectDetail({
   token,
 }: ProjectDetailProps) {
   const [project, setProject] = React.useState<any>(null);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas'>('resumen');
+  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states for various tabs
@@ -623,6 +626,8 @@ export default function ProjectDetail({
         {[
           { id: 'resumen', label: 'Resumen General', icon: Layers },
           { id: 'tareas', label: 'Tareas y Ejecución', icon: CheckSquare },
+          { id: 'cronograma', label: 'Cronograma', icon: BarChart },
+          { id: 'calendario', label: 'Calendario Operativo', icon: Calendar },
           { id: 'bitacora', label: 'Bitácora Operativa', icon: BookOpen },
           { id: 'convenio', label: 'Convenios y Desembolsos', icon: FileCheck2 },
           { id: 'presupuesto', label: 'Control Presupuestario', icon: FileSpreadsheet },
@@ -796,6 +801,26 @@ export default function ProjectDetail({
         {activeTab === 'tareas' && (
           <TabTareas
             project={project}
+            isEditable={isEditable}
+            token={token}
+          />
+        )}
+
+        {/* TAB 9: CALENDARIO OPERATIVO */}
+        {activeTab === 'calendario' && (
+          <TabCalendario
+            project={project}
+            onRefreshProject={loadProjectDetails}
+            isEditable={isEditable}
+            token={token}
+          />
+        )}
+
+        {/* TAB 10: CRONOGRAMA */}
+        {activeTab === 'cronograma' && (
+          <TabCronograma
+            project={project}
+            onRefreshProject={loadProjectDetails}
             isEditable={isEditable}
             token={token}
           />

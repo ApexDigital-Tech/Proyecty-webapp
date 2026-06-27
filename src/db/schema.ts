@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, boolean, doublePrecision, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { integer, pgTable, serial, text, timestamp, boolean, doublePrecision, jsonb, pgEnum, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // --- TENANT & ORG ---
@@ -284,6 +284,12 @@ export const tasks = pgTable('tasks', {
   position: integer('position').notNull().default(0), // Orden dentro de la columna Kanban
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
+}, (table) => {
+  return {
+    tenantIdIdx: index('tasks_tenant_id_idx').on(table.tenantId),
+    projectIdIdx: index('tasks_project_id_idx').on(table.projectId),
+    datesIdx: index('tasks_dates_idx').on(table.startDate, table.dueDate),
+  };
 });
 
 export const taskDependencies = pgTable('task_dependencies', {
@@ -322,6 +328,12 @@ export const events = pgTable('events', {
   endTime: timestamp('end_time').notNull(),
   location: text('location'),
   type: eventTypeEnum('type').notNull().default('MEETING'),
+}, (table) => {
+  return {
+    tenantIdIdx: index('events_tenant_id_idx').on(table.tenantId),
+    projectIdIdx: index('events_project_id_idx').on(table.projectId),
+    datesIdx: index('events_dates_idx').on(table.startTime, table.endTime),
+  };
 });
 
 export const eventAttendees = pgTable('event_attendees', {

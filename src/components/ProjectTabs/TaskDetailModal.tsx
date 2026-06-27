@@ -8,6 +8,7 @@ interface Task {
   status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   assigneeId: number | null;
+  startDate: string | null;
   dueDate: string | null;
   position: number;
   createdAt: string;
@@ -49,6 +50,7 @@ export default function TaskDetailModal({ task, isOpen, onClose, onSave, onDelet
         description: editedTask.description,
         status: editedTask.status,
         priority: editedTask.priority,
+        startDate: editedTask.startDate,
         dueDate: editedTask.dueDate,
         assigneeId: editedTask.assigneeId
       };
@@ -144,19 +146,35 @@ export default function TaskDetailModal({ task, isOpen, onClose, onSave, onDelet
               </select>
             </div>
 
-            {/* Due Date */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> Vencimiento
-              </label>
-              <input
-                type="date"
-                value={editedTask.dueDate ? editedTask.dueDate.substring(0, 10) : ''}
-                onChange={e => handleChange('dueDate', e.target.value || null)}
-                disabled={!isEditable}
-                className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-1 focus:ring-[#008fa0] outline-none disabled:bg-slate-50"
-              />
-            </div>
+            <div className="grid grid-cols-2 gap-4">
+                {/* Start Date */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Inicio
+                  </label>
+                  <input
+                    type="date"
+                    value={editedTask.startDate ? editedTask.startDate.substring(0, 10) : ''}
+                    onChange={e => handleChange('startDate', e.target.value || null)}
+                    disabled={!isEditable}
+                    className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-1 focus:ring-[#008fa0] outline-none disabled:bg-slate-50"
+                  />
+                </div>
+
+                {/* Due Date */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Vencimiento
+                  </label>
+                  <input
+                    type="date"
+                    value={editedTask.dueDate ? editedTask.dueDate.substring(0, 10) : ''}
+                    onChange={e => handleChange('dueDate', e.target.value || null)}
+                    disabled={!isEditable}
+                    className="w-full border border-slate-300 rounded-md p-2 text-sm focus:ring-1 focus:ring-[#008fa0] outline-none disabled:bg-slate-50"
+                  />
+                </div>
+              </div>
 
             {/* Assignee */}
             <div>

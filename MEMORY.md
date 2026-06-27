@@ -3,9 +3,9 @@
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
 ## 1. Estado Actual del Proyecto
-- **Fase Actual:** `Despliegue Controlado / Soft Launch (Beta Cerrada)`
-- **Último Hito Alcanzado:** Finalización del *Handoff Técnico* (Fase 7 completada).
-- **Validación Exitosa:** Se superó el *Tenant Breach Test* confirmando el aislamiento estricto de datos con respuesta HTTP 403, y la compilación productiva (`npm run build`) se ejecuta sin errores.
+- **Fase Actual:** `Fase 3 (Planeación y Control del Tiempo) Completada` -> `Transición a Fase 4`
+- **Último Hito Alcanzado:** Validación funcional al 100% de la Fase 3: Integración de Calendario Operativo, CRUD de Eventos, Diagrama Gantt (Cronograma) con asilamiento de datos y Agenda Ejecutiva Global.
+- **Validación Exitosa:** Las vistas temporales están consistentes. Se documentó y aplicó explícitamente la regla de negocio de aislamiento de eventos globales (`projectId = null`) frente a los eventos del proyecto. Build productivo compilando correctamente.
 
 ## 2. Stack Tecnológico Principal
 - **Frontend:** React, Vite, TypeScript, Tailwind CSS, React Router, Lucide Icons.
@@ -29,11 +29,10 @@ Se ha estabilizado el entorno productivo en Render (`proyecty-webapp.onrender.co
    - Se ha consolidado la función `mapRoleToEnum` en `auth.ts` para que los inicios de sesión mediante Google Auth resuelvan correctamente roles de DB (ej. `"Director"`) hacia los Enum de validación (`"DIRECTOR"`), corrigiendo accesos `403` en endpoints administrativos.
 4. **Data Seed (Idempotente):** Se implementaron `scripts/seed-prod-data.ts` y `scripts/rollback-demo-data.ts` accesibles vía `npm run` en el entorno Render, diseñados para inyectar datos demo `[DEMO VOSERDEM]` de forma segura sin contaminar a los usuarios reales y garantizando la limpieza de usuarios demo duplicados.
 
-## 5. Próximas Tareas y Pendientes (Priorizados)
-1. **Verificación Operativa de Usuarios:**
-   - Confirmar comportamiento en UI real: Creación de un usuario `pending`, su edición, suspensión, reactivación y trazas de auditoría correspondientes.
-   - Asegurar que no existan comportamientos indeseados (auto-eliminación/desactivación del propio usuario).
-2. **Edición de Nombres de Proyecto:**
-   - Confirmar y/o habilitar la capacidad de modificar el nombre de los proyectos directamente desde el UI del detalle de proyecto (PUT `/api/projects/:id`).
-3. **Validación Visual de Datos Demo:**
-   - Correr en Render Shell el comando `npm run db:seed:demo` y validar los datos en los módulos del portafolio, bitácora y presupuesto (dashboard).
+## 5. Próximas Tareas y Pendientes (Fase 4)
+1. **Kick-off Fase 4:** 
+   - Definir formalmente el alcance de la Fase 4 del roadmap.
+   - Establecer la arquitectura y los modelos de datos que serán requeridos.
+2. **Despliegue para Pruebas (Fase 3):**
+   - El código actual (Fase 3 completa) será fusionado a `main` para que Render realice el despliegue automático.
+   - Pruebas UAT en ambiente Cloud para confirmar que las interacciones del Calendario y Gantt funcionen fluidas bajo latencia real.
