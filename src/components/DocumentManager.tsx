@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Paperclip, Upload, Trash2, Download, AlertCircle, Loader2 } from 'lucide-react';
+import { Paperclip, Upload, Trash2, Download, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import dayjs from 'dayjs';
+import { AiAnalysisModal } from './AiAnalysisModal';
 
 interface Document {
   id: number;
@@ -27,6 +28,11 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
   
   const [uploadType, setUploadType] = useState('Other');
   const [uploadTitle, setUploadTitle] = useState('');
+  
+  // AI Analysis state
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+  const [selectedDocName, setSelectedDocName] = useState('');
 
   const fetchDocuments = async () => {
     try {
@@ -268,6 +274,19 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex justify-end gap-2">
+                        {doc.mimeType === 'application/pdf' && (
+                          <button
+                            onClick={() => {
+                              setSelectedDocId(doc.id);
+                              setSelectedDocName(doc.name);
+                              setAnalysisModalOpen(true);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors group relative"
+                            title="Analizar con IA"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDownload(doc)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
@@ -291,6 +310,13 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
           </div>
         )}
       </div>
+
+      <AiAnalysisModal 
+        isOpen={analysisModalOpen}
+        onClose={() => setAnalysisModalOpen(false)}
+        documentId={selectedDocId}
+        documentName={selectedDocName}
+      />
     </div>
   );
 }

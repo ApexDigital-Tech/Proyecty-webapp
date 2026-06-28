@@ -357,3 +357,29 @@ export const eventAttendees = pgTable('event_attendees', {
   status: text('status').default('PENDING'), // 'ACCEPTED', 'DECLINED', 'PENDING'
 });
 
+// --- SAAS PHASE 5B: DOCUMENT ANALYSIS ---
+export const documentAnalysis = pgTable('document_analysis', {
+  id: serial('id').primaryKey(),
+  documentId: integer('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  tenantId: integer('tenant_id').notNull().references(() => organizations.id),
+  summary: text('summary'),
+  keyPoints: jsonb('key_points'), // Array of strings
+  detectedEntities: jsonb('detected_entities'), // Array of objects
+  suggestedCategory: text('suggested_category'),
+  rawAiResponse: jsonb('raw_ai_response'),
+  analyzedBy: integer('analyzed_by').notNull().references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const documentAnalysisRelations = relations(documentAnalysis, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentAnalysis.documentId],
+    references: [documents.id]
+  }),
+  analyzer: one(users, {
+    fields: [documentAnalysis.analyzedBy],
+    references: [users.id]
+  })
+}));
+
+
