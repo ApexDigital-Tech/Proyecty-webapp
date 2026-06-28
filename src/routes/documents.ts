@@ -14,7 +14,17 @@ const router = express.Router();
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+let supabase: any;
+try {
+  if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  } else {
+    console.warn("WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Document endpoints will fail.");
+  }
+} catch (e) {
+  console.error("Failed to initialize Supabase client:", e);
+}
 
 // Multer config (10MB limit, specific mimetypes)
 const storage = multer.memoryStorage();
@@ -60,6 +70,9 @@ router.post('/projects/:id/documents', requireAuth, upload.single('file'), async
     const storagePath = `${tenantId}/${projectId}/${timestamp}_${safeName}`;
 
     // Upload to Supabase Storage
+    if (!supabase) {
+      throw new Error("Supabase client not initialized. Check environment variables.");
+    }
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('documents')
       .upload(storagePath, file.buffer, {
@@ -178,6 +191,9 @@ router.delete('/documents/:id', requireAuth, async (req: AuthRequest, res: any) 
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
     // Delete from Supabase Storage
+    if (!supabase) {
+      throw new Error("Supabase client not initialized. Check environment variables.");
+    }
     const storagePathMatch = doc.fileUrl?.match(/public\/documents\/(.*)$/);
     if (storagePathMatch && storagePathMatch[1]) {
       const storagePath = storagePathMatch[1];
@@ -235,6 +251,9 @@ router.post('/documents/:id/analyze', requireAuth, async (req: AuthRequest, res:
     }
 
     // 3. Download file from Supabase Storage
+    if (!supabase) {
+      throw new Error("Supabase client not initialized. Check environment variables.");
+    }
     const storagePathMatch = doc.fileUrl?.match(/public\/documents\/(.*)$/);
     if (!storagePathMatch || !storagePathMatch[1]) {
       return res.status(400).json({ error: 'Invalid document URL' });
