@@ -34,46 +34,59 @@ export const requireAuth = async (
     console.log(`[Auth Debug] Token recibido con prefijo Bearer. Segmentos: ${segments.length} (formato esperado: 3). Empieza con: ${token.substring(0, 5)}...`);
   }
 
-  // Support for Demo Roles using actual DB users via UID
-  if (token.startsWith('demo-uid-')) {
-    const parts = token.split('-role-');
-    const uidPart = parts[0].replace('demo-uid-', '');
-    const simulatedRole = parts.length > 1 ? parts[1].toUpperCase() : null;
+  // Support for all Demo Roles
+  if (token.startsWith('demo-')) {
+    if (token.startsWith('demo-uid-')) {
+      const parts = token.split('-role-');
+      const uidPart = parts[0].replace('demo-uid-', '');
+      const simulatedRole = parts.length > 1 ? parts[1].toUpperCase() : null;
 
-    try {
-      const { getUserByUid } = await import('../db/users.ts');
-      const dbUser = await getUserByUid(uidPart);
-      
-      if (!dbUser) {
-        return res.status(401).json({ error: 'Usuario demo no encontrado' });
+      try {
+        const { getUserByUid } = await import('../db/users.ts');
+        const dbUser = await getUserByUid(uidPart);
+        
+        if (!dbUser) {
+          return res.status(401).json({ error: 'Usuario demo no encontrado' });
+        }
+        
+        if (dbUser.isActive === false) {
+          return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
+        }
+
+        const mapRoleToEnum = (r: string) => {
+          const upper = r.toUpperCase();
+          if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
+          if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
+          if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
+          if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
+          if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
+          return 'MANAGER';
+        };
+
+        req.user = {
+          uid: dbUser.uid,
+          email: dbUser.email,
+          name: dbUser.name,
+          role: simulatedRole || mapRoleToEnum(dbUser.roleName || ''),
+          tenantId: dbUser.tenantId,
+          id: dbUser.id,
+        };
+        return next();
+      } catch (err) {
+        console.error('Error fetching demo user:', err);
+        return res.status(500).json({ error: 'Error al sincronizar usuario de prueba' });
       }
-      
-      if (dbUser.isActive === false) {
-        return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
-      }
-
-      const mapRoleToEnum = (r: string) => {
-        const upper = r.toUpperCase();
-        if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
-        if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
-        if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
-        if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
-        if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
-        return 'MANAGER';
-      };
-
+    } else {
+      // Handle simple demo tokens like demo-director
+      const simulatedRole = token.replace('demo-', '').toUpperCase();
       req.user = {
-        uid: dbUser.uid,
-        email: dbUser.email,
-        name: dbUser.name,
-        role: simulatedRole || mapRoleToEnum(dbUser.roleName || ''),
-        tenantId: dbUser.tenantId,
-        id: dbUser.id,
+        uid: `demo-${simulatedRole.toLowerCase()}`,
+        email: `demo@proyecty.org`,
+        name: `Demo ${simulatedRole}`,
+        role: simulatedRole,
+        tenantId: 1, // Default tenant
       };
       return next();
-    } catch (err) {
-      console.error('Error fetching demo user:', err);
-      return res.status(500).json({ error: 'Error al sincronizar usuario de prueba' });
     }
   }
 
