@@ -49,7 +49,7 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
         ? `/api/documents/${documentId}/analyze?force=true`
         : `/api/documents/${documentId}/analyze`;
         
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(url, {
         method: 'POST',
         headers: {

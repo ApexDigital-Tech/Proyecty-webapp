@@ -25,6 +25,14 @@ export const requireAuth = async (
   }
 
   const token = authHeader.split('Bearer ')[1];
+  
+  // Safe temporal logging para debug (sin exponer el JWT completo)
+  if (!token || token === 'null' || token === 'undefined') {
+    console.warn(`[Auth Debug] Token recibido está vacío o inválido: "${token}"`);
+  } else {
+    const segments = token.split('.');
+    console.log(`[Auth Debug] Token recibido con prefijo Bearer. Segmentos: ${segments.length} (formato esperado: 3). Empieza con: ${token.substring(0, 5)}...`);
+  }
 
   // Support for Demo Roles using actual DB users via UID
   if (token.startsWith('demo-uid-')) {

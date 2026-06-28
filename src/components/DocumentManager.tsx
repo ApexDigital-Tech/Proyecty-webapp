@@ -38,7 +38,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/projects/${projectId}/documents`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -93,7 +93,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       formData.append('title', uploadTitle);
       formData.append('type', uploadType);
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/projects/${projectId}/documents`, {
         method: 'POST',
         headers: {
@@ -120,7 +120,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
 
   const handleDownload = async (doc: Document) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/documents/${doc.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -138,7 +138,7 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     if (!confirm('¿Estás seguro de que deseas eliminar este documento? Esta acción no se puede deshacer.')) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/documents/${docId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
