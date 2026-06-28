@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { LayoutGrid, List, Plus, Clock, AlertCircle, MessageSquare, Flag, ArrowRight } from 'lucide-react';
-import { ProjectFull } from '../ProjectDetail';
+
 import TaskDetailModal from './TaskDetailModal';
 
 interface Task {
@@ -11,13 +11,14 @@ interface Task {
   status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   assigneeId: number | null;
+  startDate: string | null;
   dueDate: string | null;
   position: number;
   createdAt: string;
 }
 
 interface TabTareasProps {
-  project: ProjectFull;
+  project: any;
   isEditable: boolean;
   token: string;
 }

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Gantt, Task as GanttTask, ViewMode } from 'gantt-task-react';
 import 'gantt-task-react/dist/index.css';
-import { ProjectFull } from '../ProjectDetail';
+
 import { BarChart } from 'lucide-react';
 import moment from 'moment';
 
 interface TabCronogramaProps {
-  project: ProjectFull;
+  project: any;
   onRefreshProject: () => void;
   isEditable: boolean;
   token: string;

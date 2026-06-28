@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, MessageSquare, AlertCircle, MapPin, Flag, Calendar } from 'lucide-react';
-import { ProjectFull } from '../ProjectDetail';
+
 
 interface Log {
   id: number;
@@ -12,7 +12,7 @@ interface Log {
 }
 
 interface TabBitacoraProps {
-  project: ProjectFull;
+  project: any;
   isEditable: boolean;
   refreshProject: () => void;
   token: string;

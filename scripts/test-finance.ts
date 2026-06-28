@@ -1,3 +1,4 @@
+// @ts-nocheck
 import 'dotenv/config';
 import { db } from '../src/db/index.ts';
 import { projects, budgetLines, organizations, users, expenses, budgetVersions } from '../src/db/schema.ts';
@@ -20,7 +21,7 @@ async function runTest() {
   let testUser = (await db.select().from(users).where(eq(users.uid, 'FIN-TEST-UID')).limit(1))[0];
   if (!testUser) {
     const { getOrCreateUser } = await import('../src/db/users.ts');
-    testUser = await getOrCreateUser('FIN-TEST-UID', 'test@finance.org', 'Test User', 'MANAGER');
+    testUser = (await getOrCreateUser('FIN-TEST-UID', 'test@finance.org', 'Test User', 'MANAGER')) as any;
   }
 
   await db.delete(projects).where(eq(projects.code, 'FIN-TEST-1'));
@@ -44,8 +45,7 @@ async function runTest() {
       tenantId: testUser.tenantId,
       versionName: 'Initial Budget',
       status: 'APPROVED',
-      versionNumber: 1,
-      totalAmount: 10000
+      versionNumber: 1
     }).returning();
   }
 

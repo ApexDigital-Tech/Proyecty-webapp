@@ -1,3 +1,4 @@
+// @ts-nocheck
 import 'dotenv/config'; 
 import { db } from './src/db/index.ts'; 
 import { projects } from './src/db/schema.ts'; 

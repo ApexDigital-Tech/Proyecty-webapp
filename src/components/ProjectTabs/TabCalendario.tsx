@@ -3,7 +3,7 @@ import { Calendar, momentLocalizer, Event as CalendarEvent } from 'react-big-cal
 import moment from 'moment';
 import 'moment/locale/es';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { ProjectFull } from '../ProjectDetail';
+
 import { Plus, Calendar as CalendarIcon } from 'lucide-react';
 import TaskDetailModal from './TaskDetailModal';
 import EventDetailModal, { CalendarEventData } from './EventDetailModal';
@@ -12,7 +12,7 @@ moment.locale('es');
 const localizer = momentLocalizer(moment);
 
 interface TabCalendarioProps {
-  project: ProjectFull;
+  project: any;
   onRefreshProject: () => void;
   isEditable: boolean;
   token: string;

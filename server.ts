@@ -9,6 +9,7 @@ import { seedDatabase } from './src/db/seed.ts';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { logActivity } from './src/db/audit.ts';
 import multer from 'multer';
+import documentsRouter from './src/routes/documents.ts';
 import { createClient } from '@supabase/supabase-js';
 import {
   projects,
@@ -98,6 +99,8 @@ const upload = multer({
 // ==========================================
 // 1. PROJECTS ENDPOINTS
 // ==========================================
+
+app.use('/api', documentsRouter);
 
 // List all projects with simplified aggregated budget and progress
 app.get('/api/projects', requireAuth, async (req: AuthRequest, res) => {
@@ -890,9 +893,10 @@ app.post('/api/projects/:projectId/documents', requireAuth, upload.single('file'
 
     const fileSizeKB = (file.size / 1024).toFixed(2) + ' KB';
 
-    const newDoc = await db.insert(documents).values({
-      projectId,
-      uploadedBy: userId,
+    const [newDoc] = await db.insert(documents).values({
+      tenantId: req.user!.tenantId,
+      projectId: Number(projectId),
+      uploadedBy: req.user!.id,
       name: file.originalname,
       size: fileSizeKB,
       type: file.mimetype,
@@ -903,7 +907,7 @@ app.post('/api/projects/:projectId/documents', requireAuth, upload.single('file'
 
     await logActivity(projectId, userName, `Subió el documento "${file.originalname}" (${fileSizeKB}) al repositorio digital.`);
 
-    res.status(201).json(newDoc[0]);
+    res.status(201).json(newDoc);
   } catch (err) {
     console.error('Error posting document:', err);
     res.status(500).json({ error: 'Error al subir el archivo.' });
@@ -1320,7 +1324,7 @@ app.post('/api/tasks', requireAuth, async (req: AuthRequest, res) => {
       action: 'TASK_CREATED',
       entityType: 'Task',
       entityId: newTask.id,
-      details: `Created task: ${title} for project ${projectId}`
+      newValues: { details: `Created task: ${title} for project ${projectId}` }
     });
 
     res.status(201).json(newTask);
@@ -1362,7 +1366,7 @@ app.patch('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
       action: 'TASK_UPDATED',
       entityType: 'Task',
       entityId: taskId,
-      details: `Updated task ${taskId}: ${Object.keys(updateData).join(', ')}`
+      newValues: { details: `Updated task ${taskId}: ${Object.keys(updateData).join(', ')}` }
     });
 
     res.json(updatedTask);
@@ -1389,7 +1393,7 @@ app.delete('/api/tasks/:id', requireAuth, async (req: AuthRequest, res) => {
       action: 'TASK_DELETED',
       entityType: 'Task',
       entityId: taskId,
-      details: `Deleted task ${taskId}`
+      newValues: { details: `Deleted task ${taskId}` }
     });
 
     res.json({ success: true });

@@ -52,7 +52,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           return;
         }
       }
-      onLoginSuccess(demoToken, { name: user.name, email: user.email, role: user.role, uid: user.uid });
+      onLoginSuccess(demoToken, { name: user.name, email: user.email, role: user.role });
     } catch (e) {
       setError('Error al iniciar sesión demo.');
     }

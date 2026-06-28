@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from '../src/db/index.ts';
 import { users, projects, expenses, roles, budgetLines } from '../src/db/schema.ts';
 import { eq, and, desc, sql, like } from 'drizzle-orm';

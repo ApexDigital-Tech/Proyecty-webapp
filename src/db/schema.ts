@@ -183,9 +183,12 @@ export const receiptsVouchers = pgTable('receipts_vouchers', {
 // --- DOCUMENTS ---
 export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   uploadedBy: integer('uploaded_by').references(() => users.id),
   name: text('name').notNull(),
+  originalName: text('original_name'),
+  mimeType: text('mime_type'),
   size: text('size').notNull(),
   type: text('type').notNull(),
   uploadDate: text('upload_date'),

@@ -107,5 +107,6 @@ export interface ActivityLog {
   userName: string;
   actionDescription: string;
   timeAgo: string;
+  entityType?: string;
   createdAt?: string;
 }

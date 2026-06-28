@@ -158,6 +158,7 @@ export async function seedDatabase() {
     // 11. Seed Documents
     await db.insert(documents).values([
       {
+        tenantId: org.id,
         projectId: p1.id,
         uploadedBy: adminUser.id,
         name: 'Convenio de Subvención.pdf',
