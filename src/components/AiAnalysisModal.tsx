@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription 
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Loader2, Sparkles, FileText, CheckCircle2, Tag, Bot } from 'lucide-react';
+import { Loader2, Sparkles, FileText, CheckCircle2, Tag, Bot, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface DetectedEntity {
@@ -77,22 +73,29 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] bg-slate-900/95 backdrop-blur-xl border-slate-700/50 text-slate-100 shadow-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold flex items-center gap-3">
-            <div className="p-2 bg-indigo-500/20 rounded-lg">
-              <Sparkles className="w-6 h-6 text-indigo-400" />
-            </div>
-            Análisis Inteligente
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Documento: <span className="text-slate-200 font-medium">{documentName}</span>
-          </DialogDescription>
-        </DialogHeader>
+  if (!isOpen) return null;
 
-        <div className="py-6">
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 text-slate-100 shadow-2xl rounded-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+          <div>
+            <h3 className="text-2xl font-semibold flex items-center gap-3">
+              <div className="p-2 bg-indigo-500/20 rounded-lg">
+                <Sparkles className="w-6 h-6 text-indigo-400" />
+              </div>
+              Análisis Inteligente
+            </h3>
+            <p className="text-slate-400 mt-2">
+              Documento: <span className="text-slate-200 font-medium">{documentName}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md transition-colors self-start">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="relative">
@@ -106,13 +109,12 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
               <p className="text-rose-400 flex items-center gap-2">
                 <span className="font-semibold">Error:</span> {error}
               </p>
-              <Button 
+              <button 
                 onClick={() => handleAnalyze(true)} 
-                variant="outline" 
-                className="mt-4 border-rose-500/30 text-rose-300 hover:bg-rose-500/20"
+                className="mt-4 px-4 py-2 border border-rose-500/30 rounded-lg text-rose-300 hover:bg-rose-500/20 transition-colors text-sm font-medium"
               >
                 Reintentar
-              </Button>
+              </button>
             </div>
           ) : data ? (
             <div className="space-y-6">
@@ -164,7 +166,7 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {data.detectedEntities?.map((entity, idx) => (
-                        <div key={idx} className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs flex flex-col">
+                        <div key={idx} className="px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs flex flex-col">
                           <span className="text-slate-200 font-medium">{entity.name}</span>
                           <span className="text-slate-500 text-[10px] uppercase tracking-wider">{entity.type}</span>
                         </div>
@@ -179,7 +181,7 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
             </div>
           ) : null}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
