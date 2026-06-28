@@ -275,7 +275,7 @@ router.post('/documents/:id/analyze', requireAuth, async (req: AuthRequest, res:
       return res.status(500).json({ error: 'GEMINI_API_KEY no está configurada en el servidor.' });
     }
     
-    // We use gemini-1.5-flash as it supports PDF documents natively
+    // We use gemini-2.0-flash as it supports PDF documents natively and is recommended
     let responseText = "";
     if (process.env.GEMINI_API_KEY === 'mock') {
       console.log("Mocking Gemini API call...");
@@ -295,7 +295,7 @@ router.post('/documents/:id/analyze', requireAuth, async (req: AuthRequest, res:
         suggestedCategory: "Contrato"
       });
     } else {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       
       const prompt = `Analiza el siguiente documento y devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura (no incluyas markdown \`\`\`json ni nada extra):
 {
