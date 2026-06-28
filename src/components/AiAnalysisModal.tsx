@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Sparkles, FileText, CheckCircle2, Tag, Bot, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 
 interface DetectedEntity {
   name: string;
@@ -25,7 +24,6 @@ interface AiAnalysisModalProps {
 }
 
 export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: AiAnalysisModalProps) {
-  const { token, tenantId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<AiAnalysisData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +49,11 @@ export function AiAnalysisModal({ isOpen, onClose, documentId, documentName }: A
         ? `/api/documents/${documentId}/analyze?force=true`
         : `/api/documents/${documentId}/analyze`;
         
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': String(tenantId)
+          'Authorization': `Bearer ${token}`
         }
       });
       
