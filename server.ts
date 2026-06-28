@@ -26,6 +26,7 @@ import {
   tasks,
   projectLogs,
   events,
+  expenses,
 } from './src/db/schema.ts';
 import { eq, desc, and, inArray, ilike, sql } from 'drizzle-orm';
 
@@ -1153,6 +1154,7 @@ app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
     } else if (type === 'ejecutivo') {
       const pId = projectId ? Number(projectId) : null;
       const allProjects = await db.select({
+        id: projects.id,
         code: projects.code,
         name: projects.name,
         donor: projects.donorId,
@@ -1259,7 +1261,7 @@ app.post('/api/projects/:id/logs', requireAuth, async (req: AuthRequest, res) =>
       date: new Date()
     }).returning();
 
-    await logActivity(tenantId, authorId, `Added project log (${type}) to project ID ${projectId}`);
+    await logActivity(tenantId, req.user!.name, `Added project log (${type}) to project ID ${projectId}`);
     res.json({
       ...newLog[0],
       authorName: req.user!.name // O cualquier nombre disponible
@@ -1640,7 +1642,7 @@ app.post('/api/events', requireAuth, async (req: AuthRequest, res) => {
       location
     }).returning();
 
-    await logActivity(tenantId, req.user!.id, `Created event: ${title}`);
+    await logActivity(tenantId, req.user!.name, `Created event: ${title}`);
     res.json(newEvent);
   } catch (err) {
     console.error('Error creating event:', err);
@@ -1666,7 +1668,7 @@ app.patch('/api/events/:id', requireAuth, async (req: AuthRequest, res) => {
     if (updates.location !== undefined) updateData.location = updates.location;
 
     const [updatedEvent] = await db.update(events).set(updateData).where(eq(events.id, eventId)).returning();
-    await logActivity(tenantId, req.user!.id, `Updated event: ${updatedEvent.title}`);
+    await logActivity(tenantId, req.user!.name, `Updated event: ${updatedEvent.title}`);
     res.json(updatedEvent);
   } catch (err) {
     console.error('Error updating event:', err);
@@ -1683,7 +1685,7 @@ app.delete('/api/events/:id', requireAuth, async (req: AuthRequest, res) => {
     if (existing.length === 0) return res.status(404).json({ error: 'Event not found' });
 
     await db.delete(events).where(eq(events.id, eventId));
-    await logActivity(tenantId, req.user!.id, `Deleted event ${eventId}`);
+    await logActivity(tenantId, req.user!.name, `Deleted event ${eventId}`);
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting event:', err);
@@ -1767,6 +1769,197 @@ app.get('/api/agenda', requireAuth, async (req: AuthRequest, res) => {
   } catch (err) {
     console.error('Error fetching agenda:', err);
     res.status(500).json({ error: 'Failed to fetch agenda' });
+  }
+});
+
+// ==========================================
+// FASE 4: EXPENSES & FINANCIAL TRANSACTIONS
+// ==========================================
+
+// Helper to recalculate executedAmount for a budget line transactionally
+async function recalculateBudgetLineExecutedAmount(budgetLineId: number, tx: any) {
+  // Sum all APPROVED expenses for this budget line
+  const result = await tx.select({
+    total: sql`COALESCE(SUM(${expenses.baseAmount}), 0)`
+  })
+  .from(expenses)
+  .where(and(eq(expenses.budgetLineId, budgetLineId), eq(expenses.status, 'APPROVED')));
+
+  const totalExecuted = result[0].total;
+
+  // Update budget line
+  await tx.update(budgetLines)
+    .set({ executedAmount: Number(totalExecuted) })
+    .where(eq(budgetLines.id, budgetLineId));
+}
+// List Expenses (for Approval Dashboard)
+app.get('/api/expenses', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const { status, projectId } = req.query;
+
+    let conditions = [eq(expenses.tenantId, tenantId)];
+    
+    if (status) conditions.push(eq(expenses.status, status as string));
+    if (projectId) conditions.push(eq(expenses.projectId, parseInt(projectId as string)));
+
+    const allExpenses = await db.select({
+      id: expenses.id,
+      amount: expenses.amount,
+      currency: expenses.currency,
+      originalAmount: expenses.originalAmount,
+      originalCurrency: expenses.originalCurrency,
+      exchangeRate: expenses.exchangeRate,
+      baseAmount: expenses.baseAmount,
+      exchangeRateSource: expenses.exchangeRateSource,
+      exchangeRateDate: expenses.exchangeRateDate,
+      date: expenses.date,
+      description: expenses.description,
+      status: expenses.status,
+      projectCode: projects.code,
+      projectName: projects.name,
+      budgetCode: budgetLines.code,
+      budgetCategory: budgetLines.category,
+      registeredByName: users.name
+    })
+    .from(expenses)
+    .leftJoin(projects, eq(expenses.projectId, projects.id))
+    .leftJoin(budgetLines, eq(expenses.budgetLineId, budgetLines.id))
+    .leftJoin(users, eq(expenses.registeredBy, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(expenses.date));
+
+    res.json(allExpenses);
+  } catch (err) {
+    console.error('Error fetching expenses:', err);
+    res.status(500).json({ error: 'Failed to fetch expenses' });
+  }
+});
+
+// Create Expense
+app.post('/api/projects/:projectId/expenses', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { projectId } = req.params;
+    const tenantId = req.user!.tenantId;
+    
+    if (!(await verifyProjectTenant(parseInt(projectId), tenantId))) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
+    const { 
+      budgetLineId, 
+      originalAmount, 
+      originalCurrency, 
+      exchangeRate, 
+      baseAmount, 
+      exchangeRateSource, 
+      exchangeRateDate,
+      date, 
+      description 
+    } = req.body;
+
+    const newExpense = await db.insert(expenses).values({
+      tenantId,
+      projectId: parseInt(projectId),
+      budgetLineId: parseInt(budgetLineId),
+      amount: originalAmount, // legacy fallback for now
+      currency: originalCurrency, // legacy fallback for now
+      originalAmount,
+      originalCurrency,
+      exchangeRate: exchangeRate || 1,
+      baseAmount,
+      exchangeRateSource,
+      exchangeRateDate: exchangeRateDate ? new Date(exchangeRateDate) : new Date(),
+      date: new Date(date),
+      description,
+      status: 'PENDING_APPROVAL',
+      registeredBy: req.user!.id
+    }).returning();
+
+    res.json(newExpense[0]);
+  } catch (err) {
+    console.error('Error creating expense:', err);
+    res.status(500).json({ error: 'Failed to create expense' });
+  }
+});
+
+// Approve/Reject/Revoke Expense
+app.patch('/api/expenses/:expenseId/approve', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { expenseId } = req.params;
+    const { status } = req.body; // 'APPROVED' or 'REJECTED' or 'PENDING_APPROVAL' (revoke)
+    const tenantId = req.user!.tenantId;
+    const userRole = req.user!.role; // It's a string from auth.ts
+
+    if (!['MANAGER', 'DIRECTOR', 'FINANCE'].includes(userRole as string)) {
+      return res.status(403).json({ error: 'Role not authorized to approve expenses' });
+    }
+
+    // Verify tenant
+    const expenseRecord = await db.select().from(expenses).where(and(eq(expenses.id, parseInt(expenseId)), eq(expenses.tenantId, tenantId))).limit(1);
+    if (!expenseRecord.length) return res.status(404).json({ error: 'Expense not found' });
+    const expense = expenseRecord[0];
+
+    // Transactional status update and executedAmount recalculation
+    await db.transaction(async (tx) => {
+      await tx.update(expenses)
+        .set({ status, approvedBy: req.user!.id })
+        .where(eq(expenses.id, parseInt(expenseId)));
+      
+      await recalculateBudgetLineExecutedAmount(expense.budgetLineId, tx);
+      
+      // Log audit
+      await tx.insert(auditLogs).values({
+        tenantId,
+        userId: req.user!.id,
+        action: 'UPDATE_STATUS',
+        entityType: 'Expense',
+        entityId: expense.id,
+        newValues: { status }
+      });
+    });
+
+    res.json({ message: 'Expense status updated successfully' });
+  } catch (err) {
+    console.error('Error approving expense:', err);
+    res.status(500).json({ error: 'Failed to approve expense' });
+  }
+});
+
+// ==========================================
+// FASE 4: BUDGET VERSIONS (REFORMULADOS)
+// ==========================================
+// Approve a budget version
+app.patch('/api/budget-versions/:versionId/approve', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { versionId } = req.params;
+    const tenantId = req.user!.tenantId;
+    const userRole = req.user!.role; // It's a string from auth.ts
+
+    if (!['DIRECTOR', 'FINANCE'].includes(userRole as string)) {
+      return res.status(403).json({ error: 'Role not authorized to approve budget versions' });
+    }
+
+    const versionRecord = await db.select().from(budgetVersions).where(and(eq(budgetVersions.id, parseInt(versionId)), eq(budgetVersions.tenantId, tenantId))).limit(1);
+    if (!versionRecord.length) return res.status(404).json({ error: 'Budget version not found' });
+    const targetVersion = versionRecord[0];
+
+    await db.transaction(async (tx) => {
+      // Archive current approved version
+      await tx.update(budgetVersions)
+        .set({ status: 'ARCHIVED' })
+        .where(and(eq(budgetVersions.projectId, targetVersion.projectId), eq(budgetVersions.status, 'APPROVED')));
+
+      // Approve new version
+      await tx.update(budgetVersions)
+        .set({ status: 'APPROVED', approvedBy: req.user!.id })
+        .where(eq(budgetVersions.id, parseInt(versionId)));
+    });
+
+    res.json({ message: 'Budget version approved successfully' });
+  } catch (err) {
+    console.error('Error approving budget version:', err);
+    res.status(500).json({ error: 'Failed to approve budget version' });
   }
 });
 

@@ -64,6 +64,7 @@ export const projects = pgTable('projects', {
   nextMilestoneTitle: text('next_milestone_title'),
   score: integer('score').notNull().default(100), 
   description: text('description'),
+  baseCurrency: text('base_currency').notNull().default('USD'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -114,8 +115,11 @@ export const clauses = pgTable('clauses', {
 // --- BUDGETS ---
 export const budgetVersions = pgTable('budget_versions', {
   id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   versionName: text('version_name').notNull(), // 'V1 - Inicial', 'V2 - Reformulado'
+  versionNumber: integer('version_number').notNull().default(1),
+  status: text('status').notNull().default('DRAFT'), // 'DRAFT', 'APPROVED', 'ARCHIVED'
   isApproved: boolean('is_approved').notNull().default(false),
   approvedBy: integer('approved_by').references(() => users.id),
   createdAt: timestamp('created_at').defaultNow(),
@@ -139,13 +143,21 @@ export const budgetLines = pgTable('budget_lines', {
 // --- EXPENSES & VOUCHERS ---
 export const expenses = pgTable('expenses', {
   id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   budgetLineId: integer('budget_line_id').references(() => budgetLines.id).notNull(),
   amount: doublePrecision('amount').notNull(),
   currency: text('currency').notNull().default('USD'),
+  originalAmount: doublePrecision('original_amount'),
+  originalCurrency: text('original_currency'),
+  exchangeRate: doublePrecision('exchange_rate').notNull().default(1),
+  baseAmount: doublePrecision('base_amount'),
+  exchangeRateSource: text('exchange_rate_source'),
+  exchangeRateDate: timestamp('exchange_rate_date'),
   date: timestamp('date').notNull(),
   description: text('description'),
   status: text('status').notNull().default('PENDING_APPROVAL'), // 'APPROVED', 'REJECTED'
+  registeredBy: integer('registered_by').references(() => users.id),
   approvedBy: integer('approved_by').references(() => users.id),
 });
 

@@ -8,10 +8,11 @@ import ProjectDetail from './components/ProjectDetail.tsx';
 import AuditTrail from './components/AuditTrail.tsx';
 import UsersManager from './components/UsersManager.tsx';
 import Reports from './components/Reports.tsx';
+import ExpenseApprovalDashboard from './components/ExpenseApprovalDashboard.tsx';
 import ErrorBoundary from './components/common/ErrorBoundary.tsx';
 import { Project, ActivityLog, UserRole } from './types.ts';
 import { hasPermission } from './lib/rbac.ts';
-import { LayoutDashboard, FolderGit2, FileSpreadsheet, History, Users, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, FolderGit2, FileSpreadsheet, History, Users, CalendarDays, DollarSign } from 'lucide-react';
 import GlobalAgenda from './components/GlobalAgenda.tsx';
 
 export default function App() {
@@ -252,6 +253,13 @@ export default function App() {
                 />
               )}
 
+              {currentTab === 'gastos' && (
+                <ExpenseApprovalDashboard
+                  token={token}
+                  userRole={currentUser.role}
+                />
+              )}
+
               {currentTab === 'users' && hasPermission(currentUser.role, 'canViewUsers') && (
                 <UsersManager
                   token={token}
@@ -267,11 +275,12 @@ export default function App() {
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around z-50 h-16 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-safe">
-        {['dashboard', 'portfolio', 'global-agenda', 'reports', 'audit', 'users'].filter(id => {
+        {['dashboard', 'portfolio', 'global-agenda', 'reports', 'gastos', 'audit', 'users'].filter(id => {
           if (id === 'dashboard') return hasPermission(currentUser.role, 'canViewDashboard');
           if (id === 'portfolio') return hasPermission(currentUser.role, 'canViewPortfolio');
           if (id === 'global-agenda') return hasPermission(currentUser.role, 'canViewPortfolio');
           if (id === 'reports') return hasPermission(currentUser.role, 'canViewReports');
+          if (id === 'gastos') return hasPermission(currentUser.role, 'canApproveExpenses');
           if (id === 'audit') return hasPermission(currentUser.role, 'canViewAudit');
           if (id === 'users') return hasPermission(currentUser.role, 'canViewUsers');
           return false;
@@ -281,6 +290,7 @@ export default function App() {
           if (id === 'portfolio') { Icon = FolderGit2; label = 'Proyectos'; }
           if (id === 'global-agenda') { Icon = CalendarDays; label = 'Agenda'; }
           if (id === 'reports') { Icon = FileSpreadsheet; label = 'Reportes'; }
+          if (id === 'gastos') { Icon = DollarSign; label = 'Gastos'; }
           if (id === 'audit') { Icon = History; label = 'Bitácora'; }
           if (id === 'users') { Icon = Users; label = 'Usuarios'; }
           const isActive = currentTab === id && selectedProjectId === null;

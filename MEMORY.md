@@ -29,10 +29,13 @@ Se ha estabilizado el entorno productivo en Render (`proyecty-webapp.onrender.co
    - Se ha consolidado la función `mapRoleToEnum` en `auth.ts` para que los inicios de sesión mediante Google Auth resuelvan correctamente roles de DB (ej. `"Director"`) hacia los Enum de validación (`"DIRECTOR"`), corrigiendo accesos `403` en endpoints administrativos.
 4. **Data Seed (Idempotente):** Se implementaron `scripts/seed-prod-data.ts` y `scripts/rollback-demo-data.ts` accesibles vía `npm run` en el entorno Render, diseñados para inyectar datos demo `[DEMO VOSERDEM]` de forma segura sin contaminar a los usuarios reales y garantizando la limpieza de usuarios demo duplicados.
 
-## 5. Próximas Tareas y Pendientes (Fase 4)
-1. **Kick-off Fase 4:** 
-   - Definir formalmente el alcance de la Fase 4 del roadmap.
-   - Establecer la arquitectura y los modelos de datos que serán requeridos.
-2. **Despliegue para Pruebas (Fase 3):**
-   - El código actual (Fase 3 completa) será fusionado a `main` para que Render realice el despliegue automático.
-   - Pruebas UAT en ambiente Cloud para confirmar que las interacciones del Calendario y Gantt funcionen fluidas bajo latencia real.
+## 5. Próximas Tareas y Pendientes (Fase 4 & 5)
+1. **Módulo Financiero (Fase 4 - COMPLETADO):** 
+   - Arquitectura multi-moneda inyectada (Tasa de cambio capturada, monto original, `baseCurrency`).
+   - Flujo de aprobación transaccional (re-cálculo automatizado del `executedAmount` de las líneas presupuestarias usando los gastos `APPROVED`).
+   - UI de configuración (`TabConfiguracion`), modal de captura (`ExpenseRegistrationModal`) y dashboard global de aprobaciones (`ExpenseApprovalDashboard`).
+2. **Despliegue para Pruebas (Fase 4):**
+   - El código actual será fusionado a `main` para que Render realice el despliegue automático.
+   - Pruebas UAT en ambiente Cloud para confirmar flujo financiero.
+3. **Kick-off Fase 5:**
+   - Iniciar planeación del Módulo de Documentos e Integraciones.

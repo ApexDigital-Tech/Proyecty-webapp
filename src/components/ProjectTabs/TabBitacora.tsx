@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, MessageSquare, AlertCircle, MapPin, Flag, Calendar } from 'lucide-react';
-import { ProjectFull } from '../ProjectDetail'; // Reutilizando la interfaz que exista
+import { ProjectFull } from '../ProjectDetail';
 
 interface Log {
   id: number;

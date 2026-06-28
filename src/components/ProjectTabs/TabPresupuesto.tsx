@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { DollarSign } from 'lucide-react';
+import ExpenseRegistrationModal from './ExpenseRegistrationModal.tsx';
 
 interface TabPresupuestoProps {
   project: any;
@@ -17,6 +19,8 @@ interface TabPresupuestoProps {
   refVal: string;
   setRefVal: (val: string) => void;
   handleReformulate: (itemId: number) => void;
+  token: string;
+  onRefresh: () => void;
 }
 
 export default function TabPresupuesto({
@@ -36,7 +40,11 @@ export default function TabPresupuesto({
   refVal,
   setRefVal,
   handleReformulate,
+  token,
+  onRefresh,
 }: TabPresupuestoProps) {
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -44,6 +52,15 @@ export default function TabPresupuesto({
           <h4 className="text-xs font-bold text-[#00313b] uppercase tracking-wider">Control de Partidas Presupuestarias</h4>
           <p className="text-[11px] text-slate-400 font-sans">Compare partidas originales contra reformulaciones y ejecución total</p>
         </div>
+        {isEditable && (
+          <button
+            onClick={() => setIsExpenseModalOpen(true)}
+            className="flex items-center space-x-2 bg-[#008fa0] text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-[#007a8a] transition-colors shadow-sm"
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>Registrar Gasto</span>
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -151,6 +168,14 @@ export default function TabPresupuesto({
           </button>
         </div>
       )}
+
+      <ExpenseRegistrationModal
+        isOpen={isExpenseModalOpen}
+        onClose={() => setIsExpenseModalOpen(false)}
+        project={project}
+        token={token}
+        onSuccess={onRefresh}
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   BookOpen,
   CheckSquare,
   BarChart,
+  Settings,
 } from 'lucide-react';
 import TabResumen from './ProjectTabs/TabResumen.tsx';
 import TabConvenio from './ProjectTabs/TabConvenio.tsx';
@@ -33,6 +34,7 @@ import TabBitacora from './ProjectTabs/TabBitacora.tsx';
 import TabTareas from './ProjectTabs/TabTareas.tsx';
 import TabCalendario from './ProjectTabs/TabCalendario.tsx';
 import TabCronograma from './ProjectTabs/TabCronograma.tsx';
+import TabConfiguracion from './ProjectTabs/TabConfiguracion.tsx';
 import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
@@ -51,7 +53,7 @@ export default function ProjectDetail({
   token,
 }: ProjectDetailProps) {
   const [project, setProject] = React.useState<any>(null);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma'>('resumen');
+  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma' | 'configuracion'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Form states for various tabs
@@ -634,6 +636,7 @@ export default function ProjectDetail({
           { id: 'comprobantes', label: 'Comprobantes (Compliance)', icon: DollarSign },
           { id: 'documentos', label: 'Expediente Digital', icon: FileText },
           { id: 'reporte', label: 'Asistente de Reportes AI', icon: Sparkles },
+          { id: 'configuracion', label: 'Configuración', icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -730,6 +733,8 @@ export default function ProjectDetail({
             refVal={refVal}
             setRefVal={setRefVal}
             handleReformulate={handleReformulate}
+            token={token}
+            onRefresh={loadProjectDetails}
           />
         )}
 
@@ -784,6 +789,16 @@ export default function ProjectDetail({
             handleGenerateAIReport={handleGenerateAIReport}
             aiLoading={aiLoading}
             aiReportOutput={aiReportOutput}
+          />
+        )}
+
+        {/* TAB CONFIGURACION */}
+        {activeTab === 'configuracion' && (
+          <TabConfiguracion
+            project={project}
+            userRole={userRole}
+            token={token}
+            onRefresh={loadProjectDetails}
           />
         )}
 

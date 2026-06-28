@@ -11,6 +11,7 @@ import {
   Building,
   Users,
   CalendarDays,
+  DollarSign,
 } from 'lucide-react';
 import { UserRole } from '../types.ts';
 import { hasPermission } from '../lib/rbac.ts';
@@ -41,6 +42,9 @@ export default function Sidebar({
   }
   if (hasPermission(currentUser.role, 'canViewReports')) {
     menuItems.push({ id: 'reports', label: 'Reportes y Analítica', icon: FileSpreadsheet });
+  }
+  if (hasPermission(currentUser.role, 'canApproveExpenses')) {
+    menuItems.push({ id: 'gastos', label: 'Aprobación de Gastos', icon: DollarSign });
   }
   if (hasPermission(currentUser.role, 'canViewAudit')) {
     menuItems.push({ id: 'audit', label: 'Bitácora y Auditoría', icon: History });
