@@ -345,6 +345,19 @@ app.get('/api/dashboard/metrics', requireAuth, async (req: AuthRequest, res) => 
     const { donorId, status } = req.query;
 
     let conditions = [eq(projects.tenantId, tenantId)];
+    
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+        
+      if (userProjects.length > 0) {
+        conditions.push(inArray(projects.id, userProjects.map(p => p.projectId)));
+      } else {
+        conditions.push(eq(projects.id, -1));
+      }
+    }
+
     if (donorId) conditions.push(eq(projects.donorId, parseInt(donorId as string)));
     if (status) conditions.push(eq(projects.status, status as string));
 
@@ -1298,6 +1311,15 @@ app.get('/api/activity-logs', requireAuth, async (req: AuthRequest, res) => {
 app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { type, projectId } = req.query;
+    
+    let allowedProjectIds: number[] | null = null;
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+      allowedProjectIds = userProjects.map(p => p.projectId);
+      if (allowedProjectIds.length === 0) allowedProjectIds = [-1];
+    }
 
     if (type === 'financiero') {
       const pId = projectId ? Number(projectId) : null;
@@ -1314,7 +1336,8 @@ app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
         projectId: budgetLines.projectId
       }).from(budgetLines);
       
-      const filtered = pId ? allLines.filter(l => l.projectId === pId) : allLines;
+      const filteredByProject = pId ? allLines.filter(l => l.projectId === pId) : allLines;
+      const filtered = allowedProjectIds ? filteredByProject.filter(l => allowedProjectIds!.includes(l.projectId)) : filteredByProject;
       return res.json(filtered);
       
     } else if (type === 'ejecutivo') {
@@ -1332,12 +1355,15 @@ app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
         riskLevel: projects.riskLevel
       }).from(projects).where(eq(projects.tenantId, req.user!.tenantId));
 
-      const filtered = pId ? allProjects.filter(p => p.id === pId) : allProjects;
+      const filteredByProject = pId ? allProjects.filter(p => p.id === pId) : allProjects;
+      const filtered = allowedProjectIds ? filteredByProject.filter(p => allowedProjectIds!.includes(p.id)) : filteredByProject;
       return res.json(filtered);
 
     } else if (type === 'cumplimiento') {
       const pId = projectId ? Number(projectId) : null;
       const allAgreements = await db.select({
+        id: agreements.id,
+        projectId: agreements.projectId,
         counterparty: agreements.counterparty,
         amount: agreements.amount,
         startDate: agreements.startDate,
@@ -1346,7 +1372,8 @@ app.get('/api/reports/data', requireAuth, async (req: AuthRequest, res) => {
         projectId: agreements.projectId
       }).from(agreements);
 
-      const filtered = pId ? allAgreements.filter(a => a.projectId === pId) : allAgreements;
+      const filteredByProject = pId ? allAgreements.filter(a => a.projectId === pId) : allAgreements;
+      const filtered = allowedProjectIds ? filteredByProject.filter(a => allowedProjectIds!.includes(a.projectId)) : filteredByProject;
       return res.json(filtered);
     }
     
@@ -1873,12 +1900,22 @@ app.get('/api/agenda', requireAuth, async (req: AuthRequest, res) => {
     const startDate = start ? new Date(start as string) : new Date(new Date().setMonth(new Date().getMonth() - 1));
     const endDate = end ? new Date(end as string) : new Date(new Date().setMonth(new Date().getMonth() + 2));
 
+    let allowedProjectIds: number[] | null = null;
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+      allowedProjectIds = userProjects.map(p => p.projectId);
+      if (allowedProjectIds.length === 0) allowedProjectIds = [-1];
+    }
+
     // Fetch Tasks
     let taskConditions: any = and(
       eq(tasks.tenantId, tenantId),
       sql`${tasks.dueDate} IS NOT NULL OR ${tasks.startDate} IS NOT NULL`
     );
     if (projectId) taskConditions = and(taskConditions, eq(tasks.projectId, parseInt(projectId as string)));
+    if (allowedProjectIds) taskConditions = and(taskConditions, inArray(tasks.projectId, allowedProjectIds));
     if (assigneeId) taskConditions = and(taskConditions, eq(tasks.assigneeId, parseInt(assigneeId as string)));
     
     const tasksList = await db.select({
@@ -1901,6 +1938,7 @@ app.get('/api/agenda', requireAuth, async (req: AuthRequest, res) => {
     // Fetch Events
     let eventConditions: any = eq(events.tenantId, tenantId);
     if (projectId) eventConditions = and(eventConditions, eq(events.projectId, parseInt(projectId as string)));
+    if (allowedProjectIds) eventConditions = and(eventConditions, inArray(events.projectId, allowedProjectIds));
     if (assigneeId) eventConditions = and(eventConditions, eq(events.ownerId, parseInt(assigneeId as string))); // Treating owner as assignee for filtering
     
     const eventsList = await db.select({
@@ -1969,6 +2007,18 @@ app.get('/api/expenses', requireAuth, async (req: AuthRequest, res) => {
     const { status, projectId } = req.query;
 
     let conditions = [eq(expenses.tenantId, tenantId)];
+    
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+        
+      if (userProjects.length > 0) {
+        conditions.push(inArray(expenses.projectId, userProjects.map(p => p.projectId)));
+      } else {
+        conditions.push(eq(expenses.projectId, -1));
+      }
+    }
     
     if (status) conditions.push(eq(expenses.status, status as string));
     if (projectId) conditions.push(eq(expenses.projectId, parseInt(projectId as string)));
