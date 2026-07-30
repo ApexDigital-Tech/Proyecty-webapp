@@ -147,6 +147,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   Icon = Globe;
                   bgClass = "bg-amber-50 text-amber-600 border-amber-100";
                   labelClass = "bg-amber-50 text-amber-700 border-amber-100";
+                } else if (u.role === 'RESPONSABLE_PROYECTO') {
+                  Icon = FolderGit2;
+                  bgClass = "bg-teal-50 text-teal-600 border-teal-100";
+                  labelClass = "bg-teal-50 text-teal-700 border-teal-100";
+                } else if (u.role === 'TECNICO_PROYECTO') {
+                  Icon = Eye;
+                  bgClass = "bg-cyan-50 text-cyan-600 border-cyan-100";
+                  labelClass = "bg-cyan-50 text-cyan-700 border-cyan-100";
                 }
 
                 return (
