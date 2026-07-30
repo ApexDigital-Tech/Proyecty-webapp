@@ -1368,6 +1368,8 @@ function mapRoleNameToEnum(name: string): string {
   if (name === 'Administrativo / Finanzas') return 'FINANCE';
   if (name === 'Auditor') return 'AUDITOR';
   if (name === 'Donante / Financiador') return 'FINANCIADOR';
+  if (name === 'Responsable de Proyecto') return 'RESPONSABLE_PROYECTO';
+  if (name === 'Técnico de Proyecto') return 'TECNICO_PROYECTO';
   return 'DIRECTOR';
 }
 
@@ -1377,6 +1379,8 @@ function mapEnumToRoleName(roleEnum: string): string {
   if (roleEnum === 'FINANCE') return 'Administrativo / Finanzas';
   if (roleEnum === 'AUDITOR') return 'Auditor';
   if (roleEnum === 'FINANCIADOR') return 'Donante / Financiador';
+  if (roleEnum === 'RESPONSABLE_PROYECTO') return 'Responsable de Proyecto';
+  if (roleEnum === 'TECNICO_PROYECTO') return 'Técnico de Proyecto';
   return 'Director';
 }
 
