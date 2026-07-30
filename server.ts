@@ -252,6 +252,68 @@ app.post('/api/projects', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// Edit general info of an existing project (DIRECTOR or MANAGER required)
+app.put('/api/projects/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role, name: userName } = req.user!;
+    if (role !== 'DIRECTOR' && role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Director o Manager.' });
+    }
+
+    const projectId = parseInt(req.params.id);
+    const isValidTenant = await verifyProjectTenant(projectId, req.user!.tenantId);
+    if (!isValidTenant) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+    const { code, name, donor, approvedBudget, description } = req.body;
+
+    if (!code || !name || !donor || !approvedBudget) {
+      return res.status(400).json({ error: 'Los campos Código, Nombre, Donante y Presupuesto son requeridos.' });
+    }
+
+    try {
+      const updatedProject = await db.transaction(async (tx) => {
+        let finalDonorId: number | null = null;
+        if (donor) {
+          const existingDonor = await tx.select().from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
+          if (existingDonor.length > 0) {
+            finalDonorId = existingDonor[0].id;
+          } else {
+            const newDonor = await tx.insert(donors).values({
+              tenantId: req.user!.tenantId,
+              name: donor,
+              type: 'Externo',
+            }).returning();
+            finalDonorId = newDonor[0].id;
+          }
+        }
+
+        const projectUpdate = await tx.update(projects).set({
+          code,
+          name,
+          donorId: finalDonorId,
+          approvedBudget: parseFloat(approvedBudget),
+          description: description || '',
+        }).where(eq(projects.id, projectId)).returning();
+
+        return projectUpdate[0];
+      });
+
+      await logActivity(projectId, userName, `Editó los datos generales del proyecto "${name}" (Código: ${code})`);
+
+      res.status(200).json(updatedProject);
+    } catch (txErr: any) {
+      console.error('Project update transaction failed:', txErr);
+      throw txErr;
+    }
+  } catch (err: any) {
+    console.error('Error updating project:', err);
+    if (err.message?.includes('projects_code_unique')) {
+      return res.status(400).json({ error: 'Ya existe otro proyecto con este código.' });
+    }
+    res.status(500).json({ error: 'Error al actualizar el proyecto en la base de datos' });
+  }
+});
+
 // Dashboard metrics
 app.get('/api/dashboard/metrics', requireAuth, async (req: AuthRequest, res) => {
   try {

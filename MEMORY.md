@@ -3,9 +3,11 @@
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
 ## 1. Estado Actual del Proyecto
-- **Fase Actual:** `Fase 3 (Planeación y Control del Tiempo) Completada` -> `Transición a Fase 4`
-- **Último Hito Alcanzado:** Validación funcional al 100% de la Fase 3: Integración de Calendario Operativo, CRUD de Eventos, Diagrama Gantt (Cronograma) con asilamiento de datos y Agenda Ejecutiva Global.
-- **Validación Exitosa:** Las vistas temporales están consistentes. Se documentó y aplicó explícitamente la regla de negocio de aislamiento de eventos globales (`projectId = null`) frente a los eventos del proyecto. Build productivo compilando correctamente.
+- **Fase Actual:** `Fase 5 (Expediente Digital & Análisis AI) Completada` -> `Transición a Siguiente Fase`
+- **Último Hito Alcanzado:** Validación funcional al 100% de la Fase 5:
+  - Subida, listado, descarga y eliminación de documentos en Supabase Storage (Fase 5A).
+  - Implementación del modal de Análisis de IA con Gemini 2.0 Flash (`gemini-2.0-flash`) y parseo seguro de respuestas (Fase 5B).
+- **Validación Exitosa:** Las vistas y endpoints de almacenamiento están consistentes en producción. Se corrigió exitosamente el middleware de autenticación (`requireAuth`) para procesar correctamente los tokens demo simplificados (ej. `demo-director`) mediante mocks locales, previniendo los rechazos 401 de Supabase.
 
 ## 2. Stack Tecnológico Principal
 - **Frontend:** React, Vite, TypeScript, Tailwind CSS, React Router, Lucide Icons.
@@ -13,29 +15,26 @@
 - **Base de Datos & ORM:** PostgreSQL (Supabase Cloud SQL) + Drizzle ORM.
 - **Autenticación:** Supabase Auth (Integrado en cliente y verificado en backend mediante JWT).
 - **Almacenamiento:** Supabase Storage (Módulo Documental).
+- **Inteligencia Artificial:** Google AI (Gemini 2.0 Flash API).
 
 ## 3. Decisiones Arquitectónicas y de Seguridad (Hardening)
-1. **Multi-Tenancy Estricto:** Toda consulta, escritura y operación backend cruza por el middleware `verifyProjectTenant`, garantizando que la entidad solicitada pertenezca al `tenantId` de la organización del usuario autenticado. La base de datos impone restricciones de claves foráneas (`tenant_id`) a nivel de motor.
-2. **Conexión a Base de Datos:** Se utiliza el **Connection Pooler de Supabase (Puerto 6543 / IPv4)** debido a las restricciones de red locales e IPv6. La contraseña en `DATABASE_URL` requiere codificación URL (ej. `%23` en lugar de `#`).
-3. **Manejo de Errores Global (UI):** Se implementó un esquema de `ErrorBoundary` por módulos para que un fallo en un componente no rompa el _Shell_ global de la aplicación.
-4. **Build Productivo:** El servidor (`server.ts`) fue refactorizado (uso de IIFEs y eliminación de `top-level await`) para compilar de manera limpia como módulo CJS (`server.cjs`) a través de `esbuild`.
+1. **Multi-Tenancy Estricto:** Toda consulta, escritura y operación backend cruza por el middleware `verifyProjectTenant`, garantizando el aislamiento de datos por `tenantId`.
+2. **Autorización Híbrida JWT & Demo:** El middleware `requireAuth` acepta tokens Supabase JWT estándar (3 segmentos) y tokens de entorno demo (`demo-...`). Los tokens demo puros son mapeados en memoria al `tenantId: 1` para permitir pruebas sin romper la validación JWT remota.
+3. **Manejo de Almacenamiento:** Los archivos se suben al bucket `documents` usando URLs firmadas generadas por el Service Role en el backend para preservar la seguridad RLS sin exponer credenciales en el cliente.
+4. **Resiliencia API IA:** El análisis de documentos está encapsulado con Timeouts, Fallbacks y parseo robusto (limpieza de Markdown para extraer JSON crudo) protegiendo la UI de respuestas malformadas del LLM.
 
 ## 4. Estado del Despliegue en Producción (Render)
 Se ha estabilizado el entorno productivo en Render (`proyecty-webapp.onrender.com`):
-1. **Frontend & Assets:** Se resolvió el conflicto de `import.meta.env` (CJS vs ESM) aislando el build de cliente (Vite) del de backend y configurando Express para servir los assets estáticos correctamente sin romper los tipos MIME.
-2. **Corrección Module Resolution:** Se eliminaron las extensiones `.tsx` en importaciones de componentes compartidos (`Skeletons`) previniendo fallas de empaquetado y de tiempo de ejecución (ej. `TableSkeleton is not defined`).
-3. **Autenticación Demo & Real:**
-   - La API de usuarios demo está protegida mediante un feature flag `ENABLE_DEMO_LOGIN`.
-   - Se ha consolidado la función `mapRoleToEnum` en `auth.ts` para que los inicios de sesión mediante Google Auth resuelvan correctamente roles de DB (ej. `"Director"`) hacia los Enum de validación (`"DIRECTOR"`), corrigiendo accesos `403` en endpoints administrativos.
-4. **Data Seed (Idempotente):** Se implementaron `scripts/seed-prod-data.ts` y `scripts/rollback-demo-data.ts` accesibles vía `npm run` en el entorno Render, diseñados para inyectar datos demo `[DEMO VOSERDEM]` de forma segura sin contaminar a los usuarios reales y garantizando la limpieza de usuarios demo duplicados.
+1. **Frontend & Backend en un mismo App:** Se resolvió el conflicto de `import.meta.env` compilando el backend a CJS.
+2. **Resolución de Dependencias:** Ajuste completo de importaciones de componentes compartidos.
+3. **Manejo de Errores de BD & Auth en Producción:** Las variables de entorno `SUPABASE_SERVICE_ROLE_KEY` y `DATABASE_URL` (IPv4 Pooler port 6543) están correctamente configuradas y funcionales en Render.
 
-## 5. Próximas Tareas y Pendientes (Fase 4 & 5)
-1. **Módulo Financiero (Fase 4 - COMPLETADO):** 
-   - Arquitectura multi-moneda inyectada (Tasa de cambio capturada, monto original, `baseCurrency`).
-   - Flujo de aprobación transaccional (re-cálculo automatizado del `executedAmount` de las líneas presupuestarias usando los gastos `APPROVED`).
-   - UI de configuración (`TabConfiguracion`), modal de captura (`ExpenseRegistrationModal`) y dashboard global de aprobaciones (`ExpenseApprovalDashboard`).
-2. **Despliegue para Pruebas (Fase 4):**
-   - El código actual será fusionado a `main` para que Render realice el despliegue automático.
-   - Pruebas UAT en ambiente Cloud para confirmar flujo financiero.
-3. **Kick-off Fase 5:**
-   - Iniciar planeación del Módulo de Documentos e Integraciones.
+## 5. Próximas Tareas y Pendientes (Siguiente Fase)
+Para la próxima sesión (demo con VOSERDEM y cierre iterativo), se priorizarán los siguientes frentes:
+1. **Dashboard de Financiador:**
+   - Construir vistas de solo lectura y métricas de impacto para que los donantes puedan ver el estado general sin capacidades de edición.
+2. **Reportes Globales:**
+   - Consolidación de gastos financieros, avance de indicadores de cumplimiento y generación de reportes ejecutivos.
+3. **Ajustes Visuales / Preparación de Demo:**
+   - Limpieza de data residual (se recomendó al usuario borrar usuarios duplicados como "Rodrigo G." desde Supabase Studio).
+   - Pulir detalles de UI/UX, espaciados y consistencia para una demostración impecable.

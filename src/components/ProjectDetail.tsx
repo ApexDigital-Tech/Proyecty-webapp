@@ -12,6 +12,8 @@ import {
   Plus,
   Trash2,
   Lock,
+  Edit2,
+  X,
   Download,
   CheckCircle,
   Clock,
@@ -55,6 +57,15 @@ export default function ProjectDetail({
   const [project, setProject] = React.useState<any>(null);
   const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma' | 'configuracion'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
+
+  // Edit Project Form State
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = React.useState(false);
+  const [editCode, setEditCode] = React.useState('');
+  const [editName, setEditName] = React.useState('');
+  const [editDonor, setEditDonor] = React.useState('');
+  const [editApprovedBudget, setEditApprovedBudget] = React.useState('');
+  const [editDescription, setEditDescription] = React.useState('');
+  const [editFormError, setEditFormError] = React.useState<string | null>(null);
 
   // Form states for various tabs
   // 1. Physical progress update
@@ -134,6 +145,58 @@ export default function ProjectDetail({
       setGeneralError('Error al recuperar detalles del servidor Cloud SQL.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openEditModal = () => {
+    if (!project) return;
+    setEditCode(project.code || '');
+    setEditName(project.name || '');
+    setEditDonor(project.donor || '');
+    setEditApprovedBudget(project.approvedBudget?.toString() || '');
+    setEditDescription(project.description || '');
+    setEditFormError(null);
+    setIsEditProjectModalOpen(true);
+  };
+
+  const handleEditProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditFormError(null);
+    setGeneralError(null);
+    setGeneralSuccess(null);
+
+    if (!editCode || !editName || !editDonor || !editApprovedBudget) {
+      setEditFormError('Código, Nombre, Donante y Presupuesto Aprobado son requeridos.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          code: editCode,
+          name: editName,
+          donor: editDonor,
+          approvedBudget: editApprovedBudget,
+          description: editDescription,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Error al editar el proyecto');
+      }
+
+      setGeneralSuccess('Proyecto editado correctamente.');
+      setIsEditProjectModalOpen(false);
+      onLogActivity();
+      loadProjectDetails();
+    } catch (err: any) {
+      setEditFormError(err.message);
     }
   };
 
@@ -565,15 +628,27 @@ export default function ProjectDetail({
           <span>Volver al Portafolio</span>
         </button>
 
-        {canDeleteProject && (
-          <button
-            onClick={handleDeleteProject}
-            className="text-red-600 hover:bg-red-50 border border-red-200 text-xs font-bold px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Eliminar Proyecto</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isEditable && (
+            <button
+              onClick={openEditModal}
+              className="text-[#008fa0] hover:bg-[#e0f2f4] border border-[#008fa0] text-xs font-bold px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Editar Proyecto</span>
+            </button>
+          )}
+          
+          {canDeleteProject && (
+            <button
+              onClick={handleDeleteProject}
+              className="text-red-600 hover:bg-red-50 border border-red-200 text-xs font-bold px-3 py-1.5 rounded-md flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar Proyecto</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Hero Banner Section */}
@@ -841,6 +916,127 @@ export default function ProjectDetail({
           />
         )}
       </div>
+
+      {/* Edit Project Modal */}
+      {isEditProjectModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
+              <div>
+                <h3 className="font-display font-bold text-[#00313b] text-lg">
+                  Editar Proyecto
+                </h3>
+                <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                  Actualice la información general del proyecto
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditProjectModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditProject} className="p-4 space-y-4 overflow-y-auto max-h-[70vh]">
+              {editFormError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-md text-xs font-medium flex items-center gap-2 border border-red-100">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {editFormError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                    Código <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-mono text-xs focus:ring-2 focus:ring-[#008fa0]/20 focus:border-[#008fa0] transition-colors outline-none"
+                    placeholder="Ej. PRJ-2024-001"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                    Presupuesto (USD) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={editApprovedBudget}
+                    onChange={(e) => setEditApprovedBudget(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-mono text-xs focus:ring-2 focus:ring-[#008fa0]/20 focus:border-[#008fa0] transition-colors outline-none"
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  Nombre del Proyecto <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-sans text-xs focus:ring-2 focus:ring-[#008fa0]/20 focus:border-[#008fa0] transition-colors outline-none"
+                  placeholder="Nombre oficial del proyecto..."
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  Donante Principal <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editDonor}
+                  onChange={(e) => setEditDonor(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-sans text-xs focus:ring-2 focus:ring-[#008fa0]/20 focus:border-[#008fa0] transition-colors outline-none"
+                  placeholder="Agencia o entidad financiadora..."
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Descripción Corta
+                </label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md font-sans text-xs focus:ring-2 focus:ring-[#008fa0]/20 focus:border-[#008fa0] transition-colors outline-none min-h-[80px] resize-none"
+                  placeholder="Objetivo principal o descripción breve..."
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProjectModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold text-white bg-[#008fa0] rounded-md hover:bg-[#007a88] shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
