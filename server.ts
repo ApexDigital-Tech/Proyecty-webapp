@@ -1631,8 +1631,8 @@ app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res) => {
 app.get('/api/users', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { role } = req.user!;
-    if (role !== 'DIRECTOR') {
-      return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director / SuperAdmin para gestionar usuarios.' });
+    if (role !== 'DIRECTOR' && role !== 'MANAGER' && role !== 'RESPONSABLE_PROYECTO') {
+      return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director, Manager o Responsable para ver usuarios.' });
     }
 
     const allUsers = await db.select({
