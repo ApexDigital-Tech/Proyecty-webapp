@@ -65,6 +65,32 @@ export const RolePermissions = {
     canEditBudget: false,
     canUploadDocuments: false,
     canViewReports: true,
+  },
+  RESPONSABLE_PROYECTO: {
+    canViewDashboard: true,
+    canViewPortfolio: true,
+    canViewAudit: false,
+    canViewUsers: false,
+    canAddProject: false,
+    canEditProject: true,
+    canApproveVouchers: false,
+    canApproveExpenses: false,
+    canEditBudget: true,
+    canUploadDocuments: true,
+    canViewReports: true,
+  },
+  TECNICO_PROYECTO: {
+    canViewDashboard: true,
+    canViewPortfolio: true,
+    canViewAudit: false,
+    canViewUsers: false,
+    canAddProject: false,
+    canEditProject: false,
+    canApproveVouchers: false,
+    canApproveExpenses: false,
+    canEditBudget: false,
+    canUploadDocuments: true,
+    canViewReports: true,
   }
 } as const;
 

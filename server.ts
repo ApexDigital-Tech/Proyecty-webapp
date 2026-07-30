@@ -28,6 +28,7 @@ import {
   projectLogs,
   events,
   expenses,
+  projectMembers,
 } from './src/db/schema.ts';
 import { eq, desc, and, inArray, ilike, sql } from 'drizzle-orm';
 
@@ -110,6 +111,20 @@ app.get('/api/projects', requireAuth, async (req: AuthRequest, res) => {
     const limitNum = parseInt(limit as string);
 
     let conditions = [eq(projects.tenantId, req.user!.tenantId)];
+    
+    // Filtro estricto por rol: Responsables y Técnicos solo ven sus proyectos asignados
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+        
+      if (userProjects.length > 0) {
+        conditions.push(inArray(projects.id, userProjects.map(p => p.projectId)));
+      } else {
+        // Si no tiene proyectos asignados, forzamos una condición imposible para que retorne 0
+        conditions.push(eq(projects.id, -1));
+      }
+    }
     
     if (status) conditions.push(eq(projects.status, status as string));
     if (donorId) conditions.push(eq(projects.donorId, parseInt(donorId as string)));
@@ -256,13 +271,22 @@ app.post('/api/projects', requireAuth, async (req: AuthRequest, res) => {
 app.put('/api/projects/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { role, name: userName } = req.user!;
-    if (role !== 'DIRECTOR' && role !== 'MANAGER') {
-      return res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Director o Manager.' });
+    if (role !== 'DIRECTOR' && role !== 'MANAGER' && role !== 'RESPONSABLE_PROYECTO') {
+      return res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Director, Manager o Responsable de Proyecto.' });
     }
 
     const projectId = parseInt(req.params.id);
     const isValidTenant = await verifyProjectTenant(projectId, req.user!.tenantId);
     if (!isValidTenant) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+    if (role === 'RESPONSABLE_PROYECTO') {
+      const isMember = await db.select({ id: projectMembers.id }).from(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.user!.id!)))
+        .limit(1);
+      if (isMember.length === 0) {
+        return res.status(403).json({ error: 'No tienes permisos para editar este proyecto específico.' });
+      }
+    }
 
     const { code, name, donor, approvedBudget, description } = req.body;
 
@@ -421,6 +445,15 @@ app.get('/api/projects/:id', requireAuth, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Proyecto no encontrado' });
     }
 
+    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+      const isMember = await db.select({ id: projectMembers.id }).from(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.user!.id!)))
+        .limit(1);
+      if (isMember.length === 0) {
+        return res.status(403).json({ error: 'No tienes acceso a este proyecto' });
+      }
+    }
+
     const project = {
       ...projectResult[0].project,
       donor: projectResult[0].donorName
@@ -535,6 +568,73 @@ app.delete('/api/projects/:id', requireAuth, async (req: AuthRequest, res) => {
   } catch (err: any) {
     console.error('Error deleting project:', err);
     res.status(500).json({ error: 'Error al eliminar el proyecto de la base de datos' });
+  }
+});
+
+// ==========================================
+// 1.5 PROJECT MEMBERS ENDPOINTS
+// ==========================================
+
+app.get('/api/projects/:id/members', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const members = await db.select({
+      id: projectMembers.id,
+      userId: projectMembers.userId,
+      roleInProject: projectMembers.roleInProject,
+      name: users.name,
+      email: users.email,
+      role: users.roleId
+    }).from(projectMembers)
+      .leftJoin(users, eq(users.id, projectMembers.userId))
+      .where(eq(projectMembers.projectId, projectId));
+    res.json(members);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al listar los miembros del proyecto' });
+  }
+});
+
+app.post('/api/projects/:id/members', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role } = req.user!;
+    if (role !== 'DIRECTOR' && role !== 'MANAGER' && role !== 'RESPONSABLE_PROYECTO') {
+      return res.status(403).json({ error: 'No autorizado para asignar equipo' });
+    }
+    const projectId = parseInt(req.params.id);
+    const { userId, roleInProject } = req.body;
+
+    const existing = await db.select().from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'El usuario ya es miembro de este proyecto' });
+    }
+
+    await db.insert(projectMembers).values({
+      projectId,
+      userId,
+      roleInProject
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al asignar usuario' });
+  }
+});
+
+app.delete('/api/projects/:id/members/:userId', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role } = req.user!;
+    if (role !== 'DIRECTOR' && role !== 'MANAGER' && role !== 'RESPONSABLE_PROYECTO') {
+      return res.status(403).json({ error: 'No autorizado para remover equipo' });
+    }
+    const projectId = parseInt(req.params.id);
+    const userId = parseInt(req.params.userId);
+
+    await db.delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al remover usuario' });
   }
 });
 

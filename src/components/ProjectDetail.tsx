@@ -37,6 +37,7 @@ import TabTareas from './ProjectTabs/TabTareas.tsx';
 import TabCalendario from './ProjectTabs/TabCalendario.tsx';
 import TabCronograma from './ProjectTabs/TabCronograma.tsx';
 import TabConfiguracion from './ProjectTabs/TabConfiguracion.tsx';
+import TabEquipo from './ProjectTabs/TabEquipo.tsx';
 import { PageHeaderSkeleton, DashboardGridSkeleton, TableSkeleton } from './common/Skeletons';
 
 interface ProjectDetailProps {
@@ -55,7 +56,7 @@ export default function ProjectDetail({
   token,
 }: ProjectDetailProps) {
   const [project, setProject] = React.useState<any>(null);
-  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma' | 'configuracion'>('resumen');
+  const [activeTab, setActiveTab] = React.useState<'resumen' | 'convenio' | 'presupuesto' | 'comprobantes' | 'documentos' | 'reporte' | 'bitacora' | 'tareas' | 'calendario' | 'cronograma' | 'configuracion' | 'equipo'>('resumen');
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Edit Project Form State
@@ -711,7 +712,8 @@ export default function ProjectDetail({
           { id: 'comprobantes', label: 'Comprobantes (Compliance)', icon: DollarSign },
           { id: 'documentos', label: 'Expediente Digital', icon: FileText },
           { id: 'reporte', label: 'Asistente de Reportes AI', icon: Sparkles },
-          { id: 'configuracion', label: 'Configuración', icon: Settings },
+          ...(userRole !== 'TECNICO_PROYECTO' ? [{ id: 'configuracion', label: 'Configuración', icon: Settings }] : []),
+          ...(['DIRECTOR', 'MANAGER', 'RESPONSABLE_PROYECTO'].includes(userRole) ? [{ id: 'equipo', label: 'Equipo del Proyecto', icon: BookOpen }] : []),
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -868,12 +870,21 @@ export default function ProjectDetail({
         )}
 
         {/* TAB CONFIGURACION */}
-        {activeTab === 'configuracion' && (
+        {activeTab === 'configuracion' && userRole !== 'TECNICO_PROYECTO' && (
           <TabConfiguracion
             project={project}
             userRole={userRole}
             token={token}
             onRefresh={loadProjectDetails}
+          />
+        )}
+
+        {activeTab === 'equipo' && ['DIRECTOR', 'MANAGER', 'RESPONSABLE_PROYECTO'].includes(userRole) && (
+          <TabEquipo
+            projectId={projectId}
+            userRole={userRole}
+            token={token}
+            onLogActivity={onLogActivity}
           />
         )}
 

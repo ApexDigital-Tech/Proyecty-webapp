@@ -1,4 +1,4 @@
-export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR';
+export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR' | 'RESPONSABLE_PROYECTO' | 'TECNICO_PROYECTO';
 
 export interface User {
   id?: number;
