@@ -30,7 +30,7 @@ export const RolePermissions = {
   FINANCE: {
     canViewDashboard: true,
     canViewPortfolio: true,
-    canViewAudit: true,
+    canViewAudit: false,
     canViewUsers: false,
     canAddProject: false,
     canEditProject: false,
@@ -43,7 +43,7 @@ export const RolePermissions = {
   AUDITOR: {
     canViewDashboard: true,
     canViewPortfolio: true,
-    canViewAudit: true,
+    canViewAudit: false,
     canViewUsers: false,
     canAddProject: false,
     canEditProject: false,
