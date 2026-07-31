@@ -17,7 +17,8 @@ interface TabDocumentosProps {
 export default function TabDocumentos({
   project,
   userRole,
-}: TabDocumentosProps) {
+  token
+}: TabDocumentosProps & { token: string }) {
   const canView = hasPermission(userRole, 'canUploadDocuments'); // Or checking another permission if needed, but for now we let DocumentManager handle its internal RBAC via UI or we can wrap it
 
   return (
@@ -29,7 +30,7 @@ export default function TabDocumentos({
         </div>
       </div>
       
-      <DocumentManager projectId={project.id} />
+      <DocumentManager projectId={project.id} token={token} />
     </div>
   );
 }

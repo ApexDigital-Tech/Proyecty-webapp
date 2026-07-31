@@ -17,9 +17,10 @@ interface Document {
 
 interface DocumentManagerProps {
   projectId: number;
+  token: string;
 }
 
-export function DocumentManager({ projectId }: DocumentManagerProps) {
+export function DocumentManager({ projectId, token }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -38,7 +39,6 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/projects/${projectId}/documents`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -94,7 +94,6 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       formData.append('title', uploadTitle);
       formData.append('type', uploadType);
 
-      const token = localStorage.getItem('proyecty_token');
       const res = await fetch(`/api/projects/${projectId}/documents`, {
         method: 'POST',
         headers: {

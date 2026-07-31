@@ -2,6 +2,16 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-07-31] Hito: Cierre de Fase 1 (SaaS Core Blindado) - Proyecty
+- **Estado:** Completado (100% PASSED en Playwright - 6/6 tests).
+- **Rutas y API:** 
+  - `GET /api/projects/:id` retorna JSON 404 seguro (sin fallback HTML).
+  - `/api/tasks` implementado con router y controlador funcional.
+  - Subida de documentos blindada con headers `Authorization: Bearer <token>`.
+- **Autenticación y DB:** UPSERT activo en login de Google para evitar duplicados por email.
+- **Estabilidad de UI:** Eliminados los crashes de React (`removeChild` / `NotFoundError`).
+- **Próximo Paso:** Espera de feedback tras pruebas operativas de campo antes de iniciar Fase 2 (Refinamiento UX/UI y Permisos Avanzados).
+
 ## 1. Estado Actual del Proyecto
 - **Fase Actual:** `Proyecty B2B SaaS (Fase 1 al 8) oficialmente desplegado y consolidado en producción`.
 - **URL de Producción:** [proyecty-webapp.onrender.com](https://proyecty-webapp.onrender.com)

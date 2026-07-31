@@ -20,6 +20,7 @@ import usersRouter from './src/routes/users.routes.ts';
 import uploadsRouter from './src/routes/uploads.routes.ts';
 import legacyRouter from './src/routes/legacy.routes.ts';
 import projectsRouter from './src/routes/projects.routes.ts';
+import tasksRouter from './src/routes/tasks.routes.ts';
 import webhooksRouter from './src/routes/webhooks.routes.ts';
 import billingRouter from './src/routes/billing.routes.ts';
 import organizationsRouter from './src/routes/organizations.routes.ts';
@@ -169,6 +170,7 @@ app.use('/api/auth', apiLimiter);
 app.use('/api', authRouter);
 app.use('/api', usersRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/tasks', tasksRouter);
 app.use('/api', legacyRouter);
 // Healthcheck Endpoint
 app.get('/api/health', async (req, res) => {

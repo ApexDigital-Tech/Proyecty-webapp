@@ -877,6 +877,7 @@ export default function ProjectDetail({
           <TabDocumentos 
             project={project}
             userRole={userRole}
+            token={token}
             docName={docFile ? docFile.name : ''}
             setDocName={(val: string) => {}}
             docFile={docFile}
