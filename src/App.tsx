@@ -14,6 +14,11 @@ import { Project, ActivityLog, UserRole } from './types.ts';
 import { hasPermission } from './lib/rbac.ts';
 import { LayoutDashboard, FolderGit2, FileSpreadsheet, History, Users, CalendarDays, DollarSign } from 'lucide-react';
 import GlobalAgenda from './components/GlobalAgenda.tsx';
+import Settings from './components/Settings.tsx';
+import UpgradeModal from './components/billing/UpgradeModal.tsx';
+import ExpensesDashboard from './components/expenses/ExpensesDashboard.tsx';
+import AuditLogsDashboard from './components/audit/AuditLogsDashboard.tsx';
+import ReportsDashboard from './components/reports/ReportsDashboard.tsx';
 
 export default function App() {
   const [token, setToken] = React.useState<string | null>(() => localStorage.getItem('proyecty_token'));
@@ -21,6 +26,9 @@ export default function App() {
     const cached = localStorage.getItem('proyecty_user');
     return cached ? JSON.parse(cached) : null;
   });
+
+  const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
+  const [upgradeMessage, setUpgradeMessage] = React.useState('');
 
   React.useEffect(() => {
     const originalFetch = window.fetch;
@@ -33,6 +41,9 @@ export default function App() {
           if (data?.code === 'USER_SUSPENDED') {
             handleLogout();
             alert("Acceso denegado: Usuario suspendido");
+          } else if (data?.code === 'UPGRADE_REQUIRED') {
+            setUpgradeMessage(data.message || 'Esta funcionalidad requiere un plan superior.');
+            setShowUpgradeModal(true);
           }
         } catch(e) {}
       }
@@ -240,21 +251,21 @@ export default function App() {
               )}
 
               {currentTab === 'audit' && hasPermission(currentUser.role, 'canViewAudit') && (
-                <AuditTrail
-                  logs={auditLogs}
-                  onRefresh={fetchAuditLogs}
-                  isLoading={isLoadingLogs}
+                <AuditLogsDashboard
+                  token={token}
+                  userRole={currentUser.role}
                 />
               )}
 
               {currentTab === 'reports' && hasPermission(currentUser.role, 'canViewReports') && (
-                <Reports
+                <ReportsDashboard
                   token={token}
+                  userRole={currentUser.role}
                 />
               )}
 
               {currentTab === 'gastos' && (
-                <ExpenseApprovalDashboard
+                <ExpensesDashboard
                   token={token}
                   userRole={currentUser.role}
                 />
@@ -267,11 +278,22 @@ export default function App() {
                   onLogActivity={handleLogActivity}
                 />
               )}
+
+              {currentTab === 'settings' && hasPermission(currentUser.role, 'canViewUsers') && (
+                <Settings token={token} />
+              )}
             </>
           )}
           </ErrorBoundary>
         </main>
       </div>
+
+      {/* Global Modals */}
+      <UpgradeModal 
+        isOpen={showUpgradeModal} 
+        onClose={() => setShowUpgradeModal(false)} 
+        message={upgradeMessage}
+      />
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around z-50 h-16 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-safe">

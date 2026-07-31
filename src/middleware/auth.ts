@@ -60,6 +60,8 @@ export const requireAuth = async (
           if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
           if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
           if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
+          if (upper.includes('RESPONSABLE')) return 'RESPONSABLE_PROYECTO';
+          if (upper.includes('TÉCNICO') || upper.includes('TECNICO')) return 'TECNICO_PROYECTO';
           return 'MANAGER';
         };
 

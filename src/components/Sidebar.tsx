@@ -12,6 +12,7 @@ import {
   Users,
   CalendarDays,
   DollarSign,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { UserRole } from '../types.ts';
 import { hasPermission } from '../lib/rbac.ts';
@@ -51,6 +52,7 @@ export default function Sidebar({
   }
   if (hasPermission(currentUser.role, 'canViewUsers')) {
     menuItems.push({ id: 'users', label: 'Usuarios y Monitoreo', icon: Users });
+    menuItems.push({ id: 'settings', label: 'Configuración', icon: SettingsIcon });
   }
 
   const handleRoleToggle = () => {

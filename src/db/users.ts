@@ -1,6 +1,7 @@
 import { db } from './index.ts';
 import { users, organizations, roles } from './schema.ts';
 import { eq } from 'drizzle-orm';
+import { sendWelcomeEmail } from '../services/email.service.ts';
 
 export async function getOrCreateUser(uid: string, email: string, name: string, roleName: string) {
   try {
@@ -63,6 +64,11 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
         isActive: true,
       })
       .returning();
+
+    // Fire-and-forget the welcome email for new registrations
+    sendWelcomeEmail(email, name).catch(err => {
+      console.error('Failed to dispatch welcome email asynchronously:', err);
+    });
 
     return {
       ...result[0],

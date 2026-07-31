@@ -8,6 +8,12 @@ export const organizations = pgTable('organizations', {
   subscriptionPlan: text('subscription_plan').notNull().default('FREE'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow(),
+  // --- LemonSqueezy Billing Integration ---
+  lemonSqueezyCustomerId: text('lemonsqueezy_customer_id'),
+  subscriptionId: text('subscription_id'),
+  subscriptionStatus: text('subscription_status').notNull().default('free'),
+  variantId: text('variant_id'),
+  renewsAt: timestamp('renews_at'),
 });
 
 // --- RBAC: Roles & Permissions ---
@@ -155,10 +161,13 @@ export const expenses = pgTable('expenses', {
   exchangeRateSource: text('exchange_rate_source'),
   exchangeRateDate: timestamp('exchange_rate_date'),
   date: timestamp('date').notNull(),
+  title: text('title'), // Added for Sprint 5
   description: text('description'),
-  status: text('status').notNull().default('PENDING_APPROVAL'), // 'APPROVED', 'REJECTED'
+  category: text('category'), // Added for Sprint 5
+  status: text('status').notNull().default('pending'), // 'pending', 'approved', 'rejected'
   registeredBy: integer('registered_by').references(() => users.id),
   approvedBy: integer('approved_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 export const receiptsVouchers = pgTable('receipts_vouchers', {
@@ -224,11 +233,11 @@ export const auditLogs = pgTable('audit_logs', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   userId: integer('user_id').references(() => users.id),
-  action: text('action').notNull(), // 'CREATE', 'UPDATE', 'DELETE', 'APPROVE'
-  entityType: text('entity_type').notNull(), // 'Project', 'BudgetLine', 'Voucher'
-  entityId: integer('entity_id').notNull(),
-  oldValues: jsonb('old_values'),
-  newValues: jsonb('new_values'),
+  userName: text('user_name'),
+  action: text('action').notNull(), // e.g., 'EXPENSE_APPROVED', 'PLAN_UPGRADED'
+  entity: text('entity').notNull(), // e.g., 'expense', 'organization'
+  entityId: text('entity_id'), // String, optional for cases where ID might be a webhook ID
+  metadata: jsonb('metadata'), // To store details, previous/new values
   ipAddress: text('ip_address'),
   createdAt: timestamp('created_at').defaultNow(),
 });

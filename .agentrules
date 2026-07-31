@@ -1,0 +1,16 @@
+﻿# PROYECTY AGENTIC FRAMEWORK - RULES & ROLES
+
+## OPERATING MODE
+You operate in an Agentic Loop: PLAN -> IMPLEMENT -> TYPE-CHECK (	sc) -> AUTO-CORRECT.
+
+## ARCHITECTURAL CONSTRAINTS
+1. ARCHITECTURE: Enforce strict separation: Routes (src/routes) -> Controllers (src/controllers) -> Services (src/services).
+2. VALIDATION: Every incoming request must be validated using Zod schemas (src/schemas).
+3. DATABASE: Use Drizzle ORM schemas in src/db/schema.ts.
+4. STRANGLER FIG: Never delete core endpoints without replacing them with their modular counterpart.
+
+## DEFINITION OF DONE (DoD)
+- Clean compilation output for 
+px tsc --noEmit.
+- Error handling wrapped in Sentry/Global Error Middleware.
+- No direct database logic inside controllers (move DB calls to Services).
