@@ -77,6 +77,12 @@ app.use(helmet({
 }));
 app.use(cors());
 
+// Prevent caching for all API responses
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+});
+
 // Capture raw body for webhook HMAC signature verification.
 // Must be registered BEFORE express.json() to access the unparsed body.
 app.use(express.json({
