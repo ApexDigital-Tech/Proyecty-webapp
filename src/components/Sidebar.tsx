@@ -23,6 +23,7 @@ interface SidebarProps {
   currentUser: { name: string; email: string; role: UserRole };
   onLogout: () => void;
   onRoleSwitch: (role: UserRole) => void;
+  isRealSession?: boolean;
 }
 
 export default function Sidebar({
@@ -31,6 +32,7 @@ export default function Sidebar({
   currentUser,
   onLogout,
   onRoleSwitch,
+  isRealSession = false,
 }: SidebarProps) {
   const menuItems = [];
   
@@ -120,14 +122,16 @@ export default function Sidebar({
             <span className="text-[8px] font-mono uppercase tracking-wider text-slate-400">
               Rol Activo (RBAC)
             </span>
-            <button
-              onClick={handleRoleToggle}
-              className="text-[8px] font-mono font-semibold text-blue-400 hover:text-white flex items-center space-x-1 border border-blue-500/20 hover:border-blue-500 rounded px-1.5 py-0.5 cursor-pointer bg-transparent"
-              title="Cambiar rol rápido para simular RBAC"
-            >
-              <UserCheck className="w-2 h-2 inline mr-0.5" />
-              <span>Simular</span>
-            </button>
+            {!isRealSession && (
+              <button
+                onClick={handleRoleToggle}
+                className="text-[8px] font-mono font-semibold text-blue-400 hover:text-white flex items-center space-x-1 border border-blue-500/20 hover:border-blue-500 rounded px-1.5 py-0.5 cursor-pointer bg-transparent"
+                title="Cambiar rol rápido para simular RBAC"
+              >
+                <UserCheck className="w-2 h-2 inline mr-0.5" />
+                <span>Simular</span>
+              </button>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <span

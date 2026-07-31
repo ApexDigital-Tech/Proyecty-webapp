@@ -18,13 +18,34 @@ export const requireAuth = async (
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization;
+  let token: string | undefined = undefined;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No autorizado: Falta el token de acceso' });
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split('Bearer ')[1];
   }
 
-  const token = authHeader.split('Bearer ')[1];
+  // Fallback a Cookies si no hay Authorization header
+  if (!token && req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';').map(c => c.trim());
+    for (const c of cookies) {
+      if (c.startsWith('sb-') && c.includes('-auth-token=')) {
+        try {
+          const val = decodeURIComponent(c.substring(c.indexOf('=') + 1));
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed) && parsed[0]) {
+             token = parsed[0];
+          }
+        } catch(e) {}
+      } else if (c.startsWith('sb-access-token=')) {
+         token = c.substring(c.indexOf('=') + 1);
+      }
+    }
+  }
+
+  if (!token) {
+    return res.status(401).json({ error: 'No autorizado: Falta el token de acceso' });
+  }
   
   // Safe temporal logging para debug (sin exponer el JWT completo)
   if (!token || token === 'null' || token === 'undefined') {

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { db } from '../src/db/index.js';
-import { users, projects, budgetLines, agreements, receiptsVouchers, organizations, roles } from '../src/db/schema.js';
+import { users, projects, budgetLines, agreements, receiptsVouchers, organizations, roles, budgetVersions } from '../src/db/schema.js';
 import { eq, and, like } from 'drizzle-orm';
 import 'dotenv/config';
 
@@ -13,31 +13,31 @@ async function runSeed() {
   // 1. Fix duplicate Rodrigo G. user
   console.log('Checking for duplicate demo users...');
   
-  const allRodrigos = await db.select({
+  const adminUsers = await db.select({
     id: users.id,
     uid: users.uid,
     roleId: users.roleId
   })
   .from(users)
-  .where(eq(users.email, 'rodrigo@proyecty.org'));
+  .where(eq(users.email, 'apexdigital70@gmail.com'));
 
-  if (allRodrigos.length > 1) {
-    console.log(`Found ${allRodrigos.length} users with email rodrigo@proyecty.org. Cleaning up...`);
+  if (adminUsers.length > 1) {
+    console.log(`Found ${adminUsers.length} users with email apexdigital70@gmail.com. Cleaning up...`);
     // Delete all except the first one
-    for (let i = 1; i < allRodrigos.length; i++) {
-      await db.delete(users).where(eq(users.id, allRodrigos[i].id));
-      console.log(`Deleted duplicate user ID: ${allRodrigos[i].id}`);
+    for (let i = 1; i < adminUsers.length; i++) {
+      await db.delete(users).where(eq(users.id, adminUsers[i].id));
+      console.log(`Deleted duplicate user ID: ${adminUsers[i].id}`);
     }
   }
   
-  if (allRodrigos.length > 0) {
-    // Ensure the remaining Rodrigo is a MANAGER
-    const managerRole = await db.select().from(roles).where(eq(roles.name, 'Coordinador de Proyecto')).limit(1);
-    if (managerRole.length > 0) {
+  if (adminUsers.length > 0) {
+    // Ensure the user is a DIRECTOR
+    const directorRole = await db.select().from(roles).where(eq(roles.name, 'Director')).limit(1);
+    if (directorRole.length > 0) {
       await db.update(users)
-        .set({ roleId: managerRole[0].id })
-        .where(eq(users.id, allRodrigos[0].id));
-      console.log('Ensured Rodrigo G. has MANAGER role.');
+        .set({ roleId: directorRole[0].id })
+        .where(eq(users.id, adminUsers[0].id));
+      console.log('Ensured apexdigital70@gmail.com has DIRECTOR role.');
     }
   }
 
@@ -107,7 +107,8 @@ async function runSeed() {
     amount: '150000.00',
     durationMonths: 18,
     startDate: new Date('2025-01-10'),
-    endDate: new Date('2026-06-30')
+    endDate: new Date('2026-06-30'),
+    status: 'ACTIVE'
   });
 
   await db.insert(agreements).values({
@@ -117,13 +118,22 @@ async function runSeed() {
     amount: '85000.00',
     durationMonths: 9,
     startDate: new Date('2025-03-01'),
-    endDate: new Date('2025-12-15')
+    endDate: new Date('2025-12-15'),
+    status: 'ACTIVE'
   });
 
   // 6. Create Budget Lines
   console.log('Creating budget lines...');
+  const bv1 = await db.insert(budgetVersions).values({
+    projectId: proj1[0].id,
+    versionName: 'Presupuesto Base',
+    isApproved: true,
+    approvedBy: adminUsers[0]?.id
+  }).returning();
+
   const bl1 = await db.insert(budgetLines).values({
     projectId: proj1[0].id,
+    budgetVersionId: bv1[0].id,
     code: 'BL-001',
     category: 'Hardware',
     subcategory: 'Equipos de Cómputo',
@@ -137,6 +147,7 @@ async function runSeed() {
 
   const bl2 = await db.insert(budgetLines).values({
     projectId: proj1[0].id,
+    budgetVersionId: bv1[0].id,
     code: 'BL-002',
     category: 'Servicios',
     subcategory: 'Instalación',

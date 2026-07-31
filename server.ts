@@ -71,6 +71,7 @@ app.use(helmet({
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       "connect-src": ["'self'", "https://kwmvuuwinufksjjfsuls.supabase.co", "https://*.supabase.co", "wss://*.supabase.co"],
+      "img-src": ["'self'", "data:", "https://api.dicebear.com", "https://*.googleusercontent.com"],
     },
   },
 }));

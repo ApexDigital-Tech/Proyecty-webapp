@@ -211,20 +211,21 @@ export default function Portfolio({
             id="portfolio-grid"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
           >
-            {filteredProjects.map((p) => {
-            const hasRiskGap = p.physicalProgress - p.financialProgress > 15;
+            {filteredProjects.map((p, index) => {
+            if (!p) return null;
+            const hasRiskGap = (p.physicalProgress || 0) - (p.financialProgress || 0) > 15;
             return (
               <div
-                key={p.id}
-                id={`project-card-${p.id}`}
-                onClick={() => onSelectProject(p.id)}
+                key={p.id || `fallback-key-${index}`}
+                id={`project-card-${p.id || index}`}
+                onClick={() => p.id && onSelectProject(p.id)}
                 className="bg-white rounded-lg p-4 border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
               >
                 {/* Upper row */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-100/50 px-1.5 py-0.2 rounded">
-                      {p.code}
+                      {p?.code || 'N/A'}
                     </span>
                     <span
                       className={`text-[9px] font-sans font-semibold px-2 py-0.2 rounded-full border ${

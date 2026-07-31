@@ -198,6 +198,7 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onRoleSwitch={handleRoleSwitch}
+        isRealSession={token ? !token.startsWith('demo-') : false}
       />
 
       {/* Main Panel Content */}
