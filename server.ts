@@ -66,7 +66,14 @@ initSentry(); // Initialize Sentry before routes
 
 const PORT = 3000;
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "connect-src": ["'self'", "https://kwmvuuwinufksjjfsuls.supabase.co", "https://*.supabase.co", "wss://*.supabase.co"],
+    },
+  },
+}));
 app.use(cors());
 
 // Capture raw body for webhook HMAC signature verification.
