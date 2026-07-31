@@ -56,8 +56,11 @@ export const createUser = async (req: AuthRequest, res: Response, next: NextFunc
     // mapEnumToRoleName logic
     // we can temporarily just import it from server.ts or redefine here. We import it.
     const roleStringName = mapEnumToRoleName(role);
-    const roleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
-    if (roleObj.length === 0) return res.status(400).json({ error: 'Rol no encontrado en la base de datos' });
+    let roleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
+    if (roleObj.length === 0) {
+      const inserted = await db.insert(roles).values({ name: roleStringName, description: 'Role ' + roleStringName }).returning();
+      roleObj = inserted;
+    }
 
     const uid = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 

@@ -110,9 +110,8 @@ async function seed() {
     console.log('Seed completed successfully!');
   } catch (error) {
     console.error('Seed failed:', error);
-  } finally {
-    process.exit(0);
+    throw error;
   }
 }
 
-seed();
+export { seed };

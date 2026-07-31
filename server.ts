@@ -215,14 +215,12 @@ app.use('/api/organizations', organizationsRouter);
 
 // Update project status/progress (RBAC: DIRECTOR/MANAGER)
 
-import { exec } from 'child_process';
-import util from 'util';
-const execPromise = util.promisify(exec);
+import { seed } from './scripts/seed-demo-project.ts';
 
 app.post('/api/admin/run-seed', async (req, res) => {
   try {
-    const { stdout, stderr } = await execPromise('npx tsx scripts/seed-demo-project.ts');
-    res.json({ success: true, message: "Proyecto cargado", data: [], stdout, stderr });
+    await seed();
+    res.json({ success: true, message: "Proyecto cargado", data: [] });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
