@@ -3,8 +3,8 @@ import RedisStore from 'rate-limit-redis';
 import { createClient } from 'redis';
 import { logger } from '../lib/logger.ts';
 
-// Check if Redis should be enabled (production or explicitly provided URL)
-const isRedisEnabled = process.env.NODE_ENV === 'production' || !!process.env.REDIS_URL;
+// Check if Redis should be enabled (explicitly provided URL)
+const isRedisEnabled = !!process.env.REDIS_URL;
 
 // Setup Redis Client
 export const redisClient = isRedisEnabled ? createClient({
