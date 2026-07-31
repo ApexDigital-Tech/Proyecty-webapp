@@ -272,7 +272,7 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
                   </button>
                 </div>
               </div>
-            )})}
+            ); })}
           </div>
           <div className="p-3 bg-[#F8FAFC] border-t border-slate-200 text-center">
             <span className="text-[10px] font-mono text-slate-400">Verificando bases de datos relacionales en la región europe-west1</span>
@@ -316,7 +316,7 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>
-                )})}
+                ); })
               )}
             </div>
           </div>
