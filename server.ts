@@ -192,7 +192,11 @@ app.get('/api/agenda', (req, res) => {
   res.json({ success: true, data: [] });
 });
 app.get('/api/public/demo-users', (req, res) => {
-  res.json([]);
+  res.json([
+    { id: 1, uid: 'director', email: 'apexdigital70@gmail.com', name: 'Apex Digital', role: 'DIRECTOR', isActive: true },
+    { id: 2, uid: 'finance', email: 'finance@demo.com', name: 'Demo Finance', role: 'FINANCE', isActive: true },
+    { id: 3, uid: 'manager', email: 'manager@demo.com', name: 'Demo Manager', role: 'MANAGER', isActive: true }
+  ]);
 });
 app.use('/api', reportsRouter);
 
