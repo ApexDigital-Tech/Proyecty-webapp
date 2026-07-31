@@ -247,7 +247,7 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
   try {
     const projectId = parseInt(req.params.id);
     if (isNaN(projectId)) {
-      return res.status(400).json({ error: 'ID de proyecto inválido' });
+      return res.status(400).json({ success: false, message: 'ID de proyecto inválido' });
     }
 
     const projectResult = await db.select({
@@ -258,7 +258,7 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
       .where(and(eq(projects.id, projectId), eq(projects.tenantId, req.user!.tenantId)));
       
     if (projectResult.length === 0) {
-      return res.status(404).json({ error: 'Proyecto no encontrado' });
+      return res.status(404).json({ success: false, message: 'Proyecto no encontrado' });
     }
 
     if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
@@ -266,7 +266,7 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
         .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.user!.id!)))
         .limit(1);
       if (isMember.length === 0) {
-        return res.status(403).json({ error: 'No tienes acceso a este proyecto' });
+        return res.status(403).json({ success: false, message: 'No tienes acceso a este proyecto' });
       }
     }
 
@@ -295,16 +295,19 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
     }
 
     res.json({
-      ...project,
-      agreements: enrichedAgreements,
-      budgetLines: projectBudgetItems,
-      documents: projectDocuments,
-      receiptsVouchers: projectVouchers,
-      auditLogs: projectLogs
+      success: true,
+      data: {
+        ...project,
+        agreements: enrichedAgreements,
+        budgetLines: projectBudgetItems,
+        documents: projectDocuments,
+        receiptsVouchers: projectVouchers,
+        auditLogs: projectLogs
+      }
     });
   } catch (err: any) {
     console.error('Error fetching project detail:', err);
-    res.status(500).json({ success: false, error: 'Error al cargar el detalle del proyecto', message: err.message });
+    res.status(500).json({ success: false, message: 'Error al cargar el detalle del proyecto', error: err.message });
   }
 };
 

@@ -136,14 +136,24 @@ export default function ProjectDetail({
       const res = await fetch(`/api/projects/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('No se pudo cargar el proyecto');
-      const data = await res.json();
+      
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+         throw new Error("El servidor devolvió un formato no válido o el proyecto no existe.");
+      }
+      
+      const resData = await res.json();
+      if (!resData.success) {
+         throw new Error(resData.message || "Proyecto no encontrado");
+      }
+      
+      const data = resData.data;
       setProject(data);
       setPhysicalVal(data.physicalProgress);
       setStatusVal(data.status);
     } catch (err: any) {
       console.error(err);
-      setGeneralError('Error al recuperar detalles del servidor Cloud SQL.');
+      setGeneralError('Error al recuperar detalles del servidor.');
     } finally {
       setIsLoading(false);
     }

@@ -230,6 +230,10 @@ app.post('/api/admin/run-seed', async (req, res) => {
   }
 });
 
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ success: false, message: 'Ruta API no encontrada' });
+});
+
 app.use(errorHandler);
 
   async function initializeViteAndListen() {
