@@ -67,7 +67,8 @@ export default function UsersManager({ token, currentUser, onLogActivity }: User
       });
       if (res.ok) {
         const data = await res.json();
-        setUsersList(data);
+        const list = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+        setUsersList(list);
       } else {
         const errData = await res.json();
         setError(errData.error || 'Error al obtener la lista de usuarios.');

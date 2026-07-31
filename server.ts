@@ -222,7 +222,7 @@ const execPromise = util.promisify(exec);
 app.post('/api/admin/run-seed', async (req, res) => {
   try {
     const { stdout, stderr } = await execPromise('npx tsx scripts/seed-demo-project.ts');
-    res.json({ success: true, stdout, stderr });
+    res.json({ success: true, message: "Proyecto cargado", data: [], stdout, stderr });
   } catch (err) {
     res.status(500).json({ success: false, error: String(err) });
   }
