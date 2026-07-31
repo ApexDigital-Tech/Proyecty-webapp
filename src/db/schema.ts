@@ -36,7 +36,7 @@ export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   uid: text('uid').notNull().unique(), // Supabase Auth UID
-  email: text('email').notNull(),
+  email: text('email').notNull().unique(),
   name: text('name').notNull(),
   roleId: integer('role_id').references(() => roles.id).notNull(),
   avatarUrl: text('avatar_url'),

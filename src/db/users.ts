@@ -5,7 +5,8 @@ import { sendWelcomeEmail } from '../services/email.service.ts';
 
 export async function getOrCreateUser(uid: string, email: string, name: string, roleName: string) {
   try {
-    const existingResult = await db.select({
+    // --- STEP 1: Check by UID first (fast path for returning users) ---
+    const byUid = await db.select({
       id: users.id,
       uid: users.uid,
       email: users.email,
@@ -18,8 +19,9 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(users.uid, uid));
 
-    if (existingResult.length > 0) {
-      const existing = existingResult[0];
+    if (byUid.length > 0) {
+      const existing = byUid[0];
+      // Update name/email in case they changed on the provider side
       await db.update(users)
         .set({ email, name })
         .where(eq(users.uid, uid));
@@ -29,8 +31,36 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
       };
     }
 
-    // New user workflow
-    // 1. Find or create default Organization (tenant)
+    // --- STEP 2: Check by EMAIL (handles admin pre-registration with placeholder uid) ---
+    const byEmail = await db.select({
+      id: users.id,
+      uid: users.uid,
+      email: users.email,
+      name: users.name,
+      tenantId: users.tenantId,
+      roleId: users.roleId,
+      roleName: roles.name,
+      isActive: users.isActive
+    }).from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.email, email));
+
+    if (byEmail.length > 0) {
+      const existing = byEmail[0];
+      // Link the real Supabase UID to the pre-registered row.
+      // DO NOT overwrite roleId — admin assigned it intentionally.
+      await db.update(users)
+        .set({ uid, name })
+        .where(eq(users.id, existing.id));
+      console.log(`[Auth] Linked Google UID ${uid} to pre-registered email ${email} (role preserved: ${existing.roleName})`);
+      return {
+        ...existing,
+        uid, // return the now-linked uid
+        role: existing.roleName || 'Project Manager'
+      };
+    }
+
+    // --- STEP 3: Truly new user — create org, role, user row ---
     const orgName = `ORG-${email.split('@')[1] || 'DEFAULT'}`.toUpperCase();
     let orgId: number;
     const orgResult = await db.select().from(organizations).where(eq(organizations.name, orgName));
@@ -41,7 +71,6 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
       orgId = newOrg[0].id;
     }
 
-    // 2. Resolve Role
     let roleId: number;
     let mappedRoleName = roleName === 'MANAGER' ? 'Project Manager' : roleName === 'FINANCE' ? 'Administrativo / Finanzas' : roleName;
     const roleResult = await db.select().from(roles).where(eq(roles.name, mappedRoleName));
@@ -52,7 +81,6 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
       roleId = newRole[0].id;
     }
 
-    // 3. Create User
     const result = await db.insert(users)
       .values({
         uid,

@@ -234,7 +234,7 @@ export default function App() {
                 token={token}
               />
             ) : (
-            <>
+            <div key={`${currentUser.role}-${currentTab}`}>
               {currentTab === 'dashboard' && hasPermission(currentUser.role, 'canViewDashboard') && (
                 <Dashboard
                   token={token}
@@ -289,7 +289,7 @@ export default function App() {
               {currentTab === 'settings' && hasPermission(currentUser.role, 'canViewUsers') && (
                 <Settings token={token} />
               )}
-            </>
+            </div>
           )}
           </ErrorBoundary>
         </main>
