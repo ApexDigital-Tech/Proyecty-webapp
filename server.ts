@@ -188,6 +188,9 @@ app.use('/api/audit-logs', auditRouter);
 app.get('/api/activity-logs', (req, res) => {
   res.json({ success: true, data: [] });
 });
+app.get('/api/agenda', (req, res) => {
+  res.json({ success: true, data: [] });
+});
 app.get('/api/public/demo-users', (req, res) => {
   res.json([]);
 });

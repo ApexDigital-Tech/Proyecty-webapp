@@ -134,6 +134,29 @@ export default function UsersManager({ token, currentUser, onLogActivity }: User
     }
   };
 
+  const handleLoadDemo = async () => {
+    if (!confirm('¿Seguro que deseas cargar o reiniciar el proyecto demo "Las abuelitas de VOSERDEM"?')) return;
+    setIsLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch('/api/admin/run-seed', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSuccess("Proyecto demo cargado con éxito.");
+        onLogActivity(null, "Cargó el proyecto demo VOSERDEM");
+      } else {
+        setError("Error al cargar el proyecto demo.");
+      }
+    } catch (err) {
+      setError("Error de red al cargar el proyecto demo.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleToggleActive = async (user: UserData) => {
     if (user.email === currentUser.email) {
       setError('No puedes desactivar tu propia cuenta.');
@@ -228,13 +251,22 @@ export default function UsersManager({ token, currentUser, onLogActivity }: User
             Sincronizar Panel
           </button>
           {currentUser.role === 'DIRECTOR' && (
-            <button
-              onClick={() => handleOpenModal('create')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded border border-blue-700 transition cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Nuevo Usuario
-            </button>
+            <>
+              <button
+                onClick={handleLoadDemo}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded border border-amber-600 transition cursor-pointer"
+              >
+                Cargar Proyecto Demo
+              </button>
+              <button
+                onClick={() => handleOpenModal('create')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded border border-blue-700 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Nuevo Usuario
+              </button>
+            </>
           )}
         </div>
       </div>
