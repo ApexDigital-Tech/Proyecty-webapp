@@ -9,8 +9,10 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
   try {
     if (req.user?.email === 'apexdigital70@gmail.com') {
       req.user.role = 'DIRECTOR';
+      req.user.roleName = 'DIRECTOR';
     }
-    res.json({ user: req.user });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.json({ id: req.user?.id, email: req.user?.email, role: req.user?.role, roleName: req.user?.roleName, ...req.user });
   } catch (err) {
     next(err);
   }

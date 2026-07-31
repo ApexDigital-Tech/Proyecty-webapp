@@ -28,7 +28,8 @@ export default function AuditLogsDashboard({ token, userRole }: AuditLogsDashboa
         throw new Error('Error al obtener la bitácora');
       }
       const data = await res.json();
-      setLogs(data);
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      setLogs(items);
     } catch (err: any) {
       setError(err.message);
     } finally {

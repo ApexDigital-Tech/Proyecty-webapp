@@ -27,7 +27,8 @@ export default function ExpenseApprovalDashboard({ token, userRole }: ExpenseApp
         throw new Error('Error al obtener los gastos');
       }
       const data = await res.json();
-      setExpenses(data);
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      setExpenses(items);
     } catch (err: any) {
       setError(err.message);
     } finally {

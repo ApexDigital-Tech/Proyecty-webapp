@@ -44,7 +44,8 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       });
       if (!res.ok) throw new Error('Error al cargar documentos');
       const data = await res.json();
-      setDocuments(data);
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      setDocuments(items);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -126,9 +127,10 @@ export function DocumentManager({ projectId }: DocumentManagerProps) {
       });
       if (!res.ok) throw new Error('Error al descargar');
       const data = await res.json();
+      const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
       
       // Open URL in new tab to trigger download
-      window.open(data.url, '_blank');
+      window.open(items.url || data.url, '_blank');
     } catch (err: any) {
       alert(err.message);
     }

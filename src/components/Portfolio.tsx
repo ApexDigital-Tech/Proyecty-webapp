@@ -62,8 +62,9 @@ export default function Portfolio({
         if (Array.isArray(json)) {
            setProjectsList(json);
         } else {
-           setProjectsList(json.data);
-           setPagination(json.pagination);
+           const items = Array.isArray(json?.data) ? json.data : [];
+           setProjectsList(items);
+           if (json?.pagination) setPagination(json.pagination);
         }
       }
     } catch (error) {

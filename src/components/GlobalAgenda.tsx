@@ -64,8 +64,9 @@ export default function GlobalAgenda({ token }: GlobalAgendaProps) {
       });
       if (res.ok) {
         const data = await res.json();
+        const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
         // Parse dates
-        const parsed = data.map((d: any) => ({
+        const parsed = items.map((d: any) => ({
           ...d,
           start: new Date(d.start),
           end: new Date(d.end),
@@ -86,7 +87,8 @@ export default function GlobalAgenda({ token }: GlobalAgendaProps) {
       });
       if (res.ok) {
         const data = await res.json();
-        setTenantUsers(data.map((u: any) => ({ id: u.id, name: u.name })));
+        const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        setTenantUsers(items.map((u: any) => ({ id: u.id, name: u.name })));
       }
     } catch(e) {}
   };

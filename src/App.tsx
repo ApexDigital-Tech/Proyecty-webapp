@@ -118,7 +118,8 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setAuditLogs(data.data || data || []);
+        const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+        setAuditLogs(items);
       }
     } catch (err) {
       console.error('Error fetching activity logs:', err);

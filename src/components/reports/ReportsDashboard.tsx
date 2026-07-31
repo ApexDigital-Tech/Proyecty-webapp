@@ -22,7 +22,8 @@ export default function ReportsDashboard({ token, userRole }: ReportsDashboardPr
       });
       if (!res.ok) throw new Error('No se pudieron obtener los datos de gastos');
       
-      const expenses = await res.json();
+      const data = await res.json();
+      const expenses = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
       
       let total = 0;
       let pending = 0;
