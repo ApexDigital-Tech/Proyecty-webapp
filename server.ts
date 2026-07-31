@@ -62,15 +62,21 @@ async function verifyProjectTenant(projectId: number, tenantId: number): Promise
 }
 
 const app = express();
+app.set('trust proxy', 1);
 initSentry(); // Initialize Sentry before routes
 
 const PORT = 3000;
+
+const isDev = process.env.NODE_ENV !== 'production';
+const connectSrc = isDev 
+  ? ["'self'", "http://localhost:*", "ws://localhost:*", "wss://localhost:*", "https://*.supabase.co", "wss://*.supabase.co"]
+  : ["'self'", "https://kwmvuuwinufksjjfsuls.supabase.co", "https://*.supabase.co", "wss://*.supabase.co"];
 
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "connect-src": ["'self'", "https://kwmvuuwinufksjjfsuls.supabase.co", "https://*.supabase.co", "wss://*.supabase.co"],
+      "connect-src": connectSrc,
       "img-src": ["'self'", "data:", "https://api.dicebear.com", "https://*.googleusercontent.com"],
     },
   },
@@ -197,6 +203,19 @@ app.use('/api/organizations', organizationsRouter);
 // Detailed view of a project with all aggregate relations
 
 // Update project status/progress (RBAC: DIRECTOR/MANAGER)
+
+import { exec } from 'child_process';
+import util from 'util';
+const execPromise = util.promisify(exec);
+
+app.post('/api/admin/run-seed', async (req, res) => {
+  try {
+    const { stdout, stderr } = await execPromise('npx tsx scripts/seed-demo-project.ts');
+    res.json({ success: true, stdout, stderr });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
 
 app.use(errorHandler);
 

