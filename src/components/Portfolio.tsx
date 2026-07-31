@@ -82,7 +82,7 @@ export default function Portfolio({
   }, [fetchProjects]);
 
   // Derived variable for easy mapping below (no more client-side filtering needed)
-  const filteredProjects = projectsList;
+  const filteredProjects = (projectsList || []).filter(p => p && typeof p === 'object' && p.code);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,7 +229,7 @@ export default function Portfolio({
                     </span>
                     <span
                       className={`text-[9px] font-sans font-semibold px-2 py-0.2 rounded-full border ${
-                        p.status === 'EJECUCIÓN'
+                        p?.status === 'EJECUCIÓN'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50'
                           : p.status === 'ACTIVO'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50'
