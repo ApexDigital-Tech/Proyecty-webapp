@@ -67,20 +67,28 @@ initSentry(); // Initialize Sentry before routes
 
 const PORT = 3000;
 
-const isDev = process.env.NODE_ENV !== 'production';
-const connectSrc = isDev 
-  ? ["'self'", "http://localhost:*", "ws://localhost:*", "wss://localhost:*", "https://*.supabase.co", "wss://*.supabase.co"]
-  : ["'self'", "https://kwmvuuwinufksjjfsuls.supabase.co", "https://*.supabase.co", "wss://*.supabase.co"];
-
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "connect-src": connectSrc,
-      "img-src": ["'self'", "data:", "https://api.dicebear.com", "https://*.googleusercontent.com"],
-    },
-  },
-}));
+if (process.env.NODE_ENV !== 'production') {
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+} else {
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "default-src": ["'self'"],
+          "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          "connect-src": ["'self'", "https://*.supabase.co", "wss://*.supabase.co"],
+          "img-src": ["'self'", "data:", "https://api.dicebear.com", "https://*.googleusercontent.com"],
+        },
+      },
+    })
+  );
+}
 app.use(cors());
 
 // Prevent caching for all API responses

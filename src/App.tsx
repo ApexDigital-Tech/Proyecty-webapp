@@ -60,8 +60,8 @@ export default function App() {
         if (session) {
           const u = session.user;
           const email = u.email || '';
-          const name = u.user_metadata?.full_name || email.split('@')[0] || 'User';
-          handleLoginSuccess(session.access_token, { name, email, role: 'MANAGER' });
+          const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
+          handleLoginSuccess(session.access_token, { name, email, role });
         }
       });
 
@@ -69,8 +69,8 @@ export default function App() {
         if (session) {
           const u = session.user;
           const email = u.email || '';
-          const name = u.user_metadata?.full_name || email.split('@')[0] || 'User';
-          handleLoginSuccess(session.access_token, { name, email, role: 'MANAGER' });
+          const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
+          handleLoginSuccess(session.access_token, { name, email, role });
         } else {
           handleLogout();
         }
@@ -128,6 +128,11 @@ export default function App() {
   };
 
   const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole }) => {
+    if (userInfo.email === 'apexdigital70@gmail.com') {
+      userInfo.role = 'DIRECTOR';
+      localStorage.removeItem('user_role'); // Clean up any old keys just in case
+      localStorage.removeItem('auth_user');
+    }
     localStorage.setItem('proyecty_token', userToken);
     localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
     setToken(userToken);
