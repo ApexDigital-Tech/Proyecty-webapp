@@ -280,7 +280,7 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
     const projectBudgetItems = await db.select().from(budgetLines).where(eq(budgetLines.projectId, projectId));
     const projectDocuments = await db.select().from(documents).where(eq(documents.projectId, projectId));
     const projectVouchers = await db.select().from(receiptsVouchers).where(eq(receiptsVouchers.projectId, projectId));
-    const projectLogs = await db.select().from(auditLogs).where(and(eq(auditLogs.entityId, projectId), eq(auditLogs.entityType, 'Project'))).orderBy(desc(auditLogs.createdAt));
+    const projectLogs = await db.select().from(auditLogs).where(and(eq(auditLogs.entityId, String(projectId)), eq(auditLogs.entity, 'Project'))).orderBy(desc(auditLogs.createdAt));
 
     // For agreements, fetch disbursements & clauses
     const enrichedAgreements = [];
@@ -304,7 +304,7 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
     });
   } catch (err: any) {
     console.error('Error fetching project detail:', err);
-    res.status(500).json({ error: 'Error al cargar el detalle del proyecto' });
+    res.status(500).json({ success: false, error: 'Error al cargar el detalle del proyecto', message: err.message });
   }
 };
 

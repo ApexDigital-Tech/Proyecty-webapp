@@ -613,6 +613,25 @@ export default function ProjectDetail({
     );
   }
 
+  if (generalError || !project) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto space-y-6 text-center">
+        <div className="bg-red-50 text-red-600 p-8 rounded-lg max-w-md mx-auto">
+          <AlertOctagon className="w-10 h-10 mx-auto mb-3" />
+          <h3 className="font-bold text-lg mb-2">Error al cargar proyecto</h3>
+          <p className="text-sm">{generalError || 'No se pudo cargar la información del proyecto.'}</p>
+          <button 
+            onClick={onBack} 
+            className="mt-6 px-4 py-2 bg-white text-red-600 rounded-md border border-red-200 hover:bg-red-50 font-bold text-xs cursor-pointer inline-flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Volver al Portafolio</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const canDeleteProject = userRole === 'DIRECTOR';
   const isEditable = hasPermission(userRole, 'canEditProject');
 
