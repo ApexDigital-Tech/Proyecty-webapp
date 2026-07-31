@@ -118,7 +118,7 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setAuditLogs(data);
+        setAuditLogs(data.data || data || []);
       }
     } catch (err) {
       console.error('Error fetching activity logs:', err);

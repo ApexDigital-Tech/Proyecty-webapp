@@ -171,7 +171,12 @@ app.use('/api', uploadsRouter);
 
 app.use('/api/expenses', expensesRouter);
 app.use('/api/audit-logs', auditRouter);
-
+app.get('/api/activity-logs', (req, res) => {
+  res.json({ success: true, data: [] });
+});
+app.get('/api/public/demo-users', (req, res) => {
+  res.json([]);
+});
 app.use('/api', reportsRouter);
 
 // --- Sprint 2: Billing & Webhooks ---
