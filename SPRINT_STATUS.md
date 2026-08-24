@@ -5,6 +5,21 @@
 
 ---
 
+## Auditoría AUD-PROY-001 — Fase 3 (Ola 1: Seguridad y Estructura Base)
+
+| Campo | Detalle |
+|---|---|
+| **Estado** | ✅ COMPLETADO, VERIFICADO Y ETIQUETADO (`v1.1.0-wave-1`) |
+| **Módulos Cubiertos** | `M-01` (Auth), `M-03` (Portafolio), `M-04` (Detalle Proyecto), `M-15` (Bitácora Auditoría), `M-16` (Usuarios y RBAC) |
+| **Control M-01** | JWTs HMAC-SHA256 con claims canónicos (`user_id`, `role`, `tenant_id`, `session_id`, `exp: 900s`). Rechazo de manipulaciones, roles inexistentes y tokens expirados. |
+| **Control M-03 & M-04** | Aislamiento multi-tenant estricto (0 filtración cross-tenant). Creación/edición por rol y partidas activas únicas por proyecto (sin duplicados). |
+| **Control M-15** | Bitácora inmutable con diffs `before_state`/`after_state`, autor, IP y timestamps UTC inalterables. |
+| **Control M-16** | Administración de usuarios por `DIRECTOR` con invalidación inmediata de caché en `CacheService.invalidate(userId)`. |
+| **Control DOC-01** | Política *Fail-Closed* activa en backend: descarga y análisis IA bloqueados con **HTTP 423 (Locked)** salvo estado `CLEAN`. |
+| **Verificación Técnica** | Suite `tests/ola1-security-structure.test.ts` (100% PASSED), build limpio, commit `25151d2` y tag `v1.1.0-wave-1` desplegados a Render. |
+
+---
+
 ## Auditoría AUD-PROY-001 — Fase 2 (Integridad P1)
 
 | Campo | Detalle |

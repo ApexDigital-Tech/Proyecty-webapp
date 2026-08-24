@@ -2,6 +2,33 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-24] Hito: Ejecución de Fase 3 (Ola 1: Seguridad y Estructura Base) — Auditoría AUD-PROY-001
+
+### Resumen Consolidado
+Se completó, verificó y desplegó la **Ola 1 (Seguridad y Estructura Base)** que abarca los módulos **M-01, M-03, M-04, M-15 y M-16**:
+1. **`M-01` (Autenticación y Sesiones Demo):**
+   - JWTs HMAC-SHA256 con claims canónicos (`user_id`, `role`, `tenant_id`, `session_id`, `exp: 900s`).
+   - Rechazo riguroso de firmas manipuladas, roles inexistentes y tokens expirados.
+2. **`M-03` (Portafolio de Proyectos y Aislamiento):**
+   - Creación y edición por `DIRECTOR` y `MANAGER`.
+   - Bloqueo de creación para `AUDITOR` con HTTP 403.
+   - Aislamiento multi-tenant estricto verificado: 0 filtración de registros entre organizaciones.
+3. **`M-04` (Ficha Detallada de Proyecto):**
+   - Filtrado de líneas presupuestarias de la versión activa/aprobada (`activeBudgetVersion`), eliminando duplicidad visual de códigos de partida.
+4. **`M-15` (Bitácora de Auditoría e Inmutabilidad):**
+   - Registro de diffs estructurados (`before_state`, `after_state`), autor, IP y timestamps UTC.
+   - Restricción de permisos de mutación en BD para preservar inmutabilidad legal.
+5. **`M-16` (Gestión de Usuarios, Roles e Invalidación de Caché):**
+   - Gestión administrativa por `DIRECTOR` en `src/controllers/users.controller.ts` con aislamiento tenant.
+   - Invalidación reactiva e inmediata de caché de permisos en `CacheService.invalidate(userId)` tras cambios de rol.
+6. **`DOC-01` (Política Fail-Closed Activa):**
+   - Endpoint `GET /api/documents/:id/download` responde **HTTP 423 (Locked)** si el archivo no está en estado `CLEAN` o está en cuarentena.
+   - Endpoint `POST /api/documents/:id/analyze` bloquea análisis IA en HTTP 423 si el documento no está `CLEAN`.
+7. **Verificación Automatizada:**
+   - Suite `tests/ola1-security-structure.test.ts` pasando al 100%. Build limpio `npm run build` y commit `25151d2` etiquetado como `v1.1.0-wave-1` desplegado a Render.
+
+---
+
 ## [2026-08-24] Hito: Ejecución y Estabilización de Fase 2 (Integridad P1) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
