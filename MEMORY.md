@@ -2,29 +2,34 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-24] Hito: Ejecución de Fase 2 (Integridad P1) — Auditoría AUD-PROY-001
+## [2026-08-24] Hito: Ejecución y Estabilización de Fase 2 (Integridad P1) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
-Se completó e implementó la totalidad de los requerimientos de integridad P1 del plan de auditoría AUD-PROY-001:
-1. **`FIN-01` (Segregación Estricta de Funciones Financieras):**
-   - Backend: Validación en `approveExpense` (`src/services/expenses.service.ts`) que rechaza con `ConflictError` si `registeredBy === approvedByUserId`. Bloqueo de sobre-ejecución presupuestaria si `expense.amount > budgetLine.balance`.
-   - UI: `src/components/expenses/ExpensesDashboard.tsx` muestra badge informativo e inhabilita las acciones de aprobación cuando el gasto fue registrado por el propio usuario activo.
-2. **`BUD-01` (Versionado Presupuestario Inmutable):**
-   - Servicio `src/services/budget.service.ts` y rutas en `src/routes/projects.routes.ts` (`GET /:id/budget-versions` y `POST /:id/budget-versions`). Las adendas/reformulaciones crean versiones sucesivas (`V2`, `V3`) con snapshot inmutable de las líneas presupuestarias, preservando la línea base `V1` intacta para auditoría.
-3. **`AUD-01` (Auditoría Inmutable con Diffs):**
-   - Integración de `logAuditEvent` en gastos, presupuestos, documentos e IA grabando snapshots estructurados en `metadata` (`before_state`, `after_state`, usuario, IP, tenant y timestamp UTC).
-4. **`DOC-01` (Gobierno Documental Completo):**
+Se completó e implementó la totalidad de los requerimientos de integridad P1 y se subsanaron todas las observaciones de auditoría:
+1. **`FIN-01` (Segregación Estricta de Funciones y Contexto de Sesión):**
+   - Resuelta la falla de contexto de usuario (`401: Falta contexto de usuario`) incorporando `user_id` / `id` numérico en el payload firmado del JWT demo (`src/services/demoAuth.service.ts` y `src/middleware/auth.ts`).
+   - `src/middleware/rbac.ts` cuenta con resolución de permisos de sesión limpia y bypass administrativo para `DIRECTOR` / `ADMIN`.
+   - Bloqueo de auto-aprobación del creador con `ConflictError` y bloqueo de sobre-ejecución presupuestaria si el monto supera el saldo disponible.
+   - UI en `ExpensesDashboard.tsx` inhabilita las acciones y muestra badge *"Registrado por ti — Revisor independiente requerido"*.
+2. **`BUD-01` (Versionado Inmutable y No Duplicidad):**
+   - Servicio `src/services/budget.service.ts` genera correlativos consistentes (`V1`, `V2`, `V3`) con normalización automática de `versionName`.
+   - `getProjectById` en `src/controllers/projects.controller.ts` filtra exclusivamente las partidas de la versión activa/aprobada, erradicando la duplicidad visual de líneas en la interfaz.
+3. **`AUD-01` (Auditoría Inmutable con Diffs y UTC):**
+   - `logAuditEvent` registra snapshots estructurados (`before_state`, `after_state`, usuario, IP, tenant y timestamp UTC).
+4. **`DOC-01` (Gobierno Documental Honesto y Completo):**
    - Whitelist MIME estricta y límite de 10MB en `src/routes/documents.ts`.
-   - Generación de Hash SHA-256 de integridad criptográfica por documento.
-   - Pipeline de escaneo antivirus registrado (`scanStatus: 'CLEAN'`).
-   - Papelera recuperable (soft-delete) con endpoint `POST /documents/:id/restore` y trazabilidad auditada de subida/descarga/eliminación/restauración.
-5. **`AI-01` (Trazabilidad de Afirmaciones de IA):**
-   - Generación en `src/services/ai.service.ts` y `src/controllers/reports.controller.ts` que estructura fuentes citables obligatorias por ID de gasto (`sources`), flag de revisión humana (`requiresHumanReview: true`) y fallback transparente auditado.
-6. **`SEC-01` & `PERF-01` (Seguridad y Rendimiento):**
-   - Endurecimiento de CSP en Helmet (`server.ts`) eliminando `unsafe-eval`.
-   - Enriquecimiento de `/api/health` con latencia real de BD (`latencyMs`), métricas de memoria del proceso (RSS/Heap) y uptime.
+   - Hash criptográfico SHA-256 generado por archivo.
+   - Estado de escaneo antivirus honesto (`scanStatus: 'PENDING_SCAN'`, sin asignar falsos `CLEAN`).
+   - Política y plazo de retención legal fijada a 5 años (`5_YEARS_LEGAL_ARCHIVE`).
+   - Papelera recuperable (soft-delete + restore auditado) y bloqueo de descarga si el archivo está en cuarentena.
+5. **`AI-01` (Trazabilidad de Afirmaciones IA):**
+   - Reportes ejecutivos con citas obligatorias a fuentes transaccionales (`[Gasto #ID]`), flag `requiresHumanReview: true` y fallback auditado.
+6. **`SEC-01` & `PERF-01` (Seguridad, Rendimiento y Arquitectura Saneada):**
+   - Erradicada la directiva `'unsafe-eval'` de la CSP en `server.ts`.
+   - Erradicadas todas las menciones a *"Cloud SQL Conectado"* en `Topbar.tsx`, `UsersManager.tsx` y `AuditTrail.tsx`, reemplazándolas por la arquitectura real *"PostgreSQL Conectado"*.
+   - `/api/health` enriquecido con latencia de BD en ms (`latencyMs`), memoria RSS/Heap y uptime.
 7. **Verificación Automatizada:**
-   - Suite `tests/p1-integrity-audit.test.ts` pasando 14/14 aserciones críticas. Compilación `tsc --noEmit` y `npm run build` limpias (0 errores). Desplegado a GitHub (`1b8b79b`) y Render.
+   - Suite `tests/p1-integrity-audit.test.ts` con **29/29 tests pasando (100% de cobertura de los 7 controles P1)**. Compilación `tsc --noEmit` y `npm run build` limpias (0 errores). Commit `6da6408` desplegado a Render.
 
 ---
 
