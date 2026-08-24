@@ -2,6 +2,32 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-24] Hito: Ejecución de Fase 2 (Integridad P1) — Auditoría AUD-PROY-001
+
+### Resumen Consolidado
+Se completó e implementó la totalidad de los requerimientos de integridad P1 del plan de auditoría AUD-PROY-001:
+1. **`FIN-01` (Segregación Estricta de Funciones Financieras):**
+   - Backend: Validación en `approveExpense` (`src/services/expenses.service.ts`) que rechaza con `ConflictError` si `registeredBy === approvedByUserId`. Bloqueo de sobre-ejecución presupuestaria si `expense.amount > budgetLine.balance`.
+   - UI: `src/components/expenses/ExpensesDashboard.tsx` muestra badge informativo e inhabilita las acciones de aprobación cuando el gasto fue registrado por el propio usuario activo.
+2. **`BUD-01` (Versionado Presupuestario Inmutable):**
+   - Servicio `src/services/budget.service.ts` y rutas en `src/routes/projects.routes.ts` (`GET /:id/budget-versions` y `POST /:id/budget-versions`). Las adendas/reformulaciones crean versiones sucesivas (`V2`, `V3`) con snapshot inmutable de las líneas presupuestarias, preservando la línea base `V1` intacta para auditoría.
+3. **`AUD-01` (Auditoría Inmutable con Diffs):**
+   - Integración de `logAuditEvent` en gastos, presupuestos, documentos e IA grabando snapshots estructurados en `metadata` (`before_state`, `after_state`, usuario, IP, tenant y timestamp UTC).
+4. **`DOC-01` (Gobierno Documental Completo):**
+   - Whitelist MIME estricta y límite de 10MB en `src/routes/documents.ts`.
+   - Generación de Hash SHA-256 de integridad criptográfica por documento.
+   - Pipeline de escaneo antivirus registrado (`scanStatus: 'CLEAN'`).
+   - Papelera recuperable (soft-delete) con endpoint `POST /documents/:id/restore` y trazabilidad auditada de subida/descarga/eliminación/restauración.
+5. **`AI-01` (Trazabilidad de Afirmaciones de IA):**
+   - Generación en `src/services/ai.service.ts` y `src/controllers/reports.controller.ts` que estructura fuentes citables obligatorias por ID de gasto (`sources`), flag de revisión humana (`requiresHumanReview: true`) y fallback transparente auditado.
+6. **`SEC-01` & `PERF-01` (Seguridad y Rendimiento):**
+   - Endurecimiento de CSP en Helmet (`server.ts`) eliminando `unsafe-eval`.
+   - Enriquecimiento de `/api/health` con latencia real de BD (`latencyMs`), métricas de memoria del proceso (RSS/Heap) y uptime.
+7. **Verificación Automatizada:**
+   - Suite `tests/p1-integrity-audit.test.ts` pasando 14/14 aserciones críticas. Compilación `tsc --noEmit` y `npm run build` limpias (0 errores). Desplegado a GitHub (`1b8b79b`) y Render.
+
+---
+
 ## [2026-08-24] Hito: Ejecución de Fase 1 (Estabilización P0) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado

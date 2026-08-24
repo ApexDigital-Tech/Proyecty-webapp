@@ -5,6 +5,22 @@
 
 ---
 
+## Auditoría AUD-PROY-001 — Fase 2 (Integridad P1)
+
+| Campo | Detalle |
+|---|---|
+| **Estado** | ✅ COMPLETADO Y VERIFICADO (14/14 Tests Passed) |
+| **Hallazgos Resueltos** | `FIN-01`, `BUD-01`, `AUD-01`, `DOC-01`, `AI-01`, `SEC-01`, `PERF-01` |
+| **Segregación FIN-01** | Bloqueo estricto de auto-aprobación del creador con `ConflictError` en backend e inhabilitación visual en UI. Bloqueo de sobre-ejecución presupuestaria. |
+| **Versionado BUD-01** | Rutas `/:id/budget-versions` con creación inmutable de nuevas versiones (`V2`, `V3`) preservando historial inalterable de la línea base `V1`. |
+| **Auditoría AUD-01** | `audit_logs` con snapshots completos de diffs (`before_state`, `after_state`) en mutaciones transaccionales. |
+| **Gobierno DOC-01** | Whitelist MIME, límite 10MB, Hash SHA-256 criptográfico, escaneo antivirus stub y papelera recuperable (soft-delete y restore). |
+| **IA Citable AI-01** | Trazabilidad obligatoria de fuentes por ID de gasto en reportes generados con IA, flag `requiresHumanReview: true` y fallback auditado. |
+| **Seguridad & Rendimiento** | CSP en Helmet sin `unsafe-eval` (SEC-01); `/api/health` enriquecido con latencia de BD en ms, memoria del proceso y uptime (PERF-01). |
+| **Verificación Técnica** | Suite `tests/p1-integrity-audit.test.ts` (14/14 PASSED), `tsc --noEmit` limpio, `npm run build` exitoso, commit `1b8b79b` desplegado a Render. |
+
+---
+
 ## Auditoría AUD-PROY-001 — Fase 1 (Estabilización P0)
 
 | Campo | Detalle |
