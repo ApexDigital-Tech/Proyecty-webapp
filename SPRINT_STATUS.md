@@ -5,6 +5,22 @@
 
 ---
 
+## Auditoría AUD-PROY-001 — Fase 3 (Ola 2: Integridad Financiera y Presupuestaria)
+
+| Campo | Detalle |
+|---|---|
+| **Estado** | ✅ COMPLETADO, VERIFICADO Y ETIQUETADO (`v1.2.0-wave-2`) |
+| **Módulos Cubiertos** | `M-05` (Convenios), `M-06` (Desembolsos), `M-08` (Gestión Presupuestaria y Versiones), `M-09` (Registro y Aprobación de Gastos), `M-10` (Comprobantes y Facturas), `M-11` (Multi-divisa) |
+| **Control M-05 (Convenios)** | Montos estrictamente positivos (`amount > 0`), validación temporal estricta (`signedDate <= startDate <= endDate`) y aislamiento tenant verificado. |
+| **Control M-06 (Desembolsos)** | Control acumulado vs convenio: Rechazo de sobre-desembolsos que excedan el límite total del convenio (`totalDisbursed <= agreement.amount`). |
+| **Control M-08 (Presupuestos)** | Versiones correlativas e inmutables (`V1`, `V2`, `V3`), preservación histórica de versiones archivadas y vinculación de partidas presupuestarias. |
+| **Control M-09 (Gastos y FIN-01)** | • Segregación estricta de funciones: Prohibición de auto-aprobación del creador con `ConflictError`.<br>• Bloqueo de sobre-ejecución presupuestaria ante saldo insuficiente en la partida (`expense.amount <= budgetLine.balance`).<br>• Reducción de saldo y registro de ejecución atómica/transaccional resistente a concurrencia. |
+| **Control M-10 (Comprobantes)** | Control de unicidad fiscal por emisor y comprobante para evitar duplicidad de facturas. |
+| **Control M-11 (Multi-divisa)** | Conversión monetaria con registro explícito de tasa de cambio (`exchangeRate`), fuente de cotización y fecha histórica. |
+| **Verificación Técnica** | • Suite `tests/ola2-financial-integrity.test.ts` (**18/18 PASSED**).<br>• Suite de regresión `tests/ola1-security-structure.test.ts` (**34/34 PASSED**).<br>• Build limpio `npm run build` y tag `v1.2.0-wave-2`. |
+
+---
+
 ## Auditoría AUD-PROY-001 — Fase 3 (Ola 1: Seguridad y Estructura Base)
 
 | Campo | Detalle |
@@ -13,10 +29,10 @@
 | **Módulos Cubiertos** | `M-01` (Auth), `M-03` (Portafolio), `M-04` (Detalle Proyecto), `M-15` (Bitácora Auditoría), `M-16` (Usuarios y RBAC) |
 | **Control M-01** | JWTs HMAC-SHA256 con claims canónicos (`user_id`, `role`, `tenant_id`, `session_id`, `exp: 900s`). Rechazo de manipulaciones, roles inexistentes y tokens expirados. |
 | **Control M-03 & M-04** | Aislamiento multi-tenant estricto (0 filtración cross-tenant). Creación/edición por rol y partidas activas únicas por proyecto (sin duplicados). |
-| **Control M-15** | Bitácora de auditoría alineada con matriz canónica: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance, Responsable y Financiador. |
-| **Control M-16** | • Catálogo `GET /api/users`: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance y otros.<br>• Nuevo endpoint `GET /api/users/me`: Acceso **HTTP 200** para todos los roles devolviendo exclusivamente el perfil propio.<br>• Invalidación reactiva de caché `CacheService.invalidate(userId)` en cambios de rol. |
+| **Control M-15** | Bitácora de auditoría alineada con matriz canónica: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance, Responsable y Financiador. Inmutabilidad SQL estricta en PostgreSQL probada y activada. |
+| **Control M-16** | • Catálogo `GET /api/users`: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance y otros.<br>• Nuevo endpoint `GET /api/users/me`: Acceso **HTTP 200** para todos los roles con `roleCode` canónico.<br>• Invalidación reactiva de caché `CacheService.invalidate(userId)` en cambios de rol. |
 | **Control DOC-01** | Política *Fail-Closed* activa en backend: descarga y análisis IA bloqueados con **HTTP 423 (Locked)** salvo estado `CLEAN`. |
-| **Verificación Técnica** | Suite `tests/ola1-security-structure.test.ts` (**31/31 PASSED**), build limpio, commit `6b08a19` y tag `v1.1.1-wave-1-fix` desplegados a Render. |
+| **Verificación Técnica** | Suite `tests/ola1-security-structure.test.ts` (**34/34 PASSED**), build limpio, tag `v1.1.1-wave-1-fix` desplegado a Render. |
 
 ---
 

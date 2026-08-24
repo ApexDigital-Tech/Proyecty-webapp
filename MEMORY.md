@@ -2,6 +2,33 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-24] Hito: Ejecución y Cierre de Fase 3 (Ola 2: Integridad Financiera y Presupuestaria) — Auditoría AUD-PROY-001
+
+### Resumen Consolidado
+Se completó, verificó y desplegó la **Ola 2 (Integridad Financiera y Presupuestaria)** que abarca los módulos **M-05, M-06, M-08, M-09, M-10 y M-11**:
+1. **`M-05` (Convenios de Financiación y Donaciones):**
+   - Validación estricta de montos positivos (`amount > 0`) y coherencia cronológica (`signedDate <= startDate <= endDate`).
+   - Aislamiento multi-tenant validado: rechazo de convenios en proyectos no pertenecientes a la organización.
+2. **`M-06` (Desembolsos e Ingresos Trazables):**
+   - Control de límites acumulados: Rechazo estricto de sobre-desembolsos que excedan el monto total del convenio (`totalDisbursed <= agreement.amount`).
+3. **`M-08` (Gestión Presupuestaria y Versiones Correlativas):**
+   - Versiones presupuestarias correlativas (`V1`, `V2`, `V3`) inmutables una vez archivadas/aprobadas para trazabilidad legal y de donantes.
+   - Partidas presupuestarias asociadas a la versión activa con saldos controlados.
+4. **`M-09` (Registro y Aprobación de Gastos - Segregación FIN-01 y Saldo):**
+   - Segregación estricta de funciones: Bloqueo de auto-aprobación del creador con `ConflictError` (exige revisor independiente).
+   - Bloqueo de sobre-ejecución presupuestaria ante saldo insuficiente en la partida (`expense.amount <= budgetLine.balance`).
+   - Reducción atómica/transaccional de saldo disponible (`balance -= amount`) y aumento de monto ejecutado (`executedAmount += amount`).
+5. **`M-10` (Comprobantes y Facturas - Unicidad Fiscal):**
+   - Control de unicidad fiscal por emisor y comprobante para prevenir la inserción o doble contabilización de facturas.
+6. **`M-11` (Multi-divisa y Tasas de Cambio):**
+   - Conversión monetaria con registro de tasa de cambio explícita (`exchangeRate`), fuente de cotización y fecha histórica.
+7. **Verificación Automatizada y Regresión:**
+   - Suite de Ola 2 `tests/ola2-financial-integrity.test.ts`: **18/18 PASSED (100%)**.
+   - Suite de regresión de Ola 1 `tests/ola1-security-structure.test.ts`: **34/34 PASSED (100%)**.
+   - Build de producción limpio y tag oficial `v1.2.0-wave-2`.
+
+---
+
 ## [2026-08-24] Hito: Ejecución y Cierre Definitivo de Fase 3 (Ola 1: Seguridad y Estructura Base) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
