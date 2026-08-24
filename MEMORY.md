@@ -2,7 +2,7 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-24] Hito: Ejecución de Fase 3 (Ola 1: Seguridad y Estructura Base) — Auditoría AUD-PROY-001
+## [2026-08-24] Hito: Ejecución y Cierre Definitivo de Fase 3 (Ola 1: Seguridad y Estructura Base) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
 Se completó, verificó y desplegó la **Ola 1 (Seguridad y Estructura Base)** que abarca los módulos **M-01, M-03, M-04, M-15 y M-16**:
@@ -15,17 +15,21 @@ Se completó, verificó y desplegó la **Ola 1 (Seguridad y Estructura Base)** q
    - Aislamiento multi-tenant estricto verificado: 0 filtración de registros entre organizaciones.
 3. **`M-04` (Ficha Detallada de Proyecto):**
    - Filtrado de líneas presupuestarias de la versión activa/aprobada (`activeBudgetVersion`), eliminando duplicidad visual de códigos de partida.
-4. **`M-15` (Bitácora de Auditoría e Inmutabilidad):**
+4. **`M-15` (Bitácora de Auditoría e Inmutabilidad SQL Estricta en PostgreSQL):**
    - Registro de diffs estructurados (`before_state`, `after_state`), autor, IP y timestamps UTC.
-   - Restricción de permisos de mutación en BD para preservar inmutabilidad legal.
-5. **`M-16` (Gestión de Usuarios, Roles e Invalidación de Caché):**
-   - Gestión administrativa por `DIRECTOR` en `src/controllers/users.controller.ts` con aislamiento tenant.
+   - **Inmutabilidad en Motor de Base de Datos:** Triggers PostgreSQL `prevent_audit_logs_mutation()` activos que bloquean con `permission denied` cualquier intento de `UPDATE`, `DELETE` o `TRUNCATE` sobre `audit_logs`.
+   - Consulta permitida para `DIRECTOR` (200) y `AUDITOR` (200); bloqueada con HTTP 403 para Manager, Finance, Responsable y Financiador.
+5. **`M-16` (Gestión de Usuarios, Roles, /api/users/me e Invalidación de Caché):**
+   - Catálogo `GET /api/users`: Restringido exclusivamente a `DIRECTOR` (200) y `AUDITOR` (200); bloqueado para Manager y Finance (403).
+   - Perfil Propio `GET /api/users/me`: Habilitado para todos los roles autenticados (200), devolviendo `roleCode` canónico (ej. `FINANCE`, `DIRECTOR`) y `roleName` descriptivo.
    - Invalidación reactiva e inmediata de caché de permisos en `CacheService.invalidate(userId)` tras cambios de rol.
 6. **`DOC-01` (Política Fail-Closed Activa):**
    - Endpoint `GET /api/documents/:id/download` responde **HTTP 423 (Locked)** si el archivo no está en estado `CLEAN` o está en cuarentena.
    - Endpoint `POST /api/documents/:id/analyze` bloquea análisis IA en HTTP 423 si el documento no está `CLEAN`.
-7. **Verificación Automatizada:**
-   - Suite `tests/ola1-security-structure.test.ts` pasando al 100%. Build limpio `npm run build` y commit `25151d2` etiquetado como `v1.1.0-wave-1` desplegado a Render.
+7. **Trazabilidad y Verificación Automatizada:**
+   - Suite `tests/ola1-security-structure.test.ts` pasando **34/34 pruebas (100% PASS)**.
+   - **Commit Funcional y de Despliegue:** `639d1b73e2f1e4ed5b8e5494b49f3bd230af8add`.
+   - **Tag Git Canónico:** `v1.1.1-wave-1-fix` apuntando exactamente al commit `639d1b7`. Desplegado en Render.
 
 ---
 
