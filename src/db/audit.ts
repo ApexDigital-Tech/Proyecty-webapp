@@ -25,10 +25,10 @@ export async function logActivity(projectId: number | null, userName: string, ac
     await db.insert(auditLogs).values({
       tenantId: tId,
       userId: uId,
-      action: actionDescription, // Se almacena la descripción en 'action' o lo separamos
-      entityType: projectId ? 'Project' : 'System',
-      entityId: projectId || 0,
-      newValues: { description: actionDescription }
+      action: actionDescription,
+      entity: projectId ? 'project' : 'system',
+      entityId: String(projectId || 0),
+      metadata: { description: actionDescription },
     });
   } catch (err) {
     console.error('Failed to write audit log:', err);

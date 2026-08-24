@@ -4,6 +4,7 @@ import { projects, projectMembers, agreements, disbursements, budgetLines, recei
 import { eq, and, inArray, desc, gte, lte, asc , ilike, sql} from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts';
+import { withTenantContext, withRlsValidation } from '../utils/dbWrapper.ts';
 
 // Helper function from server.ts
 export async function verifyProjectTenant(projectId: number, tenantId: number): Promise<boolean> {
@@ -85,7 +86,7 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
     }
 
     try {
-      const createdProject = await db.transaction(async (tx) => {
+      const createdProject = await withTenantContext(req.user!.tenantId, async (tx) => {
         let finalDonorId: number | null = null;
         if (donor) {
           const existingDonor = await tx.select().from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
@@ -200,7 +201,7 @@ export const update = async (req: AuthRequest, res, next: NextFunction) => {
     }
 
     try {
-      const updatedProject = await db.transaction(async (tx) => {
+      const updatedProject = await withTenantContext(req.user!.tenantId, async (tx) => {
         let finalDonorId: number | null = null;
         if (donor) {
           const existingDonor = await tx.select().from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
@@ -216,13 +217,15 @@ export const update = async (req: AuthRequest, res, next: NextFunction) => {
           }
         }
 
-        const projectUpdate = await tx.update(projects).set({
-          code,
-          name,
-          donorId: finalDonorId,
-          approvedBudget: parseFloat(approvedBudget),
-          description: description || '',
-        }).where(eq(projects.id, projectId)).returning();
+        const projectUpdate = await withRlsValidation(
+          tx.update(projects).set({
+            code,
+            name,
+            donorId: finalDonorId,
+            approvedBudget: parseFloat(approvedBudget),
+            description: description || '',
+          }).where(eq(projects.id, projectId)).returning()
+        );
 
         return projectUpdate[0];
       });
@@ -324,7 +327,10 @@ export const remove = async (req: AuthRequest, res, next: NextFunction) => {
       return res.status(404).json({ error: 'Proyecto no encontrado' });
     }
 
-    await db.delete(projects).where(and(eq(projects.id, projectId), eq(projects.tenantId, req.user!.tenantId)));
+    await withTenantContext(req.user!.tenantId, async (tx) => {
+      await tx.delete(projects).where(eq(projects.id, projectId));
+    });
+    
     await logActivity(null, userName, `Eliminó permanentemente el proyecto "${currentProject[0].name}" de la plataforma`);
 
     res.json({ success: true, message: 'Proyecto eliminado con éxito' });
@@ -369,10 +375,12 @@ export const addMembers = async (req: AuthRequest, res, next: NextFunction) => {
       return res.status(400).json({ error: 'El usuario ya es miembro de este proyecto' });
     }
 
-    await db.insert(projectMembers).values({
-      projectId,
-      userId,
-      roleInProject
+    await withTenantContext(req.user!.tenantId, async (tx) => {
+      await tx.insert(projectMembers).values({
+        projectId,
+        userId,
+        roleInProject
+      });
     });
     res.json({ success: true });
   } catch (err: any) {
@@ -389,8 +397,10 @@ export const removeMembers = async (req: AuthRequest, res, next: NextFunction) =
     const projectId = parseInt(req.params.id);
     const userId = parseInt(req.params.userId);
 
-    await db.delete(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    await withTenantContext(req.user!.tenantId, async (tx) => {
+      await tx.delete(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+    });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al remover usuario' });
@@ -411,17 +421,19 @@ export const addAgreements = async (req: AuthRequest, res, next: NextFunction) =
       return res.status(403).json({ error: 'Acceso denegado a este proyecto.' });
     }
 
-    const newAgreement = await db.insert(agreements).values({
-      projectId,
-      counterparty,
-      signedDate,
-      amount: parseFloat(amount),
-      durationMonths: parseInt(durationMonths),
-      startDate: startDate || signedDate,
-      endDate: endDate || 'Por definir',
-      remainingDays: durationMonths * 30,
-      status: 'Activo'
-    }).returning();
+    const newAgreement = await withTenantContext(req.user!.tenantId, async (tx) => {
+      return await tx.insert(agreements).values({
+        projectId,
+        counterparty,
+        signedDate,
+        amount: parseFloat(amount),
+        durationMonths: parseInt(durationMonths),
+        startDate: startDate || signedDate,
+        endDate: endDate || 'Por definir',
+        remainingDays: durationMonths * 30,
+        status: 'Activo'
+      }).returning();
+    });
 
     await logActivity(projectId, userName, `Registró un nuevo convenio con "${counterparty}" por un monto de $${parseFloat(amount).toLocaleString()}`);
     res.status(201).json(newAgreement[0]);
@@ -447,19 +459,21 @@ export const addBudgetItems = async (req: AuthRequest, res, next: NextFunction) 
 
     const approvedAmount = parseFloat(approved);
 
-    const newItem = await db.insert(budgetLines).values({
-      projectId,
-      budgetVersionId: 1,
-      code,
-      category,
-      subcategory,
-      approvedAmount: parseFloat(approved),
-      reformulatedAmount: parseFloat(approved),
-      executedAmount: 0,
-      balance: approvedAmount,
-      progress: 0,
-      status: 'NORMAL'
-    }).returning();
+    const newItem = await withTenantContext(req.user!.tenantId, async (tx) => {
+      return await tx.insert(budgetLines).values({
+        projectId,
+        budgetVersionId: 1,
+        code,
+        category,
+        subcategory,
+        approvedAmount: parseFloat(approved),
+        reformulatedAmount: parseFloat(approved),
+        executedAmount: 0,
+        balance: approvedAmount,
+        progress: 0,
+        status: 'NORMAL'
+      }).returning();
+    });
 
     await logActivity(projectId, userName, `Creó la partida presupuestaria [${code}] - ${category} (${subcategory}) por $${approvedAmount.toLocaleString()}`);
 
@@ -509,14 +523,16 @@ export const addLogs = async (req: AuthRequest, res, next: NextFunction) => {
     const isValid = await verifyProjectTenant(projectId, tenantId);
     if (!isValid) return res.status(403).json({ error: 'Access denied' });
 
-    const newLog = await db.insert(projectLogs).values({
-      tenantId,
-      projectId,
-      authorId,
-      type,
-      content,
-      date: new Date()
-    }).returning();
+    const newLog = await withTenantContext(req.user!.tenantId, async (tx) => {
+      return await tx.insert(projectLogs).values({
+        tenantId,
+        projectId,
+        authorId,
+        type,
+        content,
+        date: new Date()
+      }).returning();
+    });
 
     await logActivity(tenantId, req.user!.name, `Added project log (${type}) to project ID ${projectId}`);
     res.json({
@@ -564,23 +580,25 @@ export const addExpenses = async (req: AuthRequest, res, next: NextFunction) => 
       description 
     } = req.body;
 
-    const newExpense = await db.insert(expenses).values({
-      tenantId,
-      projectId: parseInt(projectId),
-      budgetLineId: parseInt(budgetLineId),
-      amount: originalAmount, // legacy fallback for now
-      currency: originalCurrency, // legacy fallback for now
-      originalAmount,
-      originalCurrency,
-      exchangeRate: exchangeRate || 1,
-      baseAmount,
-      exchangeRateSource,
-      exchangeRateDate: exchangeRateDate ? new Date(exchangeRateDate) : new Date(),
-      date: new Date(date),
-      description,
-      status: 'PENDING_APPROVAL',
-      registeredBy: req.user!.id
-    }).returning();
+    const newExpense = await withTenantContext(req.user!.tenantId, async (tx) => {
+      return await tx.insert(expenses).values({
+        tenantId,
+        projectId: parseInt(projectId),
+        budgetLineId: parseInt(budgetLineId),
+        amount: originalAmount, // legacy fallback for now
+        currency: originalCurrency, // legacy fallback for now
+        originalAmount,
+        originalCurrency,
+        exchangeRate: exchangeRate || 1,
+        baseAmount,
+        exchangeRateSource,
+        exchangeRateDate: exchangeRateDate ? new Date(exchangeRateDate) : new Date(),
+        date: new Date(date),
+        description,
+        status: 'PENDING_APPROVAL',
+        registeredBy: req.user!.id
+      }).returning();
+    });
 
     res.json(newExpense[0]);
   } catch (err) {

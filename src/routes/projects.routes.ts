@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.ts';
 import {
   getProjects, createProject, update, getProjectById, remove, getMembers, addMembers, removeMembers, addAgreements, addBudgetItems, getProjectLogs, addLogs, getEvents, addExpenses
 } from '../controllers/projects.controller.ts';
+import { requirePermission } from '../middleware/rbac.ts';
 
 const router = Router();
 
@@ -11,14 +12,14 @@ router.post('/', requireAuth, createProject);
 router.put('/:id', requireAuth, update);
 router.get('/:id', requireAuth, getProjectById);
 router.delete('/:id', requireAuth, remove);
-router.get('/:id/members', requireAuth, getMembers);
-router.post('/:id/members', requireAuth, addMembers);
-router.delete('/:id/members/:userId', requireAuth, removeMembers);
-router.post('/:projectId/agreements', requireAuth, addAgreements);
-router.post('/:projectId/budget-items', requireAuth, addBudgetItems);
-router.get('/:id/logs', requireAuth, getProjectLogs);
-router.post('/:id/logs', requireAuth, addLogs);
-router.get('/:id/events', requireAuth, getEvents);
-router.post('/:projectId/expenses', requireAuth, addExpenses);
+router.get('/:id/members', requireAuth, requirePermission('projects', 'read'), getMembers);
+router.post('/:id/members', requireAuth, requirePermission('projects', 'manage'), addMembers);
+router.delete('/:id/members/:userId', requireAuth, requirePermission('projects', 'manage'), removeMembers);
+router.post('/:projectId/agreements', requireAuth, requirePermission('agreements', 'create'), addAgreements);
+router.post('/:projectId/budget-items', requireAuth, requirePermission('budget_lines', 'create'), addBudgetItems);
+router.get('/:id/logs', requireAuth, requirePermission('projects', 'read'), getProjectLogs);
+router.post('/:id/logs', requireAuth, requirePermission('projects', 'update'), addLogs);
+router.get('/:id/events', requireAuth, requirePermission('projects', 'read'), getEvents);
+router.post('/:projectId/expenses', requireAuth, requirePermission('expenses', 'create'), addExpenses);
 
 export default router;

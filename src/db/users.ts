@@ -72,12 +72,11 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
     }
 
     let roleId: number;
-    let mappedRoleName = roleName === 'MANAGER' ? 'Project Manager' : roleName === 'FINANCE' ? 'Administrativo / Finanzas' : roleName;
-    const roleResult = await db.select().from(roles).where(eq(roles.name, mappedRoleName));
+    const roleResult = await db.select().from(roles).where(eq(roles.name, roleName));
     if (roleResult.length > 0) {
       roleId = roleResult[0].id;
     } else {
-      const newRole = await db.insert(roles).values({ name: mappedRoleName, isSystemRole: false }).returning();
+      const newRole = await db.insert(roles).values({ name: roleName, isSystemRole: false }).returning();
       roleId = newRole[0].id;
     }
 
@@ -100,7 +99,7 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
 
     return {
       ...result[0],
-      role: mappedRoleName
+      role: roleName
     };
   } catch (error) {
     console.error('Error in getOrCreateUser:', error);

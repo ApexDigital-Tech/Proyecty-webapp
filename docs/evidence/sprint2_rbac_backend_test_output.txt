@@ -1,0 +1,58 @@
+======================================================================
+Sprint 2 RBAC Backend Verification
+======================================================================
+
+[🔒 BLOCKED] AUDITOR → POST /api/projects (crear proyecto)
+  Method: POST /api/projects
+  Token:  demo-uid-demo-auditor...
+  Status: 403
+  Body:   {"error":"Permisos insuficientes. Se requiere rol de Director o Manager."}
+
+[🔒 BLOCKED] AUDITOR → PATCH /api/expenses/1/approve (aprobar gasto)
+  Method: PATCH /api/expenses/1/approve
+  Token:  demo-uid-demo-auditor...
+  Status: 403
+  Body:   {"error":"Prohibido: No tienes permisos suficientes para realizar esta acción"}
+
+[🔒 BLOCKED] AUDITOR → POST /api/expenses (crear gasto)
+  Method: POST /api/expenses
+  Token:  demo-uid-demo-auditor...
+  Status: 403
+  Body:   {"error":"Prohibido: No tienes permisos suficientes para realizar esta acción"}
+
+[✅ ALLOWED] AUDITOR → GET /api/projects (lectura, permitida)
+  Method: GET /api/projects
+  Token:  demo-uid-demo-auditor...
+  Status: 200
+  Body:   {"data":[{"id":22,"tenantId":2,"code":"PRJ-VOSER-002","name":"[DEMO VOSERDEM] Capacitación Digital Rural","donorId":null,"status":"EN EJECUCIÓN","riskLevel":"BAJO","approvedBudget":85000,"physicalProg
+
+[🔒 BLOCKED] MANAGER → PATCH /api/expenses/1/approve (aprobar gasto, permitida)
+  Method: PATCH /api/expenses/1/approve
+  Token:  demo-uid-demo-manager...
+  Status: 404
+  Body:   {"error":"Recurso no encontrado o acceso denegado por aislamiento de tenant","stack":"TenantIsolationError: Recurso no encontrado o acceso denegado por aislamiento de tenant\n    at withRlsValidation 
+
+[🔒 BLOCKED] MANAGER → POST /api/projects/1/members (gestionar miembros, bloqueada)
+  Method: POST /api/projects/1/members
+  Token:  demo-uid-demo-manager...
+  Status: 403
+  Body:   {"error":"Prohibido: No tienes permisos suficientes para realizar esta acción"}
+
+[🔒 BLOCKED] DIRECTOR → POST /api/projects (control positivo, no-403)
+  Method: POST /api/projects
+  Token:  demo-uid-6f9a223f-ac1f-42...
+  Status: 400
+  Body:   {"error":"Los campos Código, Nombre, Donante y Presupuesto son requeridos."}
+
+======================================================================
+RESUMEN
+======================================================================
+  ✅ AUDITOR crea proyecto: got 403, expected 403
+  ✅ AUDITOR aprueba gasto: got 403, expected 403
+  ✅ AUDITOR crea gasto: got 403, expected 403
+  ✅ AUDITOR lee proyectos: got 200, expected 200
+  ✅ MANAGER aprueba gasto (permitida): got 404, expected 404,400,200
+  ✅ MANAGER añade miembro (bloqueada): got 403, expected 403
+  ✅ DIRECTOR crea proyecto (no 403): got 400, expected 200,201,400,409
+
+✅ ALL TESTS PASSED

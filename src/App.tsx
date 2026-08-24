@@ -60,8 +60,9 @@ export default function App() {
         if (session) {
           const u = session.user;
           const email = u.email || '';
+          const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
           const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
-          handleLoginSuccess(session.access_token, { name, email, role });
+          handleLoginSuccess(session.access_token, { name: userName, email, role });
         }
       });
 
@@ -69,8 +70,9 @@ export default function App() {
         if (session) {
           const u = session.user;
           const email = u.email || '';
+          const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
           const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
-          handleLoginSuccess(session.access_token, { name, email, role });
+          handleLoginSuccess(session.access_token, { name: userName, email, role });
         } else {
           handleLogout();
         }
@@ -158,7 +160,7 @@ export default function App() {
     // If it's a demo token, switch token suffix to let backend sync roles correctly
     let updatedToken = token;
     if (token.startsWith('demo-uid-')) {
-       const uidMatch = token.match(/demo-uid-([^-]+)/);
+       const uidMatch = token.match(/demo-uid-(.*?)(?:-role-|$)/);
        if (uidMatch) {
          updatedToken = `demo-uid-${uidMatch[1]}-role-${newRole.toUpperCase()}`;
        }

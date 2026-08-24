@@ -113,7 +113,7 @@ export const handleLemonSqueezyWebhook = async (req: Request, res: Response, nex
           tenantId: organizationId,
           action: 'SUBSCRIPTION_CREATED',
           entity: 'organization',
-          entityId: organizationId,
+          entityId: String(organizationId),
           metadata: { variantId: attributes.variant_id, subscriptionId: payload.data.id }
         });
         

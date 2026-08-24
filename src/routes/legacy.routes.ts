@@ -223,9 +223,9 @@ router.patch(
           tenantId,
           userId: req.user!.id,
           action: "UPDATE_STATUS",
-          entityType: "Expense",
-          entityId: expense.id,
-          newValues: { status },
+          entity: "expense",
+          entityId: String(expense.id),
+          metadata: { newValues: { status } },
         });
       });
 

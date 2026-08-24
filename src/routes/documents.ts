@@ -105,10 +105,10 @@ router.post('/projects/:id/documents', requireAuth, upload.single('file'), async
       tenantId,
       userId,
       action: 'CREATE',
-      entityType: 'Document',
-      entityId: newDoc.id,
-      newValues: newDoc,
-      ipAddress: req.ip
+      entity: 'document',
+      entityId: String(newDoc.id),
+      metadata: { newValues: newDoc },
+      ipAddress: req.ip,
     });
 
     res.json(newDoc);
@@ -163,9 +163,9 @@ router.get('/documents/:id/download', requireAuth, async (req: AuthRequest, res:
       tenantId,
       userId,
       action: 'DOWNLOAD',
-      entityType: 'Document',
-      entityId: doc.id,
-      ipAddress: req.ip
+      entity: 'document',
+      entityId: String(doc.id),
+      ipAddress: req.ip,
     });
 
     res.json({ url: doc.fileUrl });
@@ -212,10 +212,10 @@ router.delete('/documents/:id', requireAuth, async (req: AuthRequest, res: any) 
       tenantId,
       userId,
       action: 'DELETE',
-      entityType: 'Document',
-      entityId: doc.id,
-      oldValues: doc,
-      ipAddress: req.ip
+      entity: 'document',
+      entityId: String(doc.id),
+      metadata: { oldValues: doc },
+      ipAddress: req.ip,
     });
 
     res.json({ success: true });
@@ -359,9 +359,9 @@ router.post('/documents/:id/analyze', requireAuth, async (req: AuthRequest, res:
       tenantId,
       userId,
       action: 'ANALYZE',
-      entityType: 'Document',
-      entityId: doc.id,
-      ipAddress: req.ip
+      entity: 'document',
+      entityId: String(doc.id),
+      ipAddress: req.ip,
     });
 
     res.json(savedAnalysis);

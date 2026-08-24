@@ -14,7 +14,7 @@ export default function AuditLogsDashboard({ token, userRole }: AuditLogsDashboa
   const [filterAction, setFilterAction] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const canView = userRole === 'DIRECTOR' || userRole === 'ADMIN';
+  const canView = userRole === 'DIRECTOR' || userRole === 'AUDITOR' || (userRole as string) === 'ADMIN';
 
   const fetchLogs = async () => {
     setIsLoading(true);

@@ -4,6 +4,7 @@ import { users, roles, auditLogs } from '../db/schema.ts';
 import { eq, desc, and } from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts'; // We will extract these later or keep importing for now
+import { CacheService } from '../services/CacheService.ts';
 
 export const listUsers = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -34,7 +35,7 @@ export const listUsers = async (req: AuthRequest, res: Response, next: NextFunct
           actionDescription: l.action,
           createdAt: l.createdAt
         })),
-        role: mapRoleNameToEnum(r.roleName || '')
+        role: r.roleName // Direct role string
       };
     });
 
@@ -53,13 +54,10 @@ export const createUser = async (req: AuthRequest, res: Response, next: NextFunc
 
     const { name, email, role } = req.body;
     
-    // mapEnumToRoleName logic
-    // we can temporarily just import it from server.ts or redefine here. We import it.
-    const roleStringName = mapEnumToRoleName(role);
-    let roleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
+    // Check if role exists directly by string name
+    let roleObj = await db.select().from(roles).where(eq(roles.name, role));
     if (roleObj.length === 0) {
-      const inserted = await db.insert(roles).values({ name: roleStringName, description: 'Role ' + roleStringName }).returning();
-      roleObj = inserted;
+      return res.status(400).json({ error: 'Rol inválido o inexistente en el sistema.' });
     }
 
     const uid = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -110,9 +108,8 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
     if (isActive !== undefined) updates.isActive = isActive;
 
     if (role !== undefined) {
-      const roleStringName = mapEnumToRoleName(role);
-      const newRoleObj = await db.select().from(roles).where(eq(roles.name, roleStringName));
-      if (newRoleObj.length === 0) return res.status(400).json({ error: 'Rol no encontrado' });
+      const newRoleObj = await db.select().from(roles).where(eq(roles.name, role));
+      if (newRoleObj.length === 0) return res.status(400).json({ error: 'Rol inválido o inexistente en el sistema.' });
       updates.roleId = newRoleObj[0].id;
     }
 
@@ -129,6 +126,9 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
     if (isActive !== undefined && isActive !== userToUpdate[0].isActive) {
       actionMsg = isActive ? `Reactivó al usuario "${userToUpdate[0].name}"` : `Suspendió al usuario "${userToUpdate[0].name}"`;
     }
+    
+    // Invalidar caché de permisos para forzar recarga en la siguiente petición
+    CacheService.invalidate(userId);
     
     await logActivity(null, userName, actionMsg);
     res.json(updated[0]);
@@ -155,6 +155,10 @@ export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     await db.delete(users).where(eq(users.id, userId));
+    
+    // Limpiar de caché al ser eliminado
+    CacheService.invalidate(userId);
+    
     await logActivity(null, userName, `Eliminó permanentemente el usuario "${userToDelete[0].name}"`);
     res.json({ success: true, message: 'Usuario eliminado.' });
   } catch (err) {
@@ -162,20 +166,4 @@ export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunc
   }
 };
 
-export const mapRoleNameToEnum = (roleName: string) => {
-  const map: Record<string, string> = {
-    'admin': 'administrator',
-    'editor': 'manager',
-    'viewer': 'viewer'
-  };
-  return map[roleName] || 'viewer';
-};
-
-export const mapEnumToRoleName = (enumValue: string) => {
-  const map: Record<string, string> = {
-    'administrator': 'admin',
-    'manager': 'editor',
-    'viewer': 'viewer'
-  };
-  return map[enumValue] || 'viewer';
-};
+// Legacy mappers removed

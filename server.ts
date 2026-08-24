@@ -26,7 +26,6 @@ import billingRouter from './src/routes/billing.routes.ts';
 import organizationsRouter from './src/routes/organizations.routes.ts';
 import expensesRouter from './src/routes/expenses.routes.ts';
 import auditRouter from './src/routes/audit.routes.ts';
-import { sql } from 'drizzle-orm';
 
 import reportsRouter from './src/routes/reports.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
@@ -153,6 +152,11 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🔄 Sincronizando base de datos local...');
     await seedDatabase();
+    
+    // Iniciar scheduler de reinicio automático cada 24h para el tenant demo (AUD-PROY-001)
+    const { initDemoAutoResetScheduler } = await import('./src/services/demoTenant.service.ts');
+    initDemoAutoResetScheduler(24);
+    
     console.log('Database verification and optional seeding complete.');
   } catch (err) {
     console.error('Error during database seed checks:', err);
@@ -193,13 +197,7 @@ app.get('/api/activity-logs', (req, res) => {
 app.get('/api/agenda', (req, res) => {
   res.json({ success: true, data: [] });
 });
-app.get('/api/public/demo-users', (req, res) => {
-  res.json([
-    { id: 1, uid: 'director', email: 'apexdigital70@gmail.com', name: 'Apex Digital', role: 'DIRECTOR', isActive: true },
-    { id: 2, uid: 'finance', email: 'finance@demo.com', name: 'Demo Finance', role: 'FINANCE', isActive: true },
-    { id: 3, uid: 'manager', email: 'manager@demo.com', name: 'Demo Manager', role: 'MANAGER', isActive: true }
-  ]);
-});
+
 app.use('/api', reportsRouter);
 
 // --- Sprint 2: Billing & Webhooks ---
@@ -263,7 +261,7 @@ app.use(errorHandler);
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, () => {
     console.log(`PROYECTY Server running on port ${PORT}`);
   });
 }

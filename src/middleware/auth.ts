@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase.ts';
 import { getOrCreateUser } from '../db/users.ts';
+import { verifyDemoToken } from '../services/demoAuth.service.ts';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -10,6 +11,7 @@ export interface AuthRequest extends Request {
     role: string;
     tenantId: number;
     id?: number;
+    roleName?: string;
   };
 }
 
@@ -22,7 +24,7 @@ export const requireAuth = async (
 
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split('Bearer ')[1];
+    token = authHeader.split('Bearer ')[1]?.trim();
   }
 
   // Fallback a Cookies si no hay Authorization header
@@ -34,11 +36,11 @@ export const requireAuth = async (
           const val = decodeURIComponent(c.substring(c.indexOf('=') + 1));
           const parsed = JSON.parse(val);
           if (Array.isArray(parsed) && parsed[0]) {
-             token = parsed[0];
+            token = parsed[0];
           }
-        } catch(e) {}
+        } catch (e) {}
       } else if (c.startsWith('sb-access-token=')) {
-         token = c.substring(c.indexOf('=') + 1);
+        token = c.substring(c.indexOf('=') + 1);
       }
     }
   }
@@ -46,77 +48,41 @@ export const requireAuth = async (
   if (!token) {
     return res.status(401).json({ error: 'No autorizado: Falta el token de acceso' });
   }
-  
-  // Safe temporal logging para debug (sin exponer el JWT completo)
-  if (!token || token === 'null' || token === 'undefined') {
-    console.warn(`[Auth Debug] Token recibido está vacío o inválido: "${token}"`);
-  } else {
-    const segments = token.split('.');
-    console.log(`[Auth Debug] Token recibido con prefijo Bearer. Segmentos: ${segments.length} (formato esperado: 3). Empieza con: ${token.substring(0, 5)}...`);
-  }
 
-  // Support for all Demo Roles
-  if (token.startsWith('demo-')) {
-    if (token.startsWith('demo-uid-')) {
-      const parts = token.split('-role-');
-      const uidPart = parts[0].replace('demo-uid-', '');
-      const simulatedRole = parts.length > 1 ? parts[1].toUpperCase() : null;
-
-      try {
-        const { getUserByUid } = await import('../db/users.ts');
-        const dbUser = await getUserByUid(uidPart);
-        
-        if (!dbUser) {
-          return res.status(401).json({ error: 'Usuario demo no encontrado' });
-        }
-        
-        if (dbUser.isActive === false) {
-          return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
-        }
-
-        const mapRoleToEnum = (r: string) => {
-          const upper = r.toUpperCase();
-          if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
-          if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
-          if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
-          if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
-          if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
-          if (upper.includes('RESPONSABLE')) return 'RESPONSABLE_PROYECTO';
-          if (upper.includes('TÉCNICO') || upper.includes('TECNICO')) return 'TECNICO_PROYECTO';
-          return 'MANAGER';
-        };
-
-        req.user = {
-          uid: dbUser.uid,
-          email: dbUser.email,
-          name: dbUser.name,
-          role: simulatedRole || mapRoleToEnum(dbUser.roleName || ''),
-          tenantId: dbUser.tenantId,
-          id: dbUser.id,
-        };
-        return next();
-      } catch (err) {
-        console.error('Error fetching demo user:', err);
-        return res.status(500).json({ error: 'Error al sincronizar usuario de prueba' });
-      }
-    } else {
-      // Handle simple demo tokens like demo-director
-      const simulatedRole = token.replace('demo-', '').toUpperCase();
+  // --- CRYPTOGRAPHIC DEMO TOKENS (AUTH-01 & AUTH-02) ---
+  if (token.startsWith('demo.')) {
+    try {
+      const payload = verifyDemoToken(token);
       req.user = {
-        uid: `demo-${simulatedRole.toLowerCase()}`,
-        email: `demo@proyecty.org`,
-        name: `Demo ${simulatedRole}`,
-        role: simulatedRole,
-        tenantId: 1, // Default tenant
+        uid: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        role: payload.role,
+        roleName: payload.roleName,
+        tenantId: payload.tenant_id,
       };
       return next();
+    } catch (err: any) {
+      console.warn(`[Auth Security] Intento de acceso con token demo inválido/expirado: ${err?.message}`);
+      return res.status(401).json({
+        error: 'No autorizado: Token demo inválido, expirado o manipulado',
+        detail: err?.message,
+      });
     }
   }
 
-  // Real Supabase Auth verification
+  // Bloqueo explícito de tokens demo antiguos/fabricados manualmente
+  if (token.startsWith('demo-')) {
+    return res.status(401).json({
+      error: 'No autorizado: Formato de credencial demo obsoleto o no firmado',
+      code: 'UNAUTHORIZED_DEMO_TOKEN',
+    });
+  }
+
+  // --- SUPABASE PRODUCTION AUTH VERIFICATION ---
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    
+
     if (error || !user) {
       throw error || new Error('No user found in token');
     }
@@ -124,29 +90,20 @@ export const requireAuth = async (
     const email = user.email || 'user@proyecty.org';
     const name = user.user_metadata?.full_name || email.split('@')[0] || 'Usuario Proyecty';
     const uid = user.id;
-    
-    // Assign a default role if not registered yet.
+
+    // Fetch user or register if new
     const dbUser = await getOrCreateUser(uid, email, name, 'MANAGER');
-    
+
     if (dbUser.isActive === false) {
       return res.status(403).json({ error: 'Usuario suspendido', code: 'USER_SUSPENDED' });
     }
-
-    const mapRoleToEnum = (r: string) => {
-      const upper = r.toUpperCase();
-      if (upper.includes('DIRECTOR') || upper.includes('ADMIN')) return 'DIRECTOR';
-      if (upper.includes('MANAGER') || upper.includes('COORDINADOR')) return 'MANAGER';
-      if (upper.includes('FINAN') || upper.includes('ADMINISTRATIVO')) return 'FINANCE';
-      if (upper.includes('AUDITOR') || upper.includes('MONITOREO')) return 'AUDITOR';
-      if (upper.includes('FINANCIADOR') || upper.includes('DONANTE')) return 'FINANCIADOR';
-      return 'MANAGER';
-    };
 
     req.user = {
       uid,
       email,
       name,
-      role: mapRoleToEnum(dbUser.role || 'Project Manager'),
+      role: dbUser.role || 'MANAGER',
+      roleName: dbUser.role || 'MANAGER',
       tenantId: dbUser.tenantId,
       id: dbUser.id,
     };

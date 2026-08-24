@@ -41,10 +41,7 @@ export const approveExpenseHandler = async (req: AuthRequest, res: Response, nex
     const role = req.user?.role;
     if (!tenantId || !userId) return res.status(401).json({ error: 'No autorizado' });
 
-    // RBAC Check for Admin/Manager
-    if (role !== 'DIRECTOR' && role !== 'MANAGER') {
-      return res.status(403).json({ error: 'Acceso denegado. Permisos insuficientes para aprobar gastos.' });
-    }
+    // La validación RBAC se realiza en el middleware requirePermission en las rutas
 
     const expenseId = parseInt(req.params.id, 10);
     if (isNaN(expenseId)) {

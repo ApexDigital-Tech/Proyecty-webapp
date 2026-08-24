@@ -49,6 +49,25 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
   });
 
   // ============================================
+  // TEST DE AISLAMIENTO MULTI-TENANT (RLS)
+  // ============================================
+  test('Aislamiento RLS: Tenant A no puede leer proyectos del Tenant B', async ({ request }) => {
+    // Project ID 11 pertenece al Tenant 2 en la base de datos
+    // 'demo-director' pertenece al Tenant 1
+    const res = await request.get('http://localhost:3000/api/projects/11', {
+      headers: AUTH_HEADERS // Auth for Tenant 1
+    });
+    
+    // The RLS policy should prevent reading the row, 
+    // which the API should treat as a Not Found (404) or Forbidden (403)
+    expect([403, 404]).toContain(res.status());
+    
+    const body = await res.json();
+    expect(body.success).toBe(false);
+  });
+
+
+  // ============================================
   // PUNTO 2: GESTIÓN DE TAREAS Y KANBAN
   // ============================================
   test('GET y POST /api/tasks responden JSON (sin 404, sin HTML)', async ({ request }) => {

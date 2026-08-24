@@ -174,8 +174,8 @@ export async function seedDatabase() {
         tenantId: org.id,
         userId: adminUser.id,
         action: 'CREATE',
-        entityType: 'Project',
-        entityId: p1.id
+        entity: 'project',
+        entityId: String(p1.id)
       }
     ]);
 

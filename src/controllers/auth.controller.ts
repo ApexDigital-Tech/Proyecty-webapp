@@ -1,42 +1,108 @@
 import { Request, Response, NextFunction } from 'express';
-import { db } from '../db/index.ts';
-import { users, roles } from '../db/schema.ts';
-import { eq } from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
-import { mapRoleNameToEnum } from './users.controller.ts'; // to be extracted later
+import {
+  getOrCreateDemoTenant,
+  DEMO_USERS_CATALOG,
+  resetDemoTenantData,
+} from '../services/demoTenant.service.ts';
+import { generateDemoToken } from '../services/demoAuth.service.ts';
 
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.user?.email === 'apexdigital70@gmail.com') {
-      req.user.role = 'DIRECTOR';
-      req.user.roleName = 'DIRECTOR';
-    }
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.json({ id: req.user?.id, email: req.user?.email, role: req.user?.role, roleName: req.user?.roleName, ...req.user });
+    res.json({
+      id: req.user?.id,
+      uid: req.user?.uid,
+      email: req.user?.email,
+      name: req.user?.name,
+      role: req.user?.role,
+      tenantId: req.user?.tenantId,
+    });
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Endpoint público sanitizado para consultar los roles demo disponibles.
+ * Cumple con DATA-01: NO expone correos reales, UIDs internos de BD ni usuarios de producción.
+ */
 export const getDemoUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_LOGIN !== 'true') {
-      return res.status(403).json({ error: 'Endpoint not available in production without feature flag' });
-    }
-    const rawUsers = await db.select({
-      user: users,
-      roleName: roles.name
-    }).from(users)
-      .leftJoin(roles, eq(users.roleId, roles.id))
-      .where(eq(users.isActive, true))
-      .orderBy(users.id);
-      
-    const mapped = rawUsers.map(r => ({
-      ...r.user,
-      role: mapRoleNameToEnum(r.roleName || '')
+    const sanitizedCatalog = DEMO_USERS_CATALOG.map((item, idx) => ({
+      id: idx + 1,
+      role: item.roleKey,
+      title: item.title,
+      name: item.name,
+      avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(item.name)}`,
     }));
-    res.json(mapped);
+
+    res.json(sanitizedCatalog);
   } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Emite un JWT demo firmado con HMAC-SHA256 y claims estrictos (iss, aud, tenant_id, role, exp).
+ * Cumple con AUTH-01 y AUTH-02: autenticación garantizada, tokens no fabricables por cliente.
+ */
+export const createDemoSession = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { role } = req.body;
+    if (!role || typeof role !== 'string') {
+      return res.status(400).json({ error: 'El parámetro "role" es requerido' });
+    }
+
+    const normalizedRole = role.toUpperCase();
+    const catalogEntry = DEMO_USERS_CATALOG.find(u => u.roleKey === normalizedRole);
+
+    if (!catalogEntry) {
+      return res.status(400).json({
+        error: `Rol demo no válido. Roles disponibles: ${DEMO_USERS_CATALOG.map(u => u.roleKey).join(', ')}`,
+      });
+    }
+
+    // Ensure the isolated Demo Tenant and demo users are present in DB
+    const { orgId, users: demoUsers } = await getOrCreateDemoTenant();
+    const targetUser = demoUsers.find(u => u.roleKey === normalizedRole) || demoUsers[0];
+
+    // Generate cryptographically signed JWT with 15-minute expiration
+    const token = generateDemoToken({
+      uid: targetUser.uid,
+      email: targetUser.email,
+      name: targetUser.name,
+      role: targetUser.roleKey,
+      roleName: targetUser.roleName,
+      tenantId: orgId,
+    }, 15);
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        uid: targetUser.uid,
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.roleKey,
+        tenantId: orgId,
+      },
+    });
+  } catch (err) {
+    console.error('Error al crear sesión demo:', err);
+    next(err);
+  }
+};
+
+/**
+ * Reinicio manual del tenant demo a solicitud de un usuario autorizado o tester.
+ */
+export const handleResetDemo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await resetDemoTenantData();
+    res.json(result);
+  } catch (err) {
+    console.error('Error al reiniciar tenant demo:', err);
     next(err);
   }
 };
