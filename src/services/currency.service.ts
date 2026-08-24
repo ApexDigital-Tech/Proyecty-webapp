@@ -1,3 +1,5 @@
+import { ValidationError } from '../utils/errors.ts';
+
 export interface CurrencyConversionResult {
   originalAmount: number;
   originalCurrency: string;
@@ -15,28 +17,47 @@ export const convertCurrency = (
   customRate?: number,
   source: string = 'MANUAL_OFFICIAL'
 ): CurrencyConversionResult => {
+  if (amount < 0) {
+    throw new ValidationError('El monto a convertir no puede ser negativo.');
+  }
+
   const rateDate = new Date();
-  
-  if (originalCurrency.toUpperCase() === targetCurrency.toUpperCase()) {
+  const orig = (originalCurrency || 'USD').toUpperCase();
+  const target = (targetCurrency || 'USD').toUpperCase();
+
+  // Si ambas monedas son iguales, tasa forzada a 1 (Paridad)
+  if (orig === target) {
     return {
       originalAmount: amount,
-      originalCurrency,
-      targetCurrency,
+      originalCurrency: orig,
+      targetCurrency: target,
       exchangeRate: 1,
-      convertedAmount: amount,
+      convertedAmount: Math.round(amount * 100) / 100,
       rateSource: 'PARITY',
       rateDate,
     };
   }
 
-  const rate = customRate && customRate > 0 ? customRate : 1;
-  const convertedAmount = Math.round((amount * rate) * 100) / 100;
+  // Moneda diferente requiere tasa estrictamente positiva
+  if (customRate === undefined || customRate === null) {
+    throw new ValidationError(`Se requiere una tasa de cambio explícita para convertir de ${orig} a ${target}.`);
+  }
+
+  if (customRate <= 0) {
+    throw new ValidationError(`La tasa de cambio para ${orig}/${target} debe ser estrictamente mayor a 0 (recibido: ${customRate}).`);
+  }
+
+  if (!source || source.trim() === '') {
+    throw new ValidationError('La fuente de cotización de la tasa de cambio es obligatoria.');
+  }
+
+  const convertedAmount = Math.round((amount * customRate) * 100) / 100;
 
   return {
     originalAmount: amount,
-    originalCurrency,
-    targetCurrency,
-    exchangeRate: rate,
+    originalCurrency: orig,
+    targetCurrency: target,
+    exchangeRate: customRate,
     convertedAmount,
     rateSource: source,
     rateDate,

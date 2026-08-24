@@ -2,30 +2,32 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-24] Hito: Ejecución y Cierre de Fase 3 (Ola 2: Integridad Financiera y Presupuestaria) — Auditoría AUD-PROY-001
+## [2026-08-24] Hito: Ejecución y Cierre Definitivo de Fase 3 (Ola 2: Integridad Financiera y Presupuestaria) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
-Se completó, verificó y desplegó la **Ola 2 (Integridad Financiera y Presupuestaria)** que abarca los módulos **M-05, M-06, M-08, M-09, M-10 y M-11**:
-1. **`M-05` (Convenios de Financiación y Donaciones):**
-   - Validación estricta de montos positivos (`amount > 0`) y coherencia cronológica (`signedDate <= startDate <= endDate`).
-   - Aislamiento multi-tenant validado: rechazo de convenios en proyectos no pertenecientes a la organización.
+Se completó, verificó y desplegó la **Ola 2 (Integridad Financiera y Presupuestaria)** con mapeo canónico exacto:
+1. **`M-05` (Convenios y Financiadores):**
+   - Validación estricta de montos positivos (`amount > 0`), coherencia cronológica (`signedDate <= startDate <= endDate`), RBAC positivo/negativo y aislamiento cross-tenant (**8/8 tests**).
 2. **`M-06` (Desembolsos e Ingresos Trazables):**
-   - Control de límites acumulados: Rechazo estricto de sobre-desembolsos que excedan el monto total del convenio (`totalDisbursed <= agreement.amount`).
-3. **`M-08` (Gestión Presupuestaria y Versiones Correlativas):**
-   - Versiones presupuestarias correlativas (`V1`, `V2`, `V3`) inmutables una vez archivadas/aprobadas para trazabilidad legal y de donantes.
-   - Partidas presupuestarias asociadas a la versión activa con saldos controlados.
-4. **`M-09` (Registro y Aprobación de Gastos - Segregación FIN-01 y Saldo):**
-   - Segregación estricta de funciones: Bloqueo de auto-aprobación del creador con `ConflictError` (exige revisor independiente).
-   - Bloqueo de sobre-ejecución presupuestaria ante saldo insuficiente en la partida (`expense.amount <= budgetLine.balance`).
-   - Reducción atómica/transaccional de saldo disponible (`balance -= amount`) y aumento de monto ejecutado (`executedAmount += amount`).
-5. **`M-10` (Comprobantes y Facturas - Unicidad Fiscal):**
-   - Control de unicidad fiscal por emisor y comprobante para prevenir la inserción o doble contabilización de facturas.
-6. **`M-11` (Multi-divisa y Tasas de Cambio):**
-   - Conversión monetaria con registro de tasa de cambio explícita (`exchangeRate`), fuente de cotización y fecha histórica.
-7. **Verificación Automatizada y Regresión:**
-   - Suite de Ola 2 `tests/ola2-financial-integrity.test.ts`: **18/18 PASSED (100%)**.
+   - Control de límites acumulados (`totalDisbursed <= agreement.amount`), RBAC y rechazo cross-tenant (**8/8 tests**).
+3. **`M-08` (Partidas Presupuestarias Base):**
+   - Creación, consulta y aislamiento cross-tenant de partidas presupuestarias (**2/2 tests**).
+4. **`M-09` (Versionado Presupuestario y Adendas):**
+   - Versiones correlativas (`V1`, `V2`, `V3`), inmutabilidad estricta de versiones archivadas/aprobadas, resistencia a concurrencia (bloqueo FOR UPDATE), RBAC y aislamiento cross-tenant (**8/8 tests**).
+5. **`M-10` (Registro y Aprobación de Gastos - Segregación FIN-01 y Saldo Concurrente):**
+   - Segregación estricta de funciones: Bloqueo de auto-aprobación del creador con `ConflictError`.
+   - **Resistencia a Concurrencia Real:** Prueba simultánea con `Promise.all` de dos gastos de $80 contra un saldo de $100 (exactamente 1 aprobado, 1 rechazado con 409, saldo final $20, nunca negativo).
+   - RBAC y bloqueo cross-tenant (**6/6 tests**).
+6. **`M-11` (Comprobantes, Rendiciones y Control Multi-divisa):**
+   - Unicidad fiscal bajo concurrencia y aislada por tenant.
+   - Multi-divisa: Conversión obligatoria con tasa, fecha y fuente, rechazo de tasas <= 0, normalización a 1 en paridad y redondeo a 2 decimales.
+   - RBAC y cross-tenant (**10/10 tests**).
+7. **Descontaminación y Limpieza del Tenant Demo:**
+   - Tenant demo restaurado al proyecto institucional `PRJ-DEMO-2026` exclusivo (**1/1 test**).
+8. **Verificación Automatizada y Regresión:**
+   - Suite de Ola 2 `tests/ola2-financial-integrity.test.ts`: **43/43 PASSED (100%)**.
    - Suite de regresión de Ola 1 `tests/ola1-security-structure.test.ts`: **34/34 PASSED (100%)**.
-   - Build de producción limpio y tag oficial `v1.2.0-wave-2`.
+   - Build de producción limpio y tag oficial `v1.2.1-wave-2-fix`.
 
 ---
 

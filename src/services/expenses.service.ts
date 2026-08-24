@@ -1,5 +1,5 @@
 import { db } from '../db/index.ts';
-import { expenses, users, budgetLines } from '../db/schema.ts';
+import { expenses, users, budgetLines, projects } from '../db/schema.ts';
 import { eq, and } from 'drizzle-orm';
 import { sendNewExpenseNotification } from './email.service.ts';
 import { logAuditEvent } from './audit.service.ts';
@@ -12,6 +12,13 @@ export const createExpense = async (tenantId: number, userId: number, data: Crea
   return await withTenantContext(tenantId, async (tx) => {
     const projectId = data.projectId || 1;
     const budgetLineId = data.budgetLineId || 1;
+
+    const [project] = await tx.select().from(projects).where(
+      and(eq(projects.id, projectId), eq(projects.tenantId, tenantId))
+    );
+    if (!project) {
+      throw new NotFoundError('El proyecto no existe o no pertenece a esta organización.');
+    }
 
     // Verificar que la línea presupuestaria exista y pertenezca al proyecto
     const [bLine] = await tx.select().from(budgetLines).where(eq(budgetLines.id, budgetLineId));
@@ -97,30 +104,39 @@ export const approveExpense = async (
       throw new NotFoundError('El gasto especificado no existe o no pertenece a la organización.');
     }
 
+    if (existingExpense.status !== 'pending' && existingExpense.status !== 'PENDING_APPROVAL') {
+      throw new ConflictError(`El gasto ID ${expenseId} ya fue procesado con estado "${existingExpense.status}".`);
+    }
+
     // 2. Control FIN-01: Segregación estricta de funciones
     if (existingExpense.registeredBy && existingExpense.registeredBy === approvedByUserId) {
       throw new ConflictError('Segregación de funciones (FIN-01): El usuario que registró el gasto no puede aprobarlo ni rechazarlo. Se requiere la autorización de un revisor independiente.');
     }
 
-    // 3. Control de sobre-ejecución presupuestaria al aprobar
+    // 3. Control de sobre-ejecución presupuestaria y bloqueo de concurrencia (FOR UPDATE)
     if (status === 'approved') {
-      const [bLine] = await tx.select().from(budgetLines).where(eq(budgetLines.id, existingExpense.budgetLineId));
-      if (bLine && bLine.balance < existingExpense.amount) {
+      const [bLine] = await tx.select().from(budgetLines)
+        .where(eq(budgetLines.id, existingExpense.budgetLineId))
+        .for('update');
+
+      if (!bLine) {
+        throw new NotFoundError('La partida presupuestaria vinculada no existe.');
+      }
+
+      if (bLine.balance < existingExpense.amount) {
         throw new ConflictError(`Bloqueo de sobre-ejecución: El monto del gasto ($${existingExpense.amount}) excede el saldo disponible en la partida presupuestaria ${bLine.code} ($${bLine.balance}).`);
       }
 
-      // Actualizar balance y monto ejecutado de la partida presupuestaria
-      if (bLine) {
-        const newExecuted = (bLine.executedAmount || 0) + existingExpense.amount;
-        const newBalance = (bLine.approvedAmount || 0) - newExecuted;
-        await tx.update(budgetLines)
-          .set({
-            executedAmount: newExecuted,
-            balance: newBalance,
-            progress: bLine.approvedAmount > 0 ? Math.round((newExecuted / bLine.approvedAmount) * 100) : 0,
-          })
-          .where(eq(budgetLines.id, bLine.id));
-      }
+      // Actualizar balance y monto ejecutado de la partida presupuestaria atómicamente
+      const newExecuted = (bLine.executedAmount || 0) + existingExpense.amount;
+      const newBalance = (bLine.approvedAmount || 0) - newExecuted;
+      await tx.update(budgetLines)
+        .set({
+          executedAmount: newExecuted,
+          balance: newBalance,
+          progress: bLine.approvedAmount > 0 ? Math.round((newExecuted / bLine.approvedAmount) * 100) : 0,
+        })
+        .where(eq(budgetLines.id, bLine.id));
     }
 
     // 4. Actualizar estado del gasto

@@ -40,17 +40,20 @@ export const createReceiptVoucher = async (
       throw new ValidationError('El monto del comprobante fiscal debe ser mayor a 0.');
     }
 
-    // 3. Validar unicidad fiscal (M-10: evitar facturas duplicadas)
-    const existing = await tx.select().from(receiptsVouchers).where(
-      and(
-        eq(receiptsVouchers.projectId, data.projectId),
-        eq(receiptsVouchers.provider, data.provider),
-        eq(receiptsVouchers.fileName, data.fileName)
-      )
-    );
+    // 3. Validar unicidad fiscal dentro del tenant (M-11: evitar facturas duplicadas por organización)
+    const existing = await tx.select({ id: receiptsVouchers.id })
+      .from(receiptsVouchers)
+      .innerJoin(projects, eq(receiptsVouchers.projectId, projects.id))
+      .where(
+        and(
+          eq(projects.tenantId, tenantId),
+          eq(receiptsVouchers.provider, data.provider),
+          eq(receiptsVouchers.fileName, data.fileName)
+        )
+      );
 
     if (existing.length > 0) {
-      throw new ConflictError(`Control M-10: Ya existe un comprobante registrado para el emisor "${data.provider}" con el archivo/referencia "${data.fileName}".`);
+      throw new ConflictError(`Control M-11: Ya existe un comprobante registrado para el emisor "${data.provider}" con el archivo/referencia "${data.fileName}".`);
     }
 
     // 4. Inserción de comprobante

@@ -9,15 +9,16 @@
 
 | Campo | Detalle |
 |---|---|
-| **Estado** | ✅ COMPLETADO, VERIFICADO Y ETIQUETADO (`v1.2.0-wave-2`) |
-| **Módulos Cubiertos** | `M-05` (Convenios), `M-06` (Desembolsos), `M-08` (Gestión Presupuestaria y Versiones), `M-09` (Registro y Aprobación de Gastos), `M-10` (Comprobantes y Facturas), `M-11` (Multi-divisa) |
-| **Control M-05 (Convenios)** | Montos estrictamente positivos (`amount > 0`), validación temporal estricta (`signedDate <= startDate <= endDate`) y aislamiento tenant verificado. |
-| **Control M-06 (Desembolsos)** | Control acumulado vs convenio: Rechazo de sobre-desembolsos que excedan el límite total del convenio (`totalDisbursed <= agreement.amount`). |
-| **Control M-08 (Presupuestos)** | Versiones correlativas e inmutables (`V1`, `V2`, `V3`), preservación histórica de versiones archivadas y vinculación de partidas presupuestarias. |
-| **Control M-09 (Gastos y FIN-01)** | • Segregación estricta de funciones: Prohibición de auto-aprobación del creador con `ConflictError`.<br>• Bloqueo de sobre-ejecución presupuestaria ante saldo insuficiente en la partida (`expense.amount <= budgetLine.balance`).<br>• Reducción de saldo y registro de ejecución atómica/transaccional resistente a concurrencia. |
-| **Control M-10 (Comprobantes)** | Control de unicidad fiscal por emisor y comprobante para evitar duplicidad de facturas. |
-| **Control M-11 (Multi-divisa)** | Conversión monetaria con registro explícito de tasa de cambio (`exchangeRate`), fuente de cotización y fecha histórica. |
-| **Verificación Técnica** | • Suite `tests/ola2-financial-integrity.test.ts` (**18/18 PASSED**).<br>• Suite de regresión `tests/ola1-security-structure.test.ts` (**34/34 PASSED**).<br>• Build limpio `npm run build` y tag `v1.2.0-wave-2`. |
+| **Estado** | ✅ COMPLETADO, ESTABILIZADO Y ETIQUETADO (`v1.2.1-wave-2-fix`) |
+| **Módulos Canónicos** | `M-05` (Convenios y Financiadores), `M-06` (Desembolsos), `M-08` (Partidas Presupuestarias Base), `M-09` (Versionado y Adendas), `M-10` (Registro y Aprobación de Gastos), `M-11` (Comprobantes y Rendiciones Multi-divisa) |
+| **Control M-05 (Convenios)** | Montos estrictamente positivos (`amount > 0`), validación temporal estricta (`signedDate <= startDate <= endDate`), RBAC positivo/negativo y aislamiento cross-tenant verificado (**8/8 tests**). |
+| **Control M-06 (Desembolsos)** | Control acumulado vs límite de convenio (`totalDisbursed <= agreement.amount`), RBAC y rechazo cross-tenant (**8/8 tests**). |
+| **Control M-08 (Partidas Base)** | Creación y consulta de partidas presupuestarias base con aislamiento tenant (**2/2 tests**). |
+| **Control M-09 (Versionado)** | Versiones presupuestarias correlativas (`V1`, `V2`, `V3`), inmutabilidad estricta de versiones archivadas/aprobadas, resistencia a concurrencia (bloqueo FOR UPDATE), RBAC de formulación/aprobación y aislamiento cross-tenant (**8/8 tests**). |
+| **Control M-10 (Gastos & FIN-01)** | • Segregación de funciones FIN-01: Prohibición de auto-aprobación del creador.<br>• **Concurrencia Real de Saldo:** Demostración con 2 aprobaciones simultáneas de $80 contra $100 (exactamente 1 éxito, 1 409 conflicto, saldo final $20, nunca negativo).<br>• RBAC y bloqueo cross-tenant (**6/6 tests**). |
+| **Control M-11 (Comprobantes & Multi-divisa)** | • Unicidad fiscal bajo concurrencia y aislada por tenant (sin colisión inter-tenant).<br>• Multi-divisa: Conversión obligatoria con tasa, fecha y fuente, rechazo de tasas <= 0, normalización a 1 en paridad y redondeo a 2 decimales.<br>• RBAC y cross-tenant (**10/10 tests**). |
+| **Descontaminación Tenant Demo** | Reseteo y validación de 0 fixtures residuales en el tenant demo (`PRJ-DEMO-2026` exclusivo) (**1/1 test**). |
+| **Verificación Técnica** | • Suite `tests/ola2-financial-integrity.test.ts` (**43/43 PASSED**).<br>• Suite de regresión `tests/ola1-security-structure.test.ts` (**34/34 PASSED**).<br>• Compilación limpia `npm run build` y tag oficial `v1.2.1-wave-2-fix`. |
 
 ---
 

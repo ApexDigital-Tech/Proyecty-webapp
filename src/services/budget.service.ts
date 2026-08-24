@@ -1,9 +1,9 @@
 import { db } from '../db/index.ts';
 import { budgetVersions, budgetLines, projects, users } from '../db/schema.ts';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { withTenantContext } from '../utils/dbWrapper.ts';
 import { logAuditEvent } from './audit.service.ts';
-import { NotFoundError, ConflictError } from '../utils/errors.ts';
+import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.ts';
 
 export interface CreateBudgetVersionDto {
   versionName: string;
@@ -46,8 +46,8 @@ export const getBudgetVersionsByProject = async (tenantId: number, projectId: nu
 };
 
 /**
- * Crea una nueva versión presupuestaria inmutable (BUD-01) para adendas o reformulaciones.
- * La versión anterior permanece archivada e inalterable para trazabilidad de auditoría.
+ * Crea una nueva versión presupuestaria inmutable (M-09) para adendas o reformulaciones.
+ * Utiliza bloqueo FOR UPDATE sobre el proyecto para resistir concurrencia estricta.
  */
 export const createBudgetVersion = async (
   tenantId: number,
@@ -56,16 +56,16 @@ export const createBudgetVersion = async (
   data: CreateBudgetVersionDto
 ) => {
   return await withTenantContext(tenantId, async (tx) => {
-    // 1. Verificar proyecto
-    const [project] = await tx.select().from(projects).where(
-      and(eq(projects.id, projectId), eq(projects.tenantId, tenantId))
-    );
+    // 1. Bloqueo de concurrencia a nivel de proyecto (FOR UPDATE)
+    const [project] = await tx.select().from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
+      .for('update');
 
     if (!project) {
       throw new NotFoundError('El proyecto no existe en esta organización.');
     }
 
-    // 2. Obtener última versión existente
+    // 2. Obtener última versión existente bajo transacción protegida
     const existingVersions = await tx.select()
       .from(budgetVersions)
       .where(and(eq(budgetVersions.projectId, projectId), eq(budgetVersions.tenantId, tenantId)))
@@ -74,7 +74,7 @@ export const createBudgetVersion = async (
 
     const nextVersionNumber = existingVersions.length > 0 ? existingVersions[0].versionNumber + 1 : 1;
 
-    // Normalizar versionName para que siempre refleje con precisión su número de versión (BUD-01)
+    // Normalizar versionName para que siempre refleje con precisión su número correlativo único (M-09)
     let finalVersionName = data.versionName;
     if (!finalVersionName) {
       finalVersionName = `V${nextVersionNumber} - Reformulación Presupuestaria`;
@@ -83,7 +83,14 @@ export const createBudgetVersion = async (
       finalVersionName = `V${nextVersionNumber} - ${cleanName || 'Reformulación Presupuestaria'}`;
     }
 
-    // 3. Crear nueva versión
+    // 3. Archivar versiones anteriores para que solo exista una versión activa/aprobada
+    if (existingVersions.length > 0) {
+      await tx.update(budgetVersions)
+        .set({ status: 'ARCHIVED', isApproved: false })
+        .where(and(eq(budgetVersions.projectId, projectId), eq(budgetVersions.tenantId, tenantId)));
+    }
+
+    // 4. Crear nueva versión aprobada
     const [newVersion] = await tx.insert(budgetVersions).values({
       tenantId,
       projectId,
@@ -94,7 +101,7 @@ export const createBudgetVersion = async (
       approvedBy: userId,
     }).returning();
 
-    // 4. Insertar líneas presupuestarias
+    // 5. Insertar líneas presupuestarias
     const linesToInsert = data.lines && data.lines.length > 0 ? data.lines : [];
     
     // Si no se proporcionaron líneas nuevas, copiar las de la versión anterior como base
@@ -136,7 +143,7 @@ export const createBudgetVersion = async (
       }
     }
 
-    // 5. Registrar en auditoría inmutable
+    // 6. Registrar en auditoría inmutable
     logAuditEvent({
       tenantId,
       userId,
@@ -153,5 +160,28 @@ export const createBudgetVersion = async (
     });
 
     return newVersion;
+  });
+};
+
+/**
+ * Control M-09: Inmutabilidad estricta de versiones archivadas o aprobadas.
+ * Prohíbe cualquier mutación o eliminación de versiones cerradas.
+ */
+export const mutateBudgetVersionCheck = async (tenantId: number, versionId: number) => {
+  return await withTenantContext(tenantId, async (tx) => {
+    const [version] = await tx.select().from(budgetVersions)
+      .where(and(eq(budgetVersions.id, versionId), eq(budgetVersions.tenantId, tenantId)));
+
+    if (!version) {
+      throw new NotFoundError('Versión presupuestaria no encontrada.');
+    }
+
+    if (version.status === 'ARCHIVED' || version.status === 'APPROVED' || version.isApproved) {
+      throw new ConflictError(
+        `Inmutabilidad Presupuestaria (M-09): La versión ${version.versionName} (${version.status}) está sellada y no puede modificarse ni eliminarse.`
+      );
+    }
+
+    return version;
   });
 };
