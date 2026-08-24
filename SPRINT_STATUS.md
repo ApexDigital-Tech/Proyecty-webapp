@@ -5,6 +5,20 @@
 
 ---
 
+## Auditoría AUD-PROY-001 — Fase 3 (Ola 3: Operaciones de Proyecto y Gobierno Documental)
+
+| Campo | Detalle |
+|---|---|
+| **Estado** | ✅ COMPLETADO, VERIFICADO Y ETIQUETADO (`v1.3.0-wave-3`) |
+| **Módulos Canónicos** | `M-07` (Planificación y Cronograma Gantt), `M-12` (Gobierno Documental DOC-01), `M-13` (Análisis Documental con IA de Documentos CLEAN) |
+| **Control M-07 (Cronograma & Gantt)** | • Detección estricta de dependencias circulares (algoritmo DAG).<br>• Validación cronológica: `startDate <= dueDate` y `predecessor.dueDate <= task.startDate`.<br>• Cálculo reproducible de avance físico ponderado (`sum(w * p) / sum(w)`).<br>• Control `assigned` para Responsable de Proyecto (acceso exclusivo a proyectos asignados) y RBAC (+ DIRECTOR/MANAGER/RESPONSABLE, - AUDITOR/FINANCIADOR) (**8/8 tests**). |
+| **Control M-12 (Gobierno DOC-01)** | • Validación MIME mediante Magic Bytes (PDF `%PDF-`, PNG, vs rechazo de ejecutables MZ).<br>• Hash inmutable SHA-256 generado y verificado.<br>• Máquina de estados fail-closed: Estado inicial `PENDING_SCAN` con bloqueo HTTP 423.<br>• Certificación `CLEAN` restringida exclusivamente al servicio de escaneo de seguridad autorizado (`SCANNER_INTERNAL_SVC_KEY`).<br>• Papelera de reciclaje recuperable (Soft Delete y Restore) y política de retención legal de 5 años (**11/11 tests**). |
+| **Control M-13 (IA Documental CLEAN)** | • Análisis con IA restringido estrictamente a documentos `CLEAN` (rechazo con HTTP 423 si no está verificado).<br>• Extracción estructurada: Cláusulas con nivel de riesgo, entidades categorizadas, fechas clave y resumen ejecutivo.<br>• Fallback seguro y determinista ante fallas o indisponibilidad del proveedor LLM.<br>• Aislamiento cross-tenant y RBAC (**8/8 tests**). |
+| **Descontaminación Tenant Demo** | Reseteo verificado con 0 fixtures residuales y aislamiento total de pruebas (**1/1 test**). |
+| **Verificación Técnica** | • Suite de Ola 3 `tests/ola3-operations-governance.test.ts` (**28/28 PASSED**).<br>• Regresión Ola 2 `tests/ola2-financial-integrity.test.ts` (**43/43 PASSED**).<br>• Regresión Ola 1 `tests/ola1-security-structure.test.ts` (**35/35 PASSED**).<br>• **Total Suite Consolidada:** **106/106 PASSED (100%)**.<br>• Compilación limpia `npm run build` y tag oficial `v1.3.0-wave-3`. |
+
+---
+
 ## Auditoría AUD-PROY-001 — Fase 3 (Ola 2: Integridad Financiera y Presupuestaria)
 
 | Campo | Detalle |

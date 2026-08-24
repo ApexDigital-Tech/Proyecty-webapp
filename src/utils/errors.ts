@@ -47,3 +47,23 @@ export class ValidationError extends Error {
     this.statusCode = 400;
   }
 }
+
+export class LockedError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Recurso bloqueado o no verificado (DOC-01)') {
+    super(message);
+    this.name = 'LockedError';
+    this.statusCode = 423;
+  }
+}
+
+export class UnauthorizedError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Autenticación requerida o sesión inválida') {
+    super(message);
+    this.name = 'UnauthorizedError';
+    this.statusCode = 401;
+  }
+}

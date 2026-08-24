@@ -2,6 +2,36 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-24] Hito: Ejecución y Cierre de Fase 3 (Ola 3: Operaciones de Proyecto y Gobierno Documental) — Auditoría AUD-PROY-001
+
+### Resumen Consolidado
+Se completó, verificó y desplegó la **Ola 3 (Operaciones de Proyecto y Gobierno Documental)** con numeración canónica exacta:
+1. **`M-07` (Planificación Operativa, Cronograma Gantt y Avance Físico):**
+   - Detección estricta de dependencias circulares mediante algoritmo de ciclo en grafo dirigido (DAG).
+   - Validación cronológica (`startDate <= dueDate` y `predecessor.dueDate <= task.startDate`).
+   - Cálculo reproducible de avance físico ponderado (`sum(w * p) / sum(w)`).
+   - Control de acceso `assigned` para Responsable de Proyecto y matriz RBAC (**8/8 tests**).
+2. **`M-12` (Gobierno Documental DOC-01):**
+   - Sniffing de Magic Bytes en contenido real (PDF `%PDF-`, PNG, JPEG vs rechazo de ejecutables MZ).
+   - Hash SHA-256 inmutable para cada documento.
+   - Máquina de estados fail-closed: Estado inicial obligatorio `PENDING_SCAN` con bloqueo HTTP 423.
+   - Certificación `CLEAN` restringida exclusivamente al servicio de escaneo de seguridad autorizado (`SCANNER_INTERNAL_SVC_KEY`).
+   - Papelera de reciclaje recuperable (Soft Delete/Restore) con auditoría y política de retención legal de 5 años (**11/11 tests**).
+3. **`M-13` (Análisis Documental con IA de Documentos CLEAN):**
+   - Análisis con IA estrictamente restringido a documentos `CLEAN` (bloqueo HTTP 423 para cualquier otro estado).
+   - Extracción estructurada: Cláusulas con nivel de riesgo, entidades categorizadas, fechas operativas/legales y resumen ejecutivo.
+   - Fallback seguro y determinista ante fallas o indisponibilidad del LLM externo (**8/8 tests**).
+4. **Descontaminación y Limpieza:**
+   - Tenant demo verificado con 0 fixtures residuales y exclusivamente el proyecto oficial `PRJ-DEMO-2026` (**1/1 test**).
+5. **Verificación Automatizada Consolidada:**
+   - Suite Ola 3 `tests/ola3-operations-governance.test.ts`: **28/28 PASSED (100%)**.
+   - Regresión Ola 2 `tests/ola2-financial-integrity.test.ts`: **43/43 PASSED (100%)**.
+   - Regresión Ola 1 `tests/ola1-security-structure.test.ts`: **35/35 PASSED (100%)**.
+   - Total Suite Consolidada: **106/106 PASSED (100%)**.
+   - Build de producción limpio y tag oficial `v1.3.0-wave-3`.
+
+---
+
 ## [2026-08-24] Hito: Ejecución y Cierre Definitivo de Fase 3 (Ola 2: Integridad Financiera y Presupuestaria) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
