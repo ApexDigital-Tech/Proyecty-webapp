@@ -7,3 +7,43 @@ export class TenantIsolationError extends Error {
     this.statusCode = 404; // Se responde 404 en lugar de 403 para no revelar la existencia del recurso.
   }
 }
+
+export class NotFoundError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Recurso no encontrado') {
+    super(message);
+    this.name = 'NotFoundError';
+    this.statusCode = 404;
+  }
+}
+
+export class ForbiddenError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Acceso denegado: Permisos insuficientes') {
+    super(message);
+    this.name = 'ForbiddenError';
+    this.statusCode = 403;
+  }
+}
+
+export class ConflictError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Conflicto de negocio o violación de segregación de funciones') {
+    super(message);
+    this.name = 'ConflictError';
+    this.statusCode = 409;
+  }
+}
+
+export class ValidationError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Datos de entrada inválidos') {
+    super(message);
+    this.name = 'ValidationError';
+    this.statusCode = 400;
+  }
+}

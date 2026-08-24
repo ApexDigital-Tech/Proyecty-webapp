@@ -277,6 +277,7 @@ export default function App() {
                 <ExpensesDashboard
                   token={token}
                   userRole={currentUser.role}
+                  currentUser={currentUser}
                 />
               )}
 

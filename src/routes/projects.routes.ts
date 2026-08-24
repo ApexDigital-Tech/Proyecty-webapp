@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.ts';
 import {
-  getProjects, createProject, update, getProjectById, remove, getMembers, addMembers, removeMembers, addAgreements, addBudgetItems, getProjectLogs, addLogs, getEvents, addExpenses
+  getProjects, createProject, update, getProjectById, remove, getMembers, addMembers, removeMembers, addAgreements, addBudgetItems, getProjectLogs, addLogs, getEvents, addExpenses, getBudgetVersions, addBudgetVersion
 } from '../controllers/projects.controller.ts';
 import { requirePermission } from '../middleware/rbac.ts';
 
@@ -17,6 +17,8 @@ router.post('/:id/members', requireAuth, requirePermission('projects', 'manage')
 router.delete('/:id/members/:userId', requireAuth, requirePermission('projects', 'manage'), removeMembers);
 router.post('/:projectId/agreements', requireAuth, requirePermission('agreements', 'create'), addAgreements);
 router.post('/:projectId/budget-items', requireAuth, requirePermission('budget_lines', 'create'), addBudgetItems);
+router.get('/:id/budget-versions', requireAuth, requirePermission('budgets', 'read'), getBudgetVersions);
+router.post('/:id/budget-versions', requireAuth, requirePermission('budgets', 'create'), addBudgetVersion);
 router.get('/:id/logs', requireAuth, requirePermission('projects', 'read'), getProjectLogs);
 router.post('/:id/logs', requireAuth, requirePermission('projects', 'update'), addLogs);
 router.get('/:id/events', requireAuth, requirePermission('projects', 'read'), getEvents);

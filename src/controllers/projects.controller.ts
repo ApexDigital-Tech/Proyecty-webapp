@@ -607,3 +607,50 @@ export const addExpenses = async (req: AuthRequest, res, next: NextFunction) => 
   }
 };
 
+// --- BUD-01: Control de Versiones Presupuestarias e Inmutabilidad ---
+
+export const getBudgetVersions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const tenantId = req.user!.tenantId;
+
+    if (!(await verifyProjectTenant(projectId, tenantId))) {
+      return res.status(404).json({ error: 'Proyecto no encontrado en esta organización.' });
+    }
+
+    const { getBudgetVersionsByProject } = await import('../services/budget.service.ts');
+    const versions = await getBudgetVersionsByProject(tenantId, projectId);
+    res.json(versions);
+  } catch (err) {
+    console.error('Error fetching budget versions:', err);
+    res.status(500).json({ error: 'Error al consultar versiones presupuestarias' });
+  }
+};
+
+export const addBudgetVersion = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+
+    if (!(await verifyProjectTenant(projectId, tenantId))) {
+      return res.status(404).json({ error: 'Proyecto no encontrado en esta organización.' });
+    }
+
+    const { versionName, reason, lines } = req.body;
+    const { createBudgetVersion } = await import('../services/budget.service.ts');
+
+    const newVersion = await createBudgetVersion(tenantId, projectId, userId, {
+      versionName,
+      reason,
+      lines,
+    });
+
+    res.status(201).json(newVersion);
+  } catch (err: any) {
+    console.error('Error creating budget version:', err);
+    res.status(err.statusCode || 500).json({ error: err.message || 'Error al crear versión presupuestaria' });
+  }
+};
+
+

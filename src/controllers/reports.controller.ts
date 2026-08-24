@@ -361,6 +361,7 @@ export const getReportsData = async (req: AuthRequest, res: Response, next: Next
 export const generateAiReportHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const tenantId = req.user?.tenantId;
+    const userId = req.user?.id || 1;
     if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
 
     const expenses = await getExpensesByTenant(tenantId);
@@ -368,11 +369,15 @@ export const generateAiReportHandler = async (req: AuthRequest, res: Response, n
     // Pass recent expenses to Gemini
     const recentExpenses = expenses.slice(0, 100);
 
-    const reportMarkdown = await generateFinancialReport(recentExpenses);
+    const reportData = await generateFinancialReport(tenantId, userId, recentExpenses);
 
     return res.json({
-      report: reportMarkdown,
-      generatedAt: new Date(),
+      report: reportData.reportMarkdown,
+      model: reportData.model,
+      modelVersion: reportData.modelVersion,
+      sources: reportData.sources,
+      generatedAt: reportData.generatedAt,
+      requiresHumanReview: reportData.requiresHumanReview,
     });
   } catch (error) {
     logger.error('Error in generateAiReportHandler', { error });

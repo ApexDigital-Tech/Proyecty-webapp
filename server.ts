@@ -81,7 +81,7 @@ if (process.env.NODE_ENV !== 'production') {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
           "default-src": ["'self'"],
-          "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          "script-src": ["'self'", "'unsafe-inline'"], // unsafe-eval eliminado para cumplimiento SEC-01
           "connect-src": ["'self'", "https://*.supabase.co", "wss://*.supabase.co"],
           "img-src": ["'self'", "data:", "https://api.dicebear.com", "https://*.googleusercontent.com"],
         },
@@ -176,14 +176,42 @@ app.use('/api', usersRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api', legacyRouter);
-// Healthcheck Endpoint
+// Healthcheck Endpoint Enriquecido (PERF-01)
 app.get('/api/health', async (req, res) => {
+  const startTime = Date.now();
   try {
-    // Simple DB ping
+    // Medición objetiva de latencia de BD
     await db.execute(sql`SELECT 1`);
-    res.status(200).json({ status: 'ok', timestamp: new Date(), database: 'connected' });
+    const dbLatencyMs = Date.now() - startTime;
+    const memory = process.memoryUsage();
+    
+    res.status(200).json({
+      status: 'healthy',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      database: {
+        status: 'connected',
+        latencyMs: dbLatencyMs,
+      },
+      process: {
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryMb: {
+          rss: Math.round(memory.rss / 1024 / 1024),
+          heapUsed: Math.round(memory.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memory.heapTotal / 1024 / 1024),
+        },
+      },
+    });
   } catch (error) {
-    res.status(503).json({ status: 'error', timestamp: new Date(), database: 'disconnected', error: String(error) });
+    res.status(503).json({
+      status: 'unhealthy',
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+      database: {
+        status: 'disconnected',
+        error: String(error),
+      },
+    });
   }
 });
 
