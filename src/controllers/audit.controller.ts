@@ -12,8 +12,8 @@ export const getAuditLogsHandler = async (req: AuthRequest, res: Response, next:
     
     if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
 
-    // RBAC Check for Admin/Director only
-    if (role !== 'DIRECTOR' && role !== 'ADMIN') {
+    // RBAC Check for Director/Admin/Auditor (Matriz Canónica M-15)
+    if (role !== 'DIRECTOR' && role !== 'ADMIN' && role !== 'AUDITOR') {
       return res.status(403).json({ error: 'Acceso denegado a bitácora de auditoría' });
     }
 

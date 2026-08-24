@@ -6,11 +6,47 @@ import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts'; // We will extract these later or keep importing for now
 import { CacheService } from '../services/CacheService.ts';
 
+export const getCurrentUserProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user;
+    if (!user || !user.id || !user.tenantId) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    const [dbUser] = await db.select({
+      id: users.id,
+      uid: users.uid,
+      name: users.name,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+      isActive: users.isActive,
+      tenantId: users.tenantId,
+      createdAt: users.createdAt,
+      roleName: roles.name,
+    })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .where(and(eq(users.id, user.id), eq(users.tenantId, user.tenantId)));
+
+    if (!dbUser) {
+      return res.status(404).json({ error: 'Perfil de usuario no encontrado.' });
+    }
+
+    res.json({
+      ...dbUser,
+      role: dbUser.roleName || user.role,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const listUsers = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { role } = req.user!;
-    if (role !== 'DIRECTOR' && role !== 'MANAGER' && role !== 'RESPONSABLE_PROYECTO') {
-      return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director, Manager o Responsable para ver usuarios.' });
+    // Matriz Canónica M-16: Solo DIRECTOR, ADMIN y AUDITOR pueden listar usuarios del tenant
+    if (role !== 'DIRECTOR' && role !== 'ADMIN' && role !== 'AUDITOR') {
+      return res.status(403).json({ error: 'Acceso denegado: Se requiere el rol de Director o Auditor para ver el catálogo de usuarios.' });
     }
 
     const allUsers = await db.select({

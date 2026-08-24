@@ -21,6 +21,7 @@ const updateUserSchema = z.object({
 });
 
 // Routes
+router.get('/me', requireAuth, UsersController.getCurrentUserProfile);
 router.get('/', requireAuth, UsersController.listUsers);
 router.post('/', requireAuth, validateSchema(createUserSchema), UsersController.createUser);
 router.patch('/:id', requireAuth, validateSchema(updateUserSchema), UsersController.updateUser);
