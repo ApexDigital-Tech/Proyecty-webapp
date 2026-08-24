@@ -9,14 +9,14 @@
 
 | Campo | Detalle |
 |---|---|
-| **Estado** | ✅ COMPLETADO, VERIFICADO Y ETIQUETADO (`v1.1.0-wave-1`) |
+| **Estado** | ✅ COMPLETADO, ESTABILIZADO Y ETIQUETADO (`v1.1.1-wave-1-fix`) |
 | **Módulos Cubiertos** | `M-01` (Auth), `M-03` (Portafolio), `M-04` (Detalle Proyecto), `M-15` (Bitácora Auditoría), `M-16` (Usuarios y RBAC) |
 | **Control M-01** | JWTs HMAC-SHA256 con claims canónicos (`user_id`, `role`, `tenant_id`, `session_id`, `exp: 900s`). Rechazo de manipulaciones, roles inexistentes y tokens expirados. |
 | **Control M-03 & M-04** | Aislamiento multi-tenant estricto (0 filtración cross-tenant). Creación/edición por rol y partidas activas únicas por proyecto (sin duplicados). |
-| **Control M-15** | Bitácora inmutable con diffs `before_state`/`after_state`, autor, IP y timestamps UTC inalterables. |
-| **Control M-16** | Administración de usuarios por `DIRECTOR` con invalidación inmediata de caché en `CacheService.invalidate(userId)`. |
+| **Control M-15** | Bitácora de auditoría alineada con matriz canónica: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance, Responsable y Financiador. |
+| **Control M-16** | • Catálogo `GET /api/users`: **DIRECTOR (200)** y **AUDITOR (200)**; bloqueo **HTTP 403** para Manager, Finance y otros.<br>• Nuevo endpoint `GET /api/users/me`: Acceso **HTTP 200** para todos los roles devolviendo exclusivamente el perfil propio.<br>• Invalidación reactiva de caché `CacheService.invalidate(userId)` en cambios de rol. |
 | **Control DOC-01** | Política *Fail-Closed* activa en backend: descarga y análisis IA bloqueados con **HTTP 423 (Locked)** salvo estado `CLEAN`. |
-| **Verificación Técnica** | Suite `tests/ola1-security-structure.test.ts` (100% PASSED), build limpio, commit `25151d2` y tag `v1.1.0-wave-1` desplegados a Render. |
+| **Verificación Técnica** | Suite `tests/ola1-security-structure.test.ts` (**31/31 PASSED**), build limpio, commit `6b08a19` y tag `v1.1.1-wave-1-fix` desplegados a Render. |
 
 ---
 
