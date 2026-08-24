@@ -70,6 +70,8 @@ export const createDemoSession = async (req: Request, res: Response, next: NextF
     // Generate cryptographically signed JWT with 15-minute expiration
     const token = generateDemoToken({
       uid: targetUser.uid,
+      userId: targetUser.dbId,
+      id: targetUser.dbId,
       email: targetUser.email,
       name: targetUser.name,
       role: targetUser.roleKey,
@@ -81,6 +83,7 @@ export const createDemoSession = async (req: Request, res: Response, next: NextF
       success: true,
       token,
       user: {
+        id: targetUser.dbId,
         uid: targetUser.uid,
         name: targetUser.name,
         email: targetUser.email,

@@ -280,7 +280,17 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
 
     // Fetch relational datasets
     const projectAgreements = await db.select().from(agreements).where(eq(agreements.projectId, projectId));
-    const projectBudgetItems = await db.select().from(budgetLines).where(eq(budgetLines.projectId, projectId));
+    
+    // Obtener versiones presupuestarias y filtrar partidas de la versión activa (BUD-01)
+    const versions = await db.select().from(budgetVersions)
+      .where(eq(budgetVersions.projectId, projectId))
+      .orderBy(desc(budgetVersions.versionNumber));
+    
+    const activeVersion = versions.find(v => v.status === 'APPROVED' || v.isApproved) || versions[0];
+    const projectBudgetItems = activeVersion
+      ? await db.select().from(budgetLines).where(eq(budgetLines.budgetVersionId, activeVersion.id))
+      : await db.select().from(budgetLines).where(eq(budgetLines.projectId, projectId));
+
     const projectDocuments = await db.select().from(documents).where(eq(documents.projectId, projectId));
     const projectVouchers = await db.select().from(receiptsVouchers).where(eq(receiptsVouchers.projectId, projectId));
     const projectLogs = await db.select().from(auditLogs).where(and(eq(auditLogs.entityId, String(projectId)), eq(auditLogs.entity, 'Project'))).orderBy(desc(auditLogs.createdAt));
@@ -302,6 +312,8 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
       data: {
         ...project,
         agreements: enrichedAgreements,
+        budgetVersions: versions,
+        activeBudgetVersion: activeVersion || null,
         budgetLines: projectBudgetItems,
         documents: projectDocuments,
         receiptsVouchers: projectVouchers,

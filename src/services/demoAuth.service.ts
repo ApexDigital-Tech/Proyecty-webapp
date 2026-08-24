@@ -4,6 +4,8 @@ export interface DemoJWTPayload {
   iss: string;
   aud: string;
   sub: string;
+  user_id: number;
+  id?: number;
   email: string;
   name: string;
   role: string;
@@ -36,6 +38,8 @@ function base64UrlDecode(str: string): string {
 
 export function generateDemoToken(user: {
   uid: string;
+  userId?: number;
+  id?: number;
   email: string;
   name: string;
   role: string;
@@ -48,10 +52,14 @@ export function generateDemoToken(user: {
   };
 
   const nowSeconds = Math.floor(Date.now() / 1000);
+  const resolvedUserId = user.userId || user.id || 1;
+
   const payload: DemoJWTPayload = {
     iss: DEMO_ISSUER,
     aud: DEMO_AUDIENCE,
     sub: user.uid,
+    user_id: resolvedUserId,
+    id: resolvedUserId,
     email: user.email,
     name: user.name,
     role: user.role.toUpperCase(),

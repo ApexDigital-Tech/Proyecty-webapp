@@ -553,7 +553,7 @@ export default function UsersManager({ token, currentUser, onLogActivity }: User
                             {log.actionDescription}
                           </div>
                           <div className="flex items-center justify-between text-[8px] font-mono text-slate-400">
-                            <span>Sincronizado vía Cloud SQL</span>
+                            <span>Sincronizado vía PostgreSQL</span>
                             <span>{new Date(log.createdAt).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </div>

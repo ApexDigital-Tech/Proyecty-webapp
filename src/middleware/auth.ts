@@ -54,6 +54,7 @@ export const requireAuth = async (
     try {
       const payload = verifyDemoToken(token);
       req.user = {
+        id: payload.user_id || payload.id || 1,
         uid: payload.sub,
         email: payload.email,
         name: payload.name,

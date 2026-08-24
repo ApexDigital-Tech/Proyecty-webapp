@@ -52,7 +52,7 @@ export default function Topbar({ currentTab, selectedProjectName, onClearSelecte
         {/* Connection status */}
         <div className="flex items-center space-x-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-100/60">
           <CloudLightning className="w-3 h-3" />
-          <span className="text-[9px] font-mono font-bold uppercase tracking-wider">Cloud SQL Conectado</span>
+          <span className="text-[9px] font-mono font-bold uppercase tracking-wider">PostgreSQL Conectado</span>
         </div>
 
         {/* Date Display */}

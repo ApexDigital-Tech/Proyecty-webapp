@@ -48,7 +48,7 @@ export default function AuditTrail({ logs, onRefresh, isLoading }: AuditTrailPro
             Bitácora de Auditoría y Compliance
           </h2>
           <p className="text-[11px] text-slate-400 font-sans">
-            Registro inalterable de operaciones administrativas y modificaciones presupuestarias en Cloud SQL.
+            Registro inalterable de operaciones administrativas y modificaciones presupuestarias en PostgreSQL.
           </p>
         </div>
 

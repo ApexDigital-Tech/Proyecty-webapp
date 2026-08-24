@@ -19,17 +19,27 @@ export const requirePermission = (module: Module, action: Action) => {
         return res.status(401).json({ error: 'No autorizado: Falta contexto de usuario' });
       }
 
-      // Hardcode SuperAdmin bypass for now if role is DIRECTOR/SuperAdmin, 
-      // but strictly we should check permissions
-      // To strictly follow RBAC:
+      // Director / Administrador general tiene acceso completo a los módulos
+      if (user.role === 'DIRECTOR' || user.role === 'ADMIN' || user.role === 'SUPERADMIN') {
+        return next();
+      }
+
       const permissions = await CacheService.getUserPermissions(user.id);
       
       const hasPermission = permissions.some(
         p => p.module === module && p.actions.includes(action)
       );
 
-      if (!hasPermission) {
-        console.warn(`[RBAC] Acceso denegado: Usuario ${user.id} (${user.email}) intentó '${action}' en '${module}'`);
+      // Fallback para roles estándar si no están en la tabla permissions
+      const roleUpper = (user.role || '').toUpperCase();
+      const isAuthorizedRole = (
+        (module === 'expenses' && (roleUpper === 'MANAGER' || roleUpper === 'FINANCE')) ||
+        (module === 'budgets' && (roleUpper === 'MANAGER' || roleUpper === 'FINANCE' || roleUpper === 'AUDITOR')) ||
+        (module === 'projects' && (roleUpper === 'MANAGER' || roleUpper === 'RESPONSABLE_PROYECTO' || roleUpper === 'AUDITOR'))
+      );
+
+      if (!hasPermission && !isAuthorizedRole) {
+        console.warn(`[RBAC] Acceso denegado: Usuario ${user.id} (${user.email}) rol ${user.role} intentó '${action}' en '${module}'`);
         return res.status(403).json({ error: 'Prohibido: No tienes permisos suficientes para realizar esta acción' });
       }
 

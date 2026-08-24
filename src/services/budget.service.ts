@@ -74,11 +74,20 @@ export const createBudgetVersion = async (
 
     const nextVersionNumber = existingVersions.length > 0 ? existingVersions[0].versionNumber + 1 : 1;
 
+    // Normalizar versionName para que siempre refleje con precisión su número de versión (BUD-01)
+    let finalVersionName = data.versionName;
+    if (!finalVersionName) {
+      finalVersionName = `V${nextVersionNumber} - Reformulación Presupuestaria`;
+    } else {
+      const cleanName = finalVersionName.replace(/^V\d+\s*[-:]*\s*/i, '').trim();
+      finalVersionName = `V${nextVersionNumber} - ${cleanName || 'Reformulación Presupuestaria'}`;
+    }
+
     // 3. Crear nueva versión
     const [newVersion] = await tx.insert(budgetVersions).values({
       tenantId,
       projectId,
-      versionName: data.versionName || `V${nextVersionNumber} - Reformulación Presupuestaria`,
+      versionName: finalVersionName,
       versionNumber: nextVersionNumber,
       status: 'APPROVED',
       isApproved: true,
