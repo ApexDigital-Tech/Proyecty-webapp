@@ -153,11 +153,11 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
     console.log('🔄 Sincronizando base de datos local...');
     await seedDatabase();
     
-    // Iniciar scheduler de reinicio automático cada 24h para el tenant demo (AUD-PROY-001)
-    const { initDemoAutoResetScheduler } = await import('./src/services/demoTenant.service.ts');
-    initDemoAutoResetScheduler(24);
+    // Activar triggers de inmutabilidad estricta para audit_logs en PostgreSQL (M-15)
+    const { applyAuditLogsImmutability } = await import('./scripts/apply-audit-immutability.ts');
+    await applyAuditLogsImmutability();
     
-    console.log('Database verification and optional seeding complete.');
+    console.log('Database verification, immutability triggers and optional seeding complete.');
   } catch (err) {
     console.error('Error during database seed checks:', err);
   }

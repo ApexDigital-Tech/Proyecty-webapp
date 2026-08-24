@@ -202,6 +202,35 @@ async function runOla1ExhaustiveSuite() {
   testAssert(!canReadAudit('RESPONSABLE_PROYECTO'), 'RBAC M-15: RESPONSABLE_PROYECTO tiene acceso BLOQUEADO a bitácora (HTTP 403)');
   testAssert(!canReadAudit('FINANCIADOR'), 'RBAC M-15: FINANCIADOR tiene acceso BLOQUEADO a bitácora (HTTP 403)');
 
+  // 3.3 Verificación de Inmutabilidad SQL Estricta en PostgreSQL:
+  // Intentos directos de UPDATE, DELETE y TRUNCATE son rechazados por triggers de PostgreSQL
+  let updateRejected = false;
+  try {
+    await db.execute(sql`UPDATE audit_logs SET action = 'HACKED_ACTION' WHERE id = ${log.id}`);
+  } catch (err: any) {
+    const fullErr = `${err} ${err.message || ''} ${err.cause?.message || ''}`;
+    updateRejected = fullErr.includes('permission denied') || fullErr.includes('immutable') || fullErr.includes('prevent_audit_logs_mutation');
+  }
+  testAssert(updateRejected, 'Inmutabilidad SQL: UPDATE audit_logs es rechazado en PostgreSQL (permission denied / immutable)');
+
+  let deleteRejected = false;
+  try {
+    await db.execute(sql`DELETE FROM audit_logs WHERE id = ${log.id}`);
+  } catch (err: any) {
+    const fullErr = `${err} ${err.message || ''} ${err.cause?.message || ''}`;
+    deleteRejected = fullErr.includes('permission denied') || fullErr.includes('immutable') || fullErr.includes('prevent_audit_logs_mutation');
+  }
+  testAssert(deleteRejected, 'Inmutabilidad SQL: DELETE FROM audit_logs es rechazado en PostgreSQL (permission denied / immutable)');
+
+  let truncateRejected = false;
+  try {
+    await db.execute(sql`TRUNCATE audit_logs`);
+  } catch (err: any) {
+    const fullErr = `${err} ${err.message || ''} ${err.cause?.message || ''}`;
+    truncateRejected = fullErr.includes('permission denied') || fullErr.includes('immutable') || fullErr.includes('prevent_audit_logs_mutation');
+  }
+  testAssert(truncateRejected, 'Inmutabilidad SQL: TRUNCATE audit_logs es rechazado en PostgreSQL (permission denied / immutable)');
+
   // -------------------------------------------------------------------------
   // 4. M-16: Gestión de Usuarios, Catálogo vs Perfil Propio (/api/users/me)
   // -------------------------------------------------------------------------

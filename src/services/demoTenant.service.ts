@@ -152,7 +152,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   }
 
   await db.delete(donors).where(eq(donors.tenantId, orgId));
-  await db.delete(auditLogs).where(eq(auditLogs.tenantId, orgId));
+  // audit_logs no se elimina: es inmutable por diseño y protegido por triggers de PostgreSQL (M-15)
 
   // 2. Seed Donor
   const insertedDonor = await db.insert(donors).values({

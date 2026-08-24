@@ -34,7 +34,9 @@ export const getCurrentUserProfile = async (req: AuthRequest, res: Response, nex
 
     res.json({
       ...dbUser,
-      role: dbUser.roleName || user.role,
+      roleCode: user.role,
+      roleName: dbUser.roleName || user.roleName || user.role,
+      role: user.role,
     });
   } catch (err) {
     next(err);
