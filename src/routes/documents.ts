@@ -223,12 +223,16 @@ router.get('/documents/:id/download', requireAuth, async (req: AuthRequest, res:
 
     if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
 
-    // Bloqueo de descarga si está en cuarentena preventiva
+    // Fail-Closed: Bloqueo estricto si no cuenta con scanStatus === 'CLEAN' o está en cuarentena
+    const scanStatus = (doc.metadata as any)?.scanStatus || 'PENDING_SCAN';
     const isQuarantined = (doc.metadata as any)?.quarantined === true;
-    if (isQuarantined) {
-      return res.status(403).json({
-        error: 'Descarga bloqueada: El archivo se encuentra en cuarentena preventiva por motivos de seguridad.',
-        code: 'DOCUMENT_QUARANTINED',
+
+    if (scanStatus !== 'CLEAN' || isQuarantined) {
+      return res.status(423).json({
+        error: `Descarga bloqueada: El archivo no ha sido verificado como seguro (Estado: ${scanStatus})`,
+        code: 'DOCUMENT_NOT_VERIFIED',
+        scanStatus,
+        quarantined: isQuarantined,
       });
     }
 
@@ -389,6 +393,16 @@ router.post('/documents/:id/analyze', requireAuth, async (req: AuthRequest, res:
     );
 
     if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+
+    // Fail-Closed: Bloqueo de análisis IA si el documento no está CLEAN
+    const scanStatus = (doc.metadata as any)?.scanStatus || 'PENDING_SCAN';
+    if (scanStatus !== 'CLEAN') {
+      return res.status(423).json({
+        error: `Análisis bloqueado: El archivo debe haber sido verificado como seguro (CLEAN) para ser procesado por la IA (Estado actual: ${scanStatus})`,
+        code: 'DOCUMENT_NOT_VERIFIED',
+        scanStatus,
+      });
+    }
 
     // Fetch existing analysis if present
     const [existingAnalysis] = await db.select().from(documentAnalysis).where(

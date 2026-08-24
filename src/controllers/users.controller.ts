@@ -93,9 +93,11 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
     const userId = parseInt(req.params.id);
     const { name, email, role, isActive } = req.body;
 
-    const userToUpdate = await db.select().from(users).where(eq(users.id, userId));
+    const userToUpdate = await db.select().from(users).where(
+      and(eq(users.id, userId), eq(users.tenantId, req.user!.tenantId))
+    );
     if (userToUpdate.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado.' });
+      return res.status(404).json({ error: 'Usuario no encontrado en esta organización.' });
     }
 
     if (isActive === false && userToUpdate[0].uid === requesterUid) {
@@ -119,7 +121,7 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
 
     const updated = await db.update(users)
       .set(updates)
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), eq(users.tenantId, req.user!.tenantId)))
       .returning();
 
     let actionMsg = `Modificó los datos del usuario "${userToUpdate[0].name}"`;
@@ -145,16 +147,20 @@ export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     const userId = parseInt(req.params.id);
-    const userToDelete = await db.select().from(users).where(eq(users.id, userId));
+    const userToDelete = await db.select().from(users).where(
+      and(eq(users.id, userId), eq(users.tenantId, req.user!.tenantId))
+    );
     if (userToDelete.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado.' });
+      return res.status(404).json({ error: 'Usuario no encontrado en esta organización.' });
     }
 
     if (userToDelete[0].uid === req.user!.uid) {
       return res.status(400).json({ error: 'No puedes eliminar tu propio usuario.' });
     }
 
-    await db.delete(users).where(eq(users.id, userId));
+    await db.delete(users).where(
+      and(eq(users.id, userId), eq(users.tenantId, req.user!.tenantId))
+    );
     
     // Limpiar de caché al ser eliminado
     CacheService.invalidate(userId);
