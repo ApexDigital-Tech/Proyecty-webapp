@@ -67,6 +67,28 @@ async function runOla2ExhaustiveSuite() {
   }
   const otherTenantId = otherOrg.id;
 
+  // Limpieza inicial de datos de prueba
+  async function cleanTestTenant(orgId: number) {
+    const prjs = await db.select({ id: projects.id }).from(projects).where(eq(projects.tenantId, orgId));
+    const prjIds = prjs.map(p => p.id);
+    if (prjIds.length > 0) {
+      await db.delete(receiptsVouchers).where(inArray(receiptsVouchers.projectId, prjIds));
+      await db.delete(expenses).where(inArray(expenses.projectId, prjIds));
+      await db.delete(budgetLines).where(inArray(budgetLines.projectId, prjIds));
+      await db.delete(budgetVersions).where(inArray(budgetVersions.projectId, prjIds));
+      const agrs = await db.select({ id: agreements.id }).from(agreements).where(inArray(agreements.projectId, prjIds));
+      const agrIds = agrs.map(a => a.id);
+      if (agrIds.length > 0) {
+        await db.delete(disbursements).where(inArray(disbursements.agreementId, agrIds));
+      }
+      await db.delete(agreements).where(inArray(agreements.projectId, prjIds));
+      await db.delete(projects).where(inArray(projects.id, prjIds));
+    }
+  }
+
+  await cleanTestTenant(tenantId);
+  await cleanTestTenant(otherTenantId);
+
   // Asegurar roles en base de datos
   const dbRoles = await db.select().from(roles);
   const directorRole = dbRoles.find(r => r.name.toLowerCase().includes('director') || r.name.toLowerCase().includes('admin')) || dbRoles[0];

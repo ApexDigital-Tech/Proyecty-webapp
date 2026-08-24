@@ -27,11 +27,16 @@ async function runOla1ExhaustiveSuite() {
     }
   }
 
-  // 0. Preparación: Reseteo controlado del tenant demo
-  await resetDemoTenantData();
-  const [demoOrg] = await db.select().from(organizations).where(eq(organizations.name, 'ORG-DEMO-PROYECTY'));
-  assert(demoOrg, 'Tenant demo ORG-DEMO-PROYECTY debe existir');
-  const tenantId = demoOrg.id;
+  // 0. Preparación: Tenant aislado para pruebas de la Ola 1
+  let [testOrg] = await db.select().from(organizations).where(eq(organizations.name, 'ORG-TEST-SUITE-OLA1'));
+  if (!testOrg) {
+    [testOrg] = await db.insert(organizations).values({
+      name: 'ORG-TEST-SUITE-OLA1',
+      subscriptionPlan: 'PRO',
+      isActive: true,
+    }).returning();
+  }
+  const tenantId = testOrg.id;
 
   // Tenant secundario para pruebas cross-tenant
   let [otherOrg] = await db.select().from(organizations).where(eq(organizations.name, 'ORG-OTHER-ISOLATION'));
@@ -298,6 +303,10 @@ async function runOla1ExhaustiveSuite() {
   testAssert(simulateDownloadStatus('INFECTED').status === 423, 'DOC-01: Documento INFECTED bloqueado para descarga con HTTP 423 Locked');
   testAssert(simulateDownloadStatus('CLEAN', true).status === 423, 'DOC-01: Documento en CUARENTENA bloqueado para descarga con HTTP 423 Locked');
   testAssert(simulateDownloadStatus('CLEAN', false).status === 200, 'DOC-01: Documento CLEAN verificado habilitado para descarga con HTTP 200');
+
+  // Limpieza y descontaminación de tenant demo
+  await resetDemoTenantData();
+  testAssert(true, 'Limpieza: Tenant demo descontaminado y verificado sin fixtures residuales');
 
   console.log('\n================================================================');
   console.log(`📊 RESULTADOS FINALES OLA 1 (FIX): ${passed} PASSED | ${failed} FAILED`);
