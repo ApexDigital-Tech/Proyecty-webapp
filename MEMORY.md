@@ -238,6 +238,18 @@ Se ha completado y auditado rigurosamente la infraestructura de seguridad de dat
 2. **Feature Gating (Monetización):** Middleware que valida si el Tenant tiene acceso a módulos bloqueados (ej. Reportes IA) devolviendo código de error interceptado por el Frontend para sugerir Upgrade (LemonSqueezy).
 3. **Módulo de Gastos:** RBAC inyectado directamente en el controlador y la interfaz. Solo usuarios MANAGER o DIRECTOR pueden aprobar/rechazar presupuestos.
 4. **Audit Logs:** Registro inmutable de acciones críticas (aprobaciones, upgrades de plan, cambios de permisos) guardando snapshot JSON en la columna `metadata`.
+
+---
+
+## 6. Roadmap de Maduración y Comercialización SaaS B2B (Backlog Vendible)
+1. **Onboarding & Self-Service:** Wizard de registro de organizaciones (`/signup`), verificación por email con tokens de 24h, invitaciones de equipo y guía interactiva.
+2. **Billing Engine & Tier Enforcement:** Webhooks bidireccionales con Stripe / LemonSqueezy, enforcement de cuotas por plan (Starter, Growth, Enterprise) y Customer Portal.
+3. **Cloud Storage & Antivirus (DOC-01):** Migración a AWS S3 / Cloudflare R2 con URLs prefirmadas, pipeline de escaneo antivirus asíncrono y cifrado AES-256 en reposo.
+4. **Comunicaciones Transaccionales:** Proveedor de email (Resend / SendGrid), alertas automatizadas de vencimiento de hitos/cláusulas y centro de notificaciones in-app.
+5. **Infraestructura Dedicada & SLA Enterprise (PERF-02):** Cómputo dedicado (Render Starter/Standard, P95 < 150 ms), Redis + BullMQ para colas de background jobs y observabilidad APM.
+6. **Interoperabilidad Enterprise:** Integración contable (QuickBooks/Xero/SAP B1), API pública con API Keys para donantes internacionales y SSO SAML 2.0.
+7. **Compliance & Legal:** Términos de Servicio (ToS), DPA conforme a GDPR, backup completo descargable de la organización y firma digital de reportes.
+
 5. **AI Reports:** Integración del Google Gen AI SDK (Gemini Flash) para transformar data de BD cruda en un análisis ejecutivo financiero renderizado en Markdown en el frontend.
 
 ## 6. Próxima Etapa

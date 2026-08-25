@@ -207,21 +207,55 @@ Prueba ejecutada con peticiones HTTP directas al backend usando el token del usu
 
 ---
 
-## Sprint 3 — Modularización de `server.ts`
-
-| Campo | Detalle |
-|-------|---------|
-| **Estado** | 🔲 NO INICIADO |
-| **Alcance previsto** | Separar controladores, servicios y rutas por dominio funcional. Eliminar lógica inline y helpers huérfanos del archivo monolítico `server.ts`. |
-| **Prioridad** | Priorizado sobre el cierre de Fase 2 de UX por decisión de arquitectura ya acordada (la deuda técnica en `server.ts` es un riesgo de mantenibilidad creciente). |
-| **Prerequisitos** | Sprint 2 cerrado. |
-
 ---
 
-## Fases Futuras (Roadmap de Alto Nivel)
+## 🚀 Roadmap de Maduración y Comercialización SaaS B2B (Backlog Vendible)
 
-| Fase | Descripción | Estado |
-|------|-------------|--------|
-| Fase 1 | SaaS Core Blindado (Auth, CRUD, Billing, Deploy) | ✅ Completada |
-| Fase 2 | Refinamiento UX/UI + Permisos Avanzados | 🔄 En progreso (Sprint 2 cerrado, Sprint 3 pendiente) |
-| Fase 3 | Escalabilidad (Redis, queues, horizontal scaling) | 🔲 No iniciada |
+Para consolidar a **PROYECTY** como un producto SaaS comercialmente viable, escalable y vendible a organizaciones sin fines de lucro y agencias de cooperación internacional, se establecen las siguientes épicas y tareas pendientes prioritarias:
+
+### 1. Onboarding y Auto-aprovisionamiento Multi-Tenant (Self-Service)
+- [ ] **Wizard de Registro de Organización:** Flujo público de onboarding (`/signup`) para crear una nueva organización, definir país, moneda base institucional, año fiscal y cargar logotipo.
+- [ ] **Verificación de Email y Activación de Cuenta:** Flujo de confirmación con enlaces seguros de un solo uso (tokens criptográficos con TTL de 24h).
+- [ ] **Invitación y Gestión de Equipos:** Envío de invitaciones por correo para incorporar miembros con asignación directa de rol canónico (`DIRECTOR`, `MANAGER`, `FINANCE`, `RESPONSABLE_PROYECTO`, `AUDITOR`, `FINANCIADOR`).
+- [ ] **Interactive Onboarding Guide:** Guía interactiva paso a paso para la creación del primer proyecto, primer convenio y primer marco presupuestario.
+
+### 2. Monetización, Pasarela de Pagos y Límites por Plan (Billing Engine)
+- [ ] **Integración Completa con Stripe / LemonSqueezy:** Webhooks bidireccionales seguros (`checkout.completed`, `subscription.updated`, `invoice.payment_failed`, `subscription.cancelled`).
+- [ ] **Matriz de Límites por Nivel (Tier Enforcement):**
+  - **Plan Starter ($29/mes):** Hasta 3 proyectos activos, 2 GB almacenamiento, 5 usuarios.
+  - **Plan Growth / Professional ($89/mes):** Hasta 15 proyectos activos, 20 GB almacenamiento, usuarios ilimitados, reportes con IA estándar.
+  - **Plan Enterprise ($249/mes):** Proyectos ilimitados, 200 GB almacenamiento, IA sin límite, SLA 99.9%, soporte dedicado y SSO SAML.
+- [ ] **Customer Portal:** Panel de autoservicio para descarga de facturas, actualización de métodos de pago y upgrade/downgrade de plan.
+
+### 3. Almacenamiento Cloud y Escaneo Antivirus Productivo (Secure File Storage)
+- [ ] **Migración a Cloud Storage (AWS S3 / Cloudflare R2 / Supabase Storage):** Sustituir el almacenamiento en disco efímero local por URLs prefirmadas (`presigned URLs`) con expiración de 15 minutos.
+- [ ] **Pipeline de Escaneo Antivirus Asíncrono (DOC-01):** Integración con microservicio de escaneo (ClamAV / VirusTotal API / AWS GuardDuty) mediante webhooks para transicionar de `PENDING_SCAN` a `CLEAN` o `INFECTED`.
+- [ ] **Cifrado en Reposo y Auditoría de Integridad:** Cifrado AES-256 de archivos subidos y verificación periódica de hashes SHA-256.
+
+### 4. Comunicaciones, Notificaciones y Alertas Transaccionales
+- [ ] **Proveedor de Email Transaccional (Resend / SendGrid / Postmark):** Configuración de dominio con SPF, DKIM y DMARC para entregabilidad 100%.
+- [ ] **Sistema de Alertas Automáticas:**
+  - Notificaciones de vencimiento próximo de hitos y cláusulas contractuales (30, 15 y 7 días).
+  - Alerta de brecha operativa física vs financiera (`|físico - financiero| > 15%`).
+  - Solicitudes de aprobación de gastos pendientes asignadas a Directores/Finanzas.
+- [ ] **Centro de Notificaciones In-App:** Campana de notificaciones con badge de no leídos y actualización en tiempo real.
+
+### 5. Infraestructura Dedicada, Rendimiento y Alta Disponibilidad (SLA Enterprise)
+- [ ] **Upgrade de Infraestructura Productiva (Resolución Integral PERF-02):**
+  - Migración de Render Free a instancia dedicada (Render Starter/Standard con cómputo continuo y pooling de conexiones).
+  - Cumplimiento del SLA HTTP productivo P95 < 150 ms.
+- [ ] **Caché Distribuida y Background Jobs (Redis + BullMQ):**
+  - Migrar `CacheService` en memoria a Redis para soportar escalamiento horizontal multirréplica.
+  - Procesamiento en segundo plano de generación de PDFs masivos y análisis con IA.
+- [ ] **Monitoreo y Observabilidad APM:** Dashboards de salud en tiempo real (Sentry Performance, BetterStack / Datadog, UptimeRobot).
+
+### 6. Interoperabilidad, Integraciones y Exportaciones Externas (Enterprise Ready)
+- [ ] **Exportación Estandarizada Contable:** Generación de formatos conciliados compatibles con ERPs contables (QuickBooks, Xero, SAP Business One, Excel avanzado).
+- [ ] **API Pública con API Keys para Donantes:** Endpoint de sólo lectura autenticado con API Key para que cooperantes internacionales (USAID, UE, BID, BM) auditen avances y estados financieros de sus proyectos vinculados.
+- [ ] **Single Sign-On (SSO):** Soporte de SAML 2.0 y OpenID Connect (Google Workspace, Microsoft Entra ID / Azure AD, Okta).
+
+### 7. Cumplimiento Normativo, Seguridad y Legal (B2B Compliance)
+- [ ] **Políticas y Términos Legales:** Redacción e integración de Términos de Servicio (ToS), Política de Privacidad y Acuerdo de Procesamiento de Datos (DPA) conforme a GDPR.
+- [ ] **Portabilidad de Datos (GDPR Right to Data Portability):** Botón de descarga de "Backup Completo de la Organización" en formato JSON/ZIP estructurado.
+- [ ] **Firma Digital de Reportes de Auditoría:** Estampado de tiempo y firma criptográfica de reportes oficiales de auditoría.
+
