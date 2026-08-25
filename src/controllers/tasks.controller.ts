@@ -39,13 +39,20 @@ export const getTasks = async (req: AuthRequest, res: Response, next: NextFuncti
       }
     }
 
-    const formattedTasks = projectTasks.map(t => ({
-      ...t.task,
-      assigneeName: t.assigneeName,
-      weight: t.task.weight ?? 1,
-      progress: t.task.progress ?? (t.task.status === 'DONE' ? 100 : t.task.status === 'IN_PROGRESS' ? 50 : 0),
-      dependsOnIds: depMap.get(t.task.id) || [],
-    }));
+    const formattedTasks = projectTasks.map(t => {
+      const w = (t.task.weight !== null && t.task.weight !== undefined && t.task.weight > 0) ? t.task.weight : 1;
+      let p = t.task.progress;
+      if (p === null || p === undefined || (p === 0 && t.task.status !== 'TODO')) {
+        p = t.task.status === 'DONE' ? 100 : t.task.status === 'IN_PROGRESS' ? 50 : 0;
+      }
+      return {
+        ...t.task,
+        assigneeName: t.assigneeName,
+        weight: w,
+        progress: p,
+        dependsOnIds: depMap.get(t.task.id) || [],
+      };
+    });
 
     const projectPhysicalProgress = calculatePhysicalProgress(formattedTasks);
 
