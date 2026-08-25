@@ -4,9 +4,11 @@ export const createExpenseSchema = z.object({
   title: z.string().min(3, 'El título debe tener al menos 3 caracteres'),
   amount: z.number().positive('El monto debe ser positivo'),
   category: z.string().min(2, 'La categoría es requerida'),
-  currency: z.string().optional(),
-  projectId: z.number().int().positive('Project ID inválido').optional(), // Assuming we want it optional or required based on existing schema
-  budgetLineId: z.number().int().positive('Budget Line ID inválido').optional(), // Same here
+  currency: z.enum(['BOB', 'USD', 'EUR'], {
+    errorMap: () => ({ message: 'Moneda no autorizada. Monedas permitidas: BOB, USD, EUR' }),
+  }).optional(),
+  projectId: z.number().int().positive('Project ID inválido').optional(),
+  budgetLineId: z.number().int().positive('Budget Line ID inválido').optional(),
 });
 
 export type CreateExpenseDto = z.infer<typeof createExpenseSchema>;

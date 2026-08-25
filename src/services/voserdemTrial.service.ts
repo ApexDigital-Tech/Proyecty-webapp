@@ -248,7 +248,8 @@ export async function setupVoserdemTrialTenant(): Promise<{
 
     // Ensure tasks exist for this project
     const existingTasks = await db.select().from(tasks).where(eq(tasks.projectId, projectId));
-    if (existingTasks.length === 0) {
+    if (existingTasks.length !== 2) {
+      await db.delete(tasks).where(eq(tasks.projectId, projectId));
       await db.insert(tasks).values([
         {
           tenantId: orgId,
@@ -279,6 +280,7 @@ export async function setupVoserdemTrialTenant(): Promise<{
           createdBy: userId,
         },
       ]);
+      await db.update(projects).set({ physicalProgress: 80 }).where(eq(projects.id, projectId));
     }
 
     // Ensure clean document exists for this project

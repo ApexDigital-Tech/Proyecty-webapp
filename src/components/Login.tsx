@@ -24,22 +24,11 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
   const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
 
-  // Internal demo mode check: only accessible via explicit internal route / query
-  const isInternalDemo = typeof window !== 'undefined' && (
-    window.location.pathname === '/internal-demo' ||
-    window.location.search.includes('mode=internal-demo')
-  );
+  // Protected internal demo path check (strictly dependent on server-side enablement)
+  const isInternalDemo = typeof window !== 'undefined' && window.location.pathname === '/internal-demo';
 
   const [loadingRole, setLoadingRole] = useState<string | null>(null);
   const [demoUsers, setDemoUsers] = useState<DemoUserItem[]>([]);
-
-  const defaultDemoCatalog: DemoUserItem[] = [
-    { id: 1, role: 'DIRECTOR', title: 'Director General', name: 'Gonzalo Alfaro (Demo)', avatarUrl: '' },
-    { id: 2, role: 'MANAGER', title: 'Coordinador de Proyecto', name: 'Rodrigo Gómez (Demo)', avatarUrl: '' },
-    { id: 3, role: 'FINANCE', title: 'Responsable de Finanzas', name: 'Karla Martínez (Demo)', avatarUrl: '' },
-    { id: 4, role: 'AUDITOR', title: 'Auditor Externo', name: 'Andrés Peña (Demo)', avatarUrl: '' },
-    { id: 5, role: 'FINANCIADOR', title: 'Oficial de Cooperación', name: 'Representante USAID (Demo)', avatarUrl: '' },
-  ];
 
   const fetchDemoCatalog = useCallback(() => {
     if (!isInternalDemo) return;
@@ -49,19 +38,23 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
     fetch('/api/auth/demo-users', { signal: controller.signal })
       .then(res => {
         clearTimeout(timeoutId);
-        if (!res.ok) throw new Error('Error al cargar catálogo demo');
+        if (!res.ok) {
+          // If server disabled demo mode, keep list empty
+          setDemoUsers([]);
+          return [];
+        }
         return res.json();
       })
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setDemoUsers(data);
         } else {
-          setDemoUsers(defaultDemoCatalog);
+          setDemoUsers([]);
         }
       })
-      .catch(err => {
+      .catch(() => {
         clearTimeout(timeoutId);
-        setDemoUsers(defaultDemoCatalog);
+        setDemoUsers([]);
       });
   }, [isInternalDemo]);
 
@@ -157,8 +150,6 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
       setLoadingRole(null);
     }
   };
-
-  const activeCatalog = demoUsers.length > 0 ? demoUsers : defaultDemoCatalog;
 
   return (
     <div id="login-container" className="min-h-screen flex items-center justify-center bg-[#0F172A] p-4 sm:p-6 select-none font-sans">
@@ -288,8 +279,8 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
             </form>
           )}
 
-          {/* Internal Demo Panel: ONLY visible on /internal-demo */}
-          {isInternalDemo && (
+          {/* Internal Demo Panel: ONLY visible on /internal-demo when enabled by server */}
+          {isInternalDemo && demoUsers.length > 0 && (
             <div className="pt-4 border-t border-dashed border-amber-300 space-y-3 bg-amber-50/50 p-4 rounded-xl border">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono font-bold text-amber-800 uppercase tracking-wider flex items-center space-x-1">
@@ -300,7 +291,7 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
               </div>
 
               <div className="space-y-1.5">
-                {activeCatalog.map(u => (
+                {demoUsers.map(u => (
                   <button
                     key={u.role}
                     onClick={() => handleDemoLogin(u)}

@@ -48,6 +48,16 @@ export class ValidationError extends Error {
   }
 }
 
+export class UnprocessableEntityError extends Error {
+  public statusCode: number;
+
+  constructor(message: string = 'Entidad no procesable o valor fuera del catálogo permitido') {
+    super(message);
+    this.name = 'UnprocessableEntityError';
+    this.statusCode = 422;
+  }
+}
+
 export class LockedError extends Error {
   public statusCode: number;
 

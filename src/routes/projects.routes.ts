@@ -10,6 +10,7 @@ const router = Router();
 router.get('/', requireAuth, getProjects);
 router.post('/', requireAuth, createProject);
 router.put('/:id', requireAuth, update);
+router.patch('/:id', requireAuth, update);
 router.get('/:id', requireAuth, getProjectById);
 router.delete('/:id', requireAuth, remove);
 router.get('/:id/members', requireAuth, requirePermission('projects', 'read'), getMembers);

@@ -1,4 +1,19 @@
-import { ValidationError } from '../utils/errors.ts';
+import { ValidationError, UnprocessableEntityError } from '../utils/errors.ts';
+
+export const ALLOWED_CURRENCIES = ['BOB', 'USD', 'EUR'] as const;
+export type AllowedCurrency = (typeof ALLOWED_CURRENCIES)[number];
+
+export const isAllowedCurrency = (currency: string): currency is AllowedCurrency => {
+  return ALLOWED_CURRENCIES.includes((currency || '').trim().toUpperCase() as AllowedCurrency);
+};
+
+export const validateCurrency = (currency: string, fieldName: string = 'Moneda'): AllowedCurrency => {
+  const upper = (currency || '').trim().toUpperCase();
+  if (!isAllowedCurrency(upper)) {
+    throw new UnprocessableEntityError(`${fieldName} "${currency}" no está autorizada. Monedas permitidas: BOB, USD, EUR.`);
+  }
+  return upper as AllowedCurrency;
+};
 
 export interface CurrencyConversionResult {
   originalAmount: number;
@@ -21,9 +36,9 @@ export const convertCurrency = (
     throw new ValidationError('El monto a convertir no puede ser negativo.');
   }
 
+  const orig = validateCurrency(originalCurrency, 'Moneda original');
+  const target = validateCurrency(targetCurrency, 'Moneda de consolidación base');
   const rateDate = new Date();
-  const orig = (originalCurrency || 'USD').toUpperCase();
-  const target = (targetCurrency || 'USD').toUpperCase();
 
   // Si ambas monedas son iguales, tasa forzada a 1 (Paridad)
   if (orig === target) {

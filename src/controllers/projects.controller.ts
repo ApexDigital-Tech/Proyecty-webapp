@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts';
 import { withTenantContext, withRlsValidation } from '../utils/dbWrapper.ts';
 import { calculatePhysicalProgress } from '../services/schedule.service.ts';
+import { validateCurrency } from '../services/currency.service.ts';
 
 // Helper function from server.ts
 export async function verifyProjectTenant(projectId: number, tenantId: number): Promise<boolean> {
@@ -101,11 +102,13 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
       return res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Director o Manager.' });
     }
 
-    const { code, name, donor, approvedBudget, physicalProgress, financialProgress, nextMilestoneDate, nextMilestoneTitle, score, description } = req.body;
+    const { code, name, donor, approvedBudget, physicalProgress, financialProgress, nextMilestoneDate, nextMilestoneTitle, score, description, baseCurrency } = req.body;
 
     if (!code || !name || !donor || !approvedBudget) {
       return res.status(400).json({ error: 'Los campos Código, Nombre, Donante y Presupuesto son requeridos.' });
     }
+
+    const validatedBaseCurrency = baseCurrency ? validateCurrency(baseCurrency, 'Moneda base') : 'USD';
 
     // --- TRIAL RESTRICTIONS ENFORCEMENT ---
     const [currentOrg] = await db.select().from(organizations).where(eq(organizations.id, req.user!.tenantId)).limit(1);
@@ -164,6 +167,7 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
           nextMilestoneTitle: nextMilestoneTitle || 'Inicio de proyecto',
           score: score ? parseInt(score) : 100,
           description: description || '',
+          baseCurrency: validatedBaseCurrency,
         }).returning();
 
         const cp = newProject[0];
@@ -242,11 +246,23 @@ export const update = async (req: AuthRequest, res, next: NextFunction) => {
       }
     }
 
-    const { code, name, donor, approvedBudget, description } = req.body;
+    const { code, name, donor, approvedBudget, description, baseCurrency } = req.body;
+
+    // Check if it's a configuration update (e.g. baseCurrency)
+    if (baseCurrency && !code && !name && !donor) {
+      const validatedBaseCurrency = validateCurrency(baseCurrency, 'Moneda base');
+      const updated = await withTenantContext(req.user!.tenantId, async (tx) => {
+        return await tx.update(projects).set({ baseCurrency: validatedBaseCurrency }).where(eq(projects.id, projectId)).returning();
+      });
+      await logActivity(projectId, userName, `Actualizó la moneda base de consolidación a ${validatedBaseCurrency}`);
+      return res.status(200).json(updated[0]);
+    }
 
     if (!code || !name || !donor || !approvedBudget) {
       return res.status(400).json({ error: 'Los campos Código, Nombre, Donante y Presupuesto son requeridos.' });
     }
+
+    const validatedBaseCurrency = baseCurrency ? validateCurrency(baseCurrency, 'Moneda base') : undefined;
 
     try {
       const updatedProject = await withTenantContext(req.user!.tenantId, async (tx) => {
@@ -265,14 +281,19 @@ export const update = async (req: AuthRequest, res, next: NextFunction) => {
           }
         }
 
+        const updateFields: any = {
+          code,
+          name,
+          donorId: finalDonorId,
+          approvedBudget: parseFloat(approvedBudget),
+          description: description || '',
+        };
+        if (validatedBaseCurrency) {
+          updateFields.baseCurrency = validatedBaseCurrency;
+        }
+
         const projectUpdate = await withRlsValidation(
-          tx.update(projects).set({
-            code,
-            name,
-            donorId: finalDonorId,
-            approvedBudget: parseFloat(approvedBudget),
-            description: description || '',
-          }).where(eq(projects.id, projectId)).returning()
+          tx.update(projects).set(updateFields).where(eq(projects.id, projectId)).returning()
         );
 
         return projectUpdate[0];
@@ -481,12 +502,14 @@ export const removeMembers = async (req: AuthRequest, res, next: NextFunction) =
 export const addAgreements = async (req: AuthRequest, res, next: NextFunction) => {
   try {
     const projectId = parseInt(req.params.projectId);
-    const { counterparty, signedDate, amount, durationMonths, startDate, endDate } = req.body;
+    const { counterparty, signedDate, amount, durationMonths, startDate, endDate, currency } = req.body;
     const { name: userName } = req.user!;
 
     if (!counterparty || !signedDate || !amount || !durationMonths) {
       return res.status(400).json({ error: 'Campos requeridos incompletos.' });
     }
+
+    const validatedCurrency = currency ? validateCurrency(currency, 'Moneda del convenio') : 'USD';
 
     if (!(await verifyProjectTenant(projectId, req.user!.tenantId))) {
       return res.status(403).json({ error: 'Acceso denegado a este proyecto.' });
@@ -496,8 +519,9 @@ export const addAgreements = async (req: AuthRequest, res, next: NextFunction) =
       return await tx.insert(agreements).values({
         projectId,
         counterparty,
-        signedDate,
+        signedDate: new Date(signedDate),
         amount: parseFloat(amount),
+        currency: validatedCurrency,
         durationMonths: parseInt(durationMonths),
         startDate: startDate || signedDate,
         endDate: endDate || 'Por definir',
@@ -651,15 +675,17 @@ export const addExpenses = async (req: AuthRequest, res, next: NextFunction) => 
       description 
     } = req.body;
 
+    const validatedOriginalCurrency = validateCurrency(originalCurrency || 'BOB', 'Moneda original');
+
     const newExpense = await withTenantContext(req.user!.tenantId, async (tx) => {
       return await tx.insert(expenses).values({
         tenantId,
         projectId: parseInt(projectId),
         budgetLineId: parseInt(budgetLineId),
-        amount: originalAmount, // legacy fallback for now
-        currency: originalCurrency, // legacy fallback for now
+        amount: originalAmount,
+        currency: validatedOriginalCurrency,
         originalAmount,
-        originalCurrency,
+        originalCurrency: validatedOriginalCurrency,
         exchangeRate: exchangeRate || 1,
         baseAmount,
         exchangeRateSource,
