@@ -1,15 +1,28 @@
 # 📊 Estado del Sprint y Roadmap de Desarrollo
-*Última actualización: 24 de Agosto de 2026 (Cierre Formal de Fase 3 — Ola 3: `v1.3.2-wave-3-fix`)*
+*Última actualización: 25 de Agosto de 2026 (Cierre Formal de Fase 3 — Ola 4: `v1.4.2-wave-4-fix`)*
 
 ---
 
 ## 🎯 Resumen Ejecutivo
 
-- **Fase Actual**: Fase 3 — Ola 3 (Operaciones y Gobierno Documental: M-07, M-12, M-13) ✅ **SUBSANADO Y SINCRONIZADO EN PRODUCCIÓN**
-- **Siguiente Hito**: Fase 3 — Ola 4 (Cierre de Fase: M-02 Dashboard Ejecutivo y M-14 Reportes Financieros)
-- **Tag Oficial de Producción**: `v1.3.2-wave-3-fix`
-- **Estado de Regresión Global**: **113/113 Tests PASSED (100%)** (Ola 1: 35/35, Ola 2: 43/43, Ola 3: 35/35)
-- **Salud del Despliegue (Render)**: `/api/health` 200 OK, BD conectada (31 ms), RSS 136 MB, Sincronización Transaccional Multisuperficie: 75% exacta (Portafolio, Ficha, Cronograma y DB).
+- **Fase Actual**: Fase 3 — Ola 4 (Reportabilidad Ejecutiva, Dashboard y Exportaciones: M-02, M-14) ✅ **COMPLETADO, SUBSANADO Y VERIFICADO EN PRODUCCIÓN**
+- **Tag Oficial de Producción**: `v1.4.2-wave-4-fix`
+- **Commit Oficial**: `098b945`
+- **Estado de Regresión Global**: **163/163 Tests PASSED (100%)** (Ola 1: 35/35, Ola 2: 43/43, Ola 3: 35/35, Ola 4: 50/50)
+- **Salud del Despliegue (Render)**: `/api/health` 200 OK, PostgreSQL conectado, latencia de BD 2-4 ms, memoria RSS 135-150 MB, Conciliación Total en Tenant Demo: USD 150k presupuesto, USD 57k ejecutado (4 gastos aprobados), USD 93k disponible, 38% financiero, 75% físico, USD 150k desembolsos pendientes y 0 fixtures residuales.
+
+---
+
+## Auditoría AUD-PROY-001 — Fase 3 (Ola 4: Reportabilidad Ejecutiva, Dashboard y Exportaciones)
+
+| Campo | Detalle |
+|---|---|
+| **Estado** | ✅ COMPLETADO, SUBSANADO INTEGRALMENTE Y ETIQUETADO (`v1.4.2-wave-4-fix`) |
+| **Módulos Canónicos** | `M-02` (Dashboard Ejecutivo y Métricas Globales), `M-14` (Reportes Ejecutivos/Financieros, Citas, CSV Seguro y PDF Estándar) |
+| **Control M-02 (Dashboard Ejecutivo)** | • **Conciliación Financiera Directa:** `totalExecuted` suma exclusivamente gastos `APPROVED`. `availableBalance = max(0, totalBudget - totalExecuted)`. `avgFinancial = (totalExecuted / totalBudget) * 100`.<br>• **Avance Físico Global Ponderado:** `avgPhysical = sum(physicalProgress * approvedBudget) / totalApprovedBudget`.<br>• **Alerta de Brecha Operativa:** Detección de proyectos con `|físico - financiero| > 15%` y riesgo alto.<br>• **`M02-DISB-01` (Desembolsos Canónicos):** `pendingDisbursementsAmount = max(0, totalCommittedAgreements - totalPaidDisbursed)`. Verificado para desembolso cero ($150k), parcial ($100k) y completo ($0).<br>• **Alcance RBAC:** `assigned` para Responsable de Proyecto y Financiador vinculado; global para Director, Manager, Finance y Auditor.<br>• **Rendimiento `PERF-02`:** P95 < 0.2 ms; rate limiter ampliado a `max: 1000` por 15 min y unificado en `server.ts` (**14/14 tests**). |
+| **Control M-14 (Reportes & Exportaciones)** | • **Versionado & Segregación:** Borradores correlativos (`V1`, `V2`), bloqueo de autoaprobación (`created_by != approved_by`), inmutabilidad de `APPROVED` y transición automática a `SUPERSEDED`.<br>• **`M14-PDF-02` (Generación de PDF Estándar con `pdf-lib`):** Generación de documentos binarios conformes a especificación estándar con árbol `/Catalog -> /Pages -> /Page`, metadatos completos, paginación A4, texto extraíble y validación por parser estructural `PDFDocument.load()`.<br>• **Seguridad CSV (RFC 4180 + Anti-Fórmulas):** Neutralización de prefijos `=`, `+`, `-`, `@`, `\t`, `\r` y espacios iniciales con apóstrofe, UTF-8 con BOM (`\uFEFF`) y hash SHA-256.<br>• **Trazabilidad IA:** Citas obligatorias `[Gasto #ID]`, flag `requiresHumanReview: true` y fallback determinista auditado (**32/32 tests**). |
+| **Descontaminación Tenant Demo** | Restauración exclusiva al proyecto institucional `PRJ-DEMO-2026` con 4 partidas activas ($150k presupuesto, $57k ejecutado en 4 gastos aprobados, $93k disponible, 38% financiero, 75% físico, $150k desembolso pendiente y 0 fixtures residuales) (**4/4 tests**). |
+| **Verificación Técnica** | • Suite Ola 4 `tests/ola4-executive-reporting.test.ts` (**50/50 PASSED**).<br>• Regresión Ola 3 `tests/ola3-operations-governance.test.ts` (**35/35 PASSED**).<br>• Regresión Ola 2 `tests/ola2-financial-integrity.test.ts` (**43/43 PASSED**).<br>• Regresión Ola 1 `tests/ola1-security-structure.test.ts` (**35/35 PASSED**).<br>• **Total Consolidado:** **163/163 PASSED (100%)**.<br>• Build limpio `npm run build` y tag oficial `v1.4.2-wave-4-fix`. |
 
 ---
 
