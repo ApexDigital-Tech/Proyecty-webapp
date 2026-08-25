@@ -2,6 +2,34 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-25] Hito: Observaciones Preliminares de Prueba VOSERDEM — Portada Profesional, Monedas Autorizadas (BOB/USD/EUR) y Reseteo OAuth
+
+### Resumen Consolidado y Decisiones Arquitectónicas
+1. **Portada de Acceso Profesional (`src/components/Login.tsx`):**
+   - **Saneamiento Público:** Eliminados de la vista principal todos los perfiles ficticios/demo (Gonzalo Alfaro, Rodrigo Gómez, Karla Martínez, Andrés Peña, Representante USAID), el panel "Probar con un rol demo" y leyendas técnicas desactualizadas.
+   - **Elementos Autorizados en Portada:** Identidad y branding PROYECTY, botón destacado "Continuar con Google", opción de acceso seguro "Continuar con correo" (Magic Link / OTP de un solo uso), modal de Aviso de Privacidad y modal del Centro de Soporte Institucional (`soporte@proyecty.org`).
+   - **Versión Oficial:** `PROYECTY v1.5.0 • Plataforma Institucional SaaS`.
+   - **Aislamiento de Modo Demo:** El catálogo y botones de inicio de sesión de roles demo institucionales quedan estrictamente confinados a la ruta interna protegida `/internal-demo` (o parámetro `mode=internal-demo`).
+2. **Monedas Autorizadas (BOB, USD, EUR):**
+   - Eliminación estricta de monedas no autorizadas (`MXN`, `COP`, `ARS`, `BRL`, `CLP`, `PEN`, `UYU`).
+   - Monedas autorizadas canónicas exportadas en `src/types.ts` (`AUTHORIZED_CURRENCIES`):
+     - `BOB — Boliviano` (predeterminada para nuevos gastos en VOSERDEM)
+     - `USD — Dólar estadounidense` (financiamientos y convenios internacionales)
+     - `EUR — Euro`
+   - Validación y conversión: Exigencia de tasa de cambio positiva, fuente y fecha de cotización cuando la moneda original difiere de la moneda de consolidación del proyecto. Redondeo y precisión matemática a dos decimales.
+3. **Reinicio Controlado de Identidad OAuth (`scripts/reset-oauth-identity.ts`):**
+   - Procedimiento automatizado para permitir pruebas limpias de incorporación en modo incógnito.
+   - Snapshot inmutable `before_state` capturado en auditoría.
+   - Desvinculación de UID Google previo (`uid` restablecido a `preauth-rolangutiali.rg@gmail.com`) sin borrar el registro de usuario.
+   - Preservación de la preautorización en `ORG-TRIAL-VOSERDEM` con rol `DIRECTOR`.
+   - Registro de la operación en `audit_logs` con trazabilidad completa.
+4. **Registro de Revisión de Módulo Financiero (`UX-FIN-01`):**
+   - Registrado como ítem pendiente de validación continua por Dirección (presupuesto, partidas, convenios, desembolsos, gastos, comprobantes, tasas de cambio, autoaprobación, saldos y reportes financieros).
+5. **Estado de Entrega:**
+   - No se ha enviado el acceso a Miroslava Romero ni ejecutado el rollback definitivo de Rolando Gutiérrez; el entorno se mantiene disponible para continuar las evaluaciones de Dirección.
+
+---
+
 ## [2026-08-25] Hito: Estabilización, Normalización de Usuarios y Habilitación del Entorno Privado VOSERDEM (v1.5.0-voserdem-trial)
 
 ### Resumen Consolidado y Decisiones Arquitectónicas
