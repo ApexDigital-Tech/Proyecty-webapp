@@ -254,8 +254,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
   ]);
 
-  // 6. Seed Tasks
-  await db.insert(tasks).values([
+  // 6. Seed Tasks con pesos, progreso y dependencias explícitas (M-07)
+  const insertedTasks = await db.insert(tasks).values([
     {
       tenantId: orgId,
       projectId,
@@ -267,6 +267,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       createdBy: directorUser.dbId,
       startDate: new Date('2026-02-01T00:00:00Z'),
       dueDate: new Date('2026-03-15T00:00:00Z'),
+      weight: 50,
+      progress: 100,
       position: 0,
     },
     {
@@ -280,9 +282,22 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       createdBy: directorUser.dbId,
       startDate: new Date('2026-04-01T00:00:00Z'),
       dueDate: new Date('2026-09-30T00:00:00Z'),
+      weight: 50,
+      progress: 50,
       position: 1,
     },
-  ]);
+  ]).returning();
+
+  // Dependencia: La tarea 2 depende de la tarea 1
+  if (insertedTasks.length >= 2) {
+    await db.insert(taskDependencies).values({
+      taskId: insertedTasks[1].id,
+      dependsOnId: insertedTasks[0].id,
+    });
+  }
+
+  // Actualizar avance físico del proyecto demo: (50*100 + 50*50)/100 = 75%
+  await db.update(projects).set({ physicalProgress: 75 }).where(eq(projects.id, projectId));
 
   // 7. Log audit event
   await db.insert(auditLogs).values({
