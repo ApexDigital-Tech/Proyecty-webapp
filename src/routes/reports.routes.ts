@@ -16,8 +16,9 @@ import {
 
 const router = Router();
 
-// M-02: Dashboard ejecutivo
+// M-02: Dashboard ejecutivo (ruta canónica /api/dashboard/metrics y alias /api/reports/dashboard/metrics)
 router.get('/dashboard/metrics', requireAuth, getDashboardMetrics);
+router.get('/reports/dashboard/metrics', requireAuth, getDashboardMetrics);
 
 // M-14: Ciclo de vida y versionado de reportes
 router.post('/reports/drafts', requireAuth, createDraftReportHandler);

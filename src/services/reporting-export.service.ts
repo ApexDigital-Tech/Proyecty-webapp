@@ -69,40 +69,159 @@ export function generateSafeCsv(headers: string[], rows: any[][]): { buffer: Buf
   return { buffer: finalBuffer, sha256 };
 }
 
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+
 /**
- * Genera buffer de documento PDF estructurado en memoria.
+ * Genera buffer de documento PDF estructurado en memoria conforme a la norma PDF-1.4/1.7
+ * utilizando pdf-lib para garantizar árbol /Catalog -> /Pages -> /Page válido, texto extraíble y metadatos.
  */
-export function generateStructuredPdf(
+export async function generateStructuredPdf(
   orgName: string,
   projectInfo: { code: string; name: string } | null,
   reportType: string,
   versionNumber: number,
   contentMarkdown: string,
   financialSummary?: Record<string, any>
-): { buffer: Buffer; sha256: string } {
-  // Construir documento PDF con estructura binaria válida y texto extraíble
-  const timestampStr = new Date().toISOString();
-  const title = `PROYECTY — REPORTE OFICIAL ${reportType} (V${versionNumber})`;
-  const subtitle = projectInfo ? `Proyecto: [${projectInfo.code}] ${projectInfo.name}` : `Reporte Institucional: ${orgName}`;
+): Promise<{ buffer: Buffer; sha256: string }> {
+  const pdfDoc = await PDFDocument.create();
   
-  let bodyText = `${title}\n${subtitle}\nOrganización: ${orgName}\nFecha Emisión: ${timestampStr}\n\n`;
+  const title = `PROYECTY - REPORTE OFICIAL ${reportType} (V${versionNumber})`;
+  pdfDoc.setTitle(title);
+  pdfDoc.setAuthor(orgName);
+  pdfDoc.setSubject(`Reporte Ejecutivo Oficial ${reportType}`);
+  pdfDoc.setCreator('Proyecty Platform');
+  pdfDoc.setProducer('pdf-lib');
+  pdfDoc.setCreationDate(new Date());
+
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  // Formato A4 estándar (595.28 x 841.89 pt)
+  const page = pdfDoc.addPage([595.28, 841.89]);
+  const { width, height } = page.getSize();
+  const margin = 50;
+  let y = height - margin;
+
+  // Encabezado decorativo institucional
+  page.drawRectangle({
+    x: margin,
+    y: y - 35,
+    width: width - 2 * margin,
+    height: 40,
+    color: rgb(0.12, 0.23, 0.38),
+  });
+
+  page.drawText('PROYECTY - GESTION Y FISCALIZACION EJECUTIVA', {
+    x: margin + 15,
+    y: y - 22,
+    size: 13,
+    font: helveticaBold,
+    color: rgb(1, 1, 1),
+  });
+
+  y -= 60;
+
+  // Título del reporte
+  page.drawText(title, {
+    x: margin,
+    y,
+    size: 12,
+    font: helveticaBold,
+    color: rgb(0.1, 0.1, 0.1),
+  });
+  y -= 18;
+
+  // Subtítulo e información de proyecto / organización
+  const subtitle = projectInfo 
+    ? `Proyecto: [${projectInfo.code}] ${projectInfo.name}` 
+    : `Reporte Institucional Global: ${orgName}`;
   
-  if (financialSummary) {
-    bodyText += `RESUMEN FINANCIERO:\n`;
-    for (const [k, v] of Object.entries(financialSummary)) {
-      bodyText += `- ${k}: ${v}\n`;
+  page.drawText(subtitle.length > 80 ? subtitle.slice(0, 77) + '...' : subtitle, {
+    x: margin,
+    y,
+    size: 10,
+    font: helveticaBold,
+    color: rgb(0.2, 0.4, 0.7),
+  });
+  y -= 15;
+
+  page.drawText(`Organizacion: ${orgName} | Fecha Emision: ${new Date().toISOString()}`, {
+    x: margin,
+    y,
+    size: 8.5,
+    font: helvetica,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+  y -= 25;
+
+  // Resumen financiero tabular si existe
+  if (financialSummary && Object.keys(financialSummary).length > 0) {
+    page.drawText('RESUMEN FINANCIERO CONCILIADO:', {
+      x: margin,
+      y,
+      size: 10.5,
+      font: helveticaBold,
+      color: rgb(0.15, 0.15, 0.15),
+    });
+    y -= 15;
+
+    for (const [key, val] of Object.entries(financialSummary)) {
+      if (y < margin + 60) break;
+      const entryText = `* ${key}: ${String(val)}`;
+      page.drawText(entryText.length > 85 ? entryText.slice(0, 82) + '...' : entryText, {
+        x: margin + 8,
+        y,
+        size: 9,
+        font: helvetica,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 13;
     }
-    bodyText += `\n`;
+    y -= 15;
   }
-  
-  bodyText += `CONTENIDO Y DICTAMEN:\n${contentMarkdown}\n\n`;
-  bodyText += `--- FIN DEL REPORTE OFICIAL (Página 1 de 1) ---`;
 
-  const pdfStream = `%PDF-1.4\n1 0 obj\n<< /Title (${title}) /Author (${orgName}) /CreationDate (D:${timestampStr.replace(/[-:T]/g, '').slice(0, 14)}) >>\nendobj\n2 0 obj\n<< /Length ${Buffer.byteLength(bodyText, 'utf-8')} >>\nstream\n${bodyText}\nendstream\nendobj\nxref\n0 3\n0000000000 65535 f \n0000000010 00000 n \n0000000110 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n${Buffer.byteLength(bodyText, 'utf-8') + 150}\n%%EOF`;
+  // Contenido y Dictamen
+  page.drawText('CONTENIDO Y DICTAMEN AUDITADO:', {
+    x: margin,
+    y,
+    size: 10.5,
+    font: helveticaBold,
+    color: rgb(0.15, 0.15, 0.15),
+  });
+  y -= 15;
 
-  const buffer = Buffer.from(pdfStream, 'utf-8');
+  const rawLines = contentMarkdown.split('\n');
+  for (const line of rawLines) {
+    if (y < margin + 40) break;
+    const cleanLine = line.replace(/^[#*-]+\s*/, '').trim();
+    if (!cleanLine) {
+      y -= 6;
+      continue;
+    }
+    const truncated = cleanLine.length > 90 ? cleanLine.slice(0, 87) + '...' : cleanLine;
+    page.drawText(truncated, {
+      x: margin + 8,
+      y,
+      size: 8.5,
+      font: helvetica,
+      color: rgb(0.25, 0.25, 0.25),
+    });
+    y -= 12;
+  }
+
+  // Pie de página oficial
+  page.drawText('Pagina 1 de 1 - Documento oficial emitido con hash SHA-256 e inmutabilidad auditada', {
+    x: margin,
+    y: margin - 15,
+    size: 8,
+    font: helvetica,
+    color: rgb(0.5, 0.5, 0.5),
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  const buffer = Buffer.from(pdfBytes);
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-  
+
   return { buffer, sha256 };
 }
 
@@ -318,7 +437,7 @@ export async function approveReport(
       if (p) projInfo = { code: p.code, name: p.name };
     }
 
-    const { sha256: pdfSha } = generateStructuredPdf(
+    const { sha256: pdfSha } = await generateStructuredPdf(
       org?.name || 'Proyecty Org',
       projInfo,
       report.reportType,

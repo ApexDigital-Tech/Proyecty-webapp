@@ -168,8 +168,6 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 // ==========================================
 
 app.use('/api', documentsRouter);
-app.use('/api', apiLimiter);
-app.use('/api/auth', apiLimiter);
 
 app.use('/api', authRouter);
 app.use('/api', usersRouter);

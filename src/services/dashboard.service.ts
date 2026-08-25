@@ -140,7 +140,7 @@ export async function getDashboardMetricsForUser(
         or(eq(expenses.status, 'approved'), eq(expenses.status, 'APPROVED'))
       )
     ),
-    db.select({ id: agreements.id })
+    db.select({ id: agreements.id, amount: agreements.amount, projectId: agreements.projectId })
       .from(agreements)
       .where(and(inArray(agreements.projectId, projectIds), eq(agreements.status, 'Activo')))
   ]);
@@ -224,17 +224,35 @@ export async function getDashboardMetricsForUser(
   const avgScore = pCount > 0 ? Math.round(totalScoreSum / pCount) : 0;
   const availableBalance = Math.max(0, totalApprovedBudget - totalExecuted);
 
-  // 5. Desembolsos pendientes
+  // 5. Desembolsos pendientes (M02-DISB-01)
+  // Fórmula canónica: Monto comprometido en convenios activos menos desembolsos efectivamente pagados (PAGADO)
   let pendingDisbursementsCount = 0;
   let pendingDisbursementsAmount = 0;
 
   const agrIds = activeAgreements.map(a => a.id);
   if (agrIds.length > 0) {
-    const pendingDisbs = await db.select({ amount: disbursements.amount }).from(disbursements).where(
-      and(inArray(disbursements.agreementId, agrIds), eq(disbursements.status, 'PENDIENTE'))
-    );
-    pendingDisbursementsCount = pendingDisbs.length;
-    pendingDisbursementsAmount = pendingDisbs.reduce((sum, d) => sum + Number(d.amount), 0);
+    const allDisbs = await db.select({
+      id: disbursements.id,
+      agreementId: disbursements.agreementId,
+      amount: disbursements.amount,
+      status: disbursements.status
+    }).from(disbursements).where(inArray(disbursements.agreementId, agrIds));
+
+    const totalCommittedAgreements = activeAgreements.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+    const totalPaidDisbursed = allDisbs
+      .filter(d => d.status === 'PAGADO' || d.status === 'pagado')
+      .reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
+    pendingDisbursementsAmount = Math.max(0, totalCommittedAgreements - totalPaidDisbursed);
+
+    const pendingDisbRows = allDisbs.filter(d => d.status === 'PENDIENTE' || d.status === 'ATRASADO');
+    if (pendingDisbRows.length > 0) {
+      pendingDisbursementsCount = pendingDisbRows.length;
+    } else if (pendingDisbursementsAmount > 0) {
+      pendingDisbursementsCount = activeAgreements.filter(a => Number(a.amount) > 0).length;
+    } else {
+      pendingDisbursementsCount = 0;
+    }
   }
 
   const result: DashboardMetricsDto = {

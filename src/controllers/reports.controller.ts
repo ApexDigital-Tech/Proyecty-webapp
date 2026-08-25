@@ -346,7 +346,7 @@ export const exportReportsPdf = async (req: AuthRequest, res: Response, next: Ne
     const reportTitle = type ? String(type).toUpperCase() : 'EJECUTIVO';
     const content = `Reporte oficial de seguimiento y fiscalización financiera emitido para la organización ${org?.name || 'Proyecty'}. Toda cifra está respaldada por registros transaccionales auditados en PostgreSQL.`;
 
-    const { buffer, sha256 } = generateStructuredPdf(
+    const { buffer, sha256 } = await generateStructuredPdf(
       org?.name || 'Proyecty Org',
       projInfo,
       reportTitle,

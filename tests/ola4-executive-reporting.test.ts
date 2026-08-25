@@ -29,12 +29,13 @@ import {
   sanitizeCsvField,
   validateProjectScope
 } from '../src/services/reporting-export.service.ts';
+import { PDFDocument } from 'pdf-lib';
 import { generateFinancialReport } from '../src/services/ai.service.ts';
 import { exportReportsPdf, exportReportsCsv } from '../src/controllers/reports.controller.ts';
 
 async function runOla4ExhaustiveSuite() {
   console.log('================================================================');
-  console.log('📊 SUITE EXHAUSTIVA DE AUDITORÍA OLA 4 (v1.4.0-wave-4-final)');
+  console.log('📊 SUITE EXHAUSTIVA DE AUDITORÍA OLA 4 (v1.4.2-wave-4-fix)');
   console.log('   Módulos Canónicos: M-02 (Dashboard Ejecutivo y Métricas Globales)');
   console.log('   M-14 (Reportes Ejecutivos/Financieros, Citas, CSV Seguro y PDF)');
   console.log('================================================================\n');
@@ -299,7 +300,7 @@ async function runOla4ExhaustiveSuite() {
     }
   ]);
 
-  // Convenio y Desembolso Pendiente en P1
+  // Convenio Activo en P1 ($200,000)
   const [agrP1] = await db.insert(agreements).values({
     projectId: project1.id,
     counterparty: donorA.name,
@@ -312,15 +313,6 @@ async function runOla4ExhaustiveSuite() {
     endDate: new Date('2026-12-31'),
     remainingDays: 180,
   }).returning();
-
-  await db.insert(disbursements).values({
-    agreementId: agrP1.id,
-    milestoneTitle: 'Primer Desembolso',
-    estimatedDate: new Date('2026-03-01'),
-    amount: 50000,
-    condition: 'Aprobación de informe inicial',
-    status: 'PENDIENTE',
-  });
 
   // -------------------------------------------------------------------------
   // 1. M-02: Dashboard Ejecutivo, Fórmulas Matemáticas y Alertas
@@ -351,11 +343,48 @@ async function runOla4ExhaustiveSuite() {
     'M-02 Alerta de Brecha: Detección reactiva de brecha física/financiera > 15% (P1 alertado con gap 20%)'
   );
 
-  // 1.3 Desembolsos Pendientes
+  // 1.3 M02-DISB-01: Desembolsos Pendientes (Cero, Parcial y Completo)
+  // Caso A: Desembolso Cero (Convenio $200,000 sin desembolsos pagados)
   testAssert(
-    metricsDir.pendingDisbursementsCount === 1 && metricsDir.pendingDisbursementsAmount === 50000,
-    'M-02 Desembolsos: Cálculo agregado de desembolsos PENDIENTES desde convenios activos ($50,000)'
+    metricsDir.pendingDisbursementsCount === 1 && metricsDir.pendingDisbursementsAmount === 200000,
+    'M-02 / M02-DISB-01 Desembolso Cero: Monto comprometido $200,000 pendiente de desembolso'
   );
+
+  // Caso B: Desembolso Parcial (Se paga hito de $50,000 -> Pendiente $150,000)
+  const [d1] = await db.insert(disbursements).values({
+    agreementId: agrP1.id,
+    milestoneTitle: 'Hito 1 Parcial',
+    estimatedDate: new Date('2026-03-01'),
+    amount: 50000,
+    condition: 'Aprobación inicial',
+    status: 'PAGADO',
+  }).returning();
+  invalidateDashboardCache(tenantId);
+  const metricsPartialDisb = await getDashboardMetricsForUser(tenantId, userDirector.id, 'DIRECTOR');
+  testAssert(
+    metricsPartialDisb.pendingDisbursementsAmount === 150000,
+    'M-02 / M02-DISB-01 Desembolso Parcial: Monto pendiente se actualiza aritméticamente a $150,000 ($200k - $50k)'
+  );
+
+  // Caso C: Desembolso Completo (Se paga resto de $150,000 -> Pendiente $0)
+  const [d2] = await db.insert(disbursements).values({
+    agreementId: agrP1.id,
+    milestoneTitle: 'Hito 2 Final',
+    estimatedDate: new Date('2026-06-01'),
+    amount: 150000,
+    condition: 'Cierre de fase',
+    status: 'PAGADO',
+  }).returning();
+  invalidateDashboardCache(tenantId);
+  const metricsFullDisb = await getDashboardMetricsForUser(tenantId, userDirector.id, 'DIRECTOR');
+  testAssert(
+    metricsFullDisb.pendingDisbursementsAmount === 0 && metricsFullDisb.pendingDisbursementsCount === 0,
+    'M-02 / M02-DISB-01 Desembolso Completo: Monto pendiente llega exactamente a $0 y 0 hitos pendientes'
+  );
+
+  // Limpiar desembolsos de prueba para mantener estado limpio
+  await db.delete(disbursements).where(inArray(disbursements.id, [d1.id, d2.id]));
+  invalidateDashboardCache(tenantId);
 
   // 1.4 Manejo Seguro de Estados Vacíos (Tenant sin proyectos)
   const metricsEmpty = await getDashboardMetricsForUser(otherTenantId, 999, 'DIRECTOR');
@@ -521,22 +550,30 @@ async function runOla4ExhaustiveSuite() {
   const hasBom = csvBuf[0] === 0xEF && csvBuf[1] === 0xBB && csvBuf[2] === 0xBF;
   testAssert(hasBom && csvSha.length === 64, 'M-14 CSV: Codificación UTF-8 con BOM validada en buffer binario y SHA-256');
 
-  // 3.3 Validación de PDF Estructurado en Memoria
-  const { buffer: pdfBuf, sha256: pdfSha } = generateStructuredPdf(
+  // 3.3 M14-PDF-02: Validación Estructural de PDF con pdf-lib (Parser Estándar)
+  const { buffer: pdfBuf, sha256: pdfSha } = await generateStructuredPdf(
     'Organización de Prueba',
     { code: project1.code, name: project1.name },
     'FINANCIAL',
     1,
-    'Contenido financiero auditado con citas [Gasto #1].',
-    { 'Presupuesto Total': '$200,000 USD' }
+    'Contenido financiero auditado con citas [Gasto #1]. Toda cifra transaccional verificada.',
+    { 'Presupuesto Total': '$200,000 USD', 'Ejecución': '$120,000 USD' }
   );
   
-  const pdfString = pdfBuf.toString('utf-8');
-  const isValidPdf = pdfString.startsWith('%PDF-1.4') && 
-                     pdfString.includes('Organización de Prueba') && 
-                     pdfString.includes(project1.code) &&
-                     pdfString.includes('%%EOF');
-  testAssert(isValidPdf && pdfSha.length === 64, 'M-14 PDF: Buffer PDF válido con metadatos, texto extraíble, paginación y SHA-256');
+  // Parsear el PDF generado con PDFDocument.load para certificar validez estructural
+  const loadedPdf = await PDFDocument.load(pdfBuf);
+  const pageCount = loadedPdf.getPageCount();
+  const pdfTitle = loadedPdf.getTitle();
+  const pdfAuthor = loadedPdf.getAuthor();
+  const pdfProducer = loadedPdf.getProducer();
+  console.log(`  🔍 PDF Inspection: Pages=${pageCount}, Title="${pdfTitle}", Author="${pdfAuthor}", Producer="${pdfProducer}", SHA=${pdfSha.slice(0, 16)}...`);
+  testAssert(
+    pageCount >= 1 && 
+    pdfTitle?.includes('PROYECTY') && 
+    pdfAuthor === 'Organización de Prueba' &&
+    pdfSha.length === 64,
+    'M-14 / M14-PDF-02: PDF validado estructuralmente por parser (árbol /Catalog -> /Pages -> /Page, metadatos, páginas >= 1 y SHA-256)'
+  );
 
   // -------------------------------------------------------------------------
   // 4. M-14: Trazabilidad IA con Citas [Gasto #ID] y Fallback Estructurado
@@ -638,6 +675,10 @@ async function runOla4ExhaustiveSuite() {
   testAssert(demoMetrics.avgFinancial === 38, 'M-02 Demo Conciliación: Avance financiero global es exactamente 38%');
   testAssert(demoMetrics.avgPhysical === 75, 'M-02 Demo Conciliación: Avance físico global es exactamente 75%');
   testAssert(
+    demoMetrics.pendingDisbursementsAmount === 150000 && demoMetrics.pendingDisbursementsCount === 1,
+    'M-02 / M02-DISB-01 Demo Conciliación: Desembolsos pendientes son exactamente USD 150,000 (Convenio $150k - Desembolsado $0)'
+  );
+  testAssert(
     demoMetrics.projectsList.length === 1 && 
     demoMetrics.projectsList[0].financialProgress === 38 &&
     demoMetrics.projectsList[0].physicalProgress === 75,
@@ -666,16 +707,21 @@ async function runOla4ExhaustiveSuite() {
   const hasNoTestLines = !demoCsvContent.includes('BL-OLA4-01') && !demoCsvContent.includes('BL-TEST');
   testAssert(hasAllDemoLines && hasNoTestLines, 'M-14 Demo CSV: Exportación contiene única y exclusivamente las 4 partidas activas de PRJ-DEMO-2026');
 
-  // 7.3 Verificación de PDF en Tenant Demo
+  // 7.3 Verificación de PDF en Tenant Demo (Validación Estructural por Parser)
   const demoPdfReq: any = {
     user: { id: demoDirectorUser.id, tenantId: demoOrgId, role: 'DIRECTOR' },
     query: { type: 'financiero' }
   };
   const demoPdfRes = createMockRes();
   await exportReportsPdf(demoPdfReq, demoPdfRes as any, (() => {}) as any);
+  const demoLoadedPdf = await PDFDocument.load(demoPdfRes.body);
+  const demoPageCount = demoLoadedPdf.getPageCount();
+
   testAssert(
-    demoPdfRes.statusCode === 200 && demoPdfRes.headers['Content-Type'] === 'application/pdf',
-    'M-14 Demo PDF: Exportación PDF del tenant demo responde exitosamente HTTP 200'
+    demoPdfRes.statusCode === 200 && 
+    demoPdfRes.headers['Content-Type'] === 'application/pdf' &&
+    demoPageCount >= 1,
+    'M-14 / M14-PDF-02 Demo PDF: Exportación PDF responde HTTP 200 con documento PDF estándar renderizable'
   );
 
   const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
@@ -683,7 +729,7 @@ async function runOla4ExhaustiveSuite() {
   testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a PRJ-DEMO-2026 (0 fixtures residuales)');
 
   console.log('\n================================================================');
-  console.log(`📊 RESULTADOS FINALES OLA 4 (v1.4.1-wave-4-fix): ${passed} PASSED | ${failed} FAILED`);
+  console.log(`📊 RESULTADOS FINALES OLA 4 (v1.4.2-wave-4-fix): ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');
 }
 
