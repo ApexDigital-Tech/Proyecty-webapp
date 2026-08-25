@@ -185,7 +185,7 @@ app.get('/api/health', async (req, res) => {
     
     res.status(200).json({
       status: 'healthy',
-      version: '1.5.0',
+      version: '1.5.1',
       timestamp: new Date().toISOString(),
       database: {
         status: 'connected',
@@ -283,6 +283,12 @@ app.use(errorHandler);
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api')) return next();
       if (req.path.startsWith('/assets')) return next();
+
+      // AUTH-DEMO-02: Block /internal-demo in production unless explicitly enabled
+      if (req.path === '/internal-demo' && process.env.ENABLE_INTERNAL_DEMO !== 'true') {
+        return res.redirect(302, '/');
+      }
+
       res.sendFile(path.join(clientDist, 'index.html'));
     });
   }

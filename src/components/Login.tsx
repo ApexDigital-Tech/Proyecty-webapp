@@ -330,7 +330,7 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
             </button>
           </div>
           <p className="text-[10px] font-mono text-slate-400">
-            PROYECTY v1.5.0 • Plataforma Institucional SaaS
+            PROYECTY v1.5.1 • Plataforma Institucional SaaS
           </p>
         </div>
 

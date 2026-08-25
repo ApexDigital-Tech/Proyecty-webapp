@@ -2,28 +2,36 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-25] Hito: Subsanación de Seguridad AUTH-DEMO-02 y Whitelist Monetaria Estricta Backend 422 (v1.5.1-voserdem-security-patch)
+## [2026-08-25] Hito: Cierre Subsanación v1.5.1 — CHECK Constraints PG, /internal-demo 302, Versión Unificada
 
 ### Resumen Consolidado y Decisiones Arquitectónicas
-1. **Subsanación de Seguridad Servidor (`AUTH-DEMO-02`):**
+1. **Subsanación de Seguridad Servidor (`AUTH-DEMO-02`) — CERRADO:**
    - **Middleware `requireDemoModeEnabled` (`src/middleware/demoGuard.ts`):** En entornos de producción (o cuando `ENABLE_INTERNAL_DEMO !== 'true'`), las rutas `/api/auth/demo-users`, `/api/auth/demo-session` y `/api/auth/demo-reset` son bloqueadas a nivel de servidor respondiendo **HTTP 404** (`DEMO_MODE_DISABLED`).
-   - **Enrutamiento Servidor (`server.ts`):** Peticiones a `/internal-demo` son bloqueadas/redirigidas por el servidor sin exponer recursos internos.
-   - **Saneamiento Frontend (`Login.tsx`):** Eliminada cualquier evaluación por parámetro de consulta URL (`?mode=internal-demo`) y purgado el catálogo de perfiles fallback predeterminado en cliente. La interfaz renderiza única y exclusivamente los controles institucionales autorizados.
+   - **Ruta `/internal-demo` (`server.ts`):** Redirige **HTTP 302** hacia `/` en producción cuando `ENABLE_INTERNAL_DEMO !== 'true'`. Contratos documentales corregidos.
+   - **Saneamiento Frontend (`Login.tsx`):** Eliminada cualquier evaluación por parámetro de consulta URL (`?mode=internal-demo`) y purgado el catálogo de perfiles fallback predeterminado en cliente.
 2. **Whitelist Monetaria Estricta en Backend y Base de Datos (HTTP 422):**
-   - Implementado `UnprocessableEntityError` (`statusCode: 422`) en `src/utils/errors.ts`.
-   - Implementado `validateCurrency` y `ALLOWED_CURRENCIES = ['BOB', 'USD', 'EUR']` en `src/services/currency.service.ts`.
-   - Controladores blindados (`src/controllers/projects.controller.ts`):
-     - `POST /api/projects/:id/expenses` rechaza monedas ajenas con **HTTP 422** (`UnprocessableEntityError`).
-     - `POST /api/projects` y `PUT/PATCH /api/projects/:id` validan `baseCurrency` con **HTTP 422**.
-     - `POST /api/projects/:id/agreements` valida `currency` con **HTTP 422**.
-3. **Verificación Automatizada Consolidada:**
-   - Suite de Subsanación `tests/voserdem-security-remediation.test.ts`: **8/8 PASSED (100%)**.
-   - Suite VOSERDEM `tests/voserdem-trial-verification.test.ts`: **26/26 PASSED (100%)**.
-   - Compilación y Build: `npx tsc --noEmit` (**0 errores**) y `npm run build` (**100% exitoso**).
-   - Tag oficial: `v1.5.1-voserdem-security-patch` apuntando a commit SHA `b3cb24cd5479dcaac7da961e4635cba3d22cad70`.
-   - Despliegue en Render verificado (`/api/health` HTTP 200, latencia DB 3 ms).
+   - Controladores blindados con `UnprocessableEntityError` (422) para `POST /api/projects`, `PATCH /api/projects/:id`, `POST /api/projects/:id/agreements` y `POST /api/projects/:id/expenses`.
+   - **CHECK constraints en PostgreSQL** aplicados mediante `scripts/migrate-currency-check.ts`:
+     - `chk_projects_base_currency_whitelist` — `projects.base_currency IN ('BOB','USD','EUR')`
+     - `chk_agreements_currency_whitelist` — `agreements.currency IN ('BOB','USD','EUR')`
+     - `chk_expenses_currency_whitelist` — `expenses.currency IN ('BOB','USD','EUR')`
+     - `chk_expenses_original_currency_whitelist` — `expenses.original_currency IS NULL OR IN ('BOB','USD','EUR')`
+     - `chk_receipts_vouchers_currency_whitelist` — `receipts_vouchers.currency IN ('BOB','USD','EUR')`
+   - Migración idempotente con pre-vuelo de violaciones y verificación funcional automatizada.
+3. **Sincronización de Versión `1.5.1`:**
+   - `package.json` → `1.5.1`
+   - `/api/health` → `version: '1.5.1'`
+   - `Login.tsx` footer → `PROYECTY v1.5.1`
+4. **Verificación Automatizada Consolidada:**
+   - Suite de Subsanación `tests/voserdem-security-remediation.test.ts`: **8/8 PASSED**.
+   - Suite VOSERDEM `tests/voserdem-trial-verification.test.ts`: **26/26 PASSED**.
+   - 5/5 CHECK constraints verificadas en `pg_constraint`.
+   - Tag oficial: `v1.5.1-voserdem-security-patch` (SHA: `b3cb24cd5479dcaac7da961e4635cba3d22cad70`).
+5. **Pendiente:**
+   - Prueba controlada de revinculación OAuth (`rolangutiali.rg@gmail.com`) — requiere acción de Dirección.
 
 ---
+
 
 ## [2026-08-25] Hito: Observaciones Preliminares de Prueba VOSERDEM — Portada Profesional, Monedas Autorizadas (BOB/USD/EUR) y Reseteo OAuth
 
@@ -31,7 +39,7 @@
 1. **Portada de Acceso Profesional (`src/components/Login.tsx`):**
    - **Saneamiento Público:** Eliminados de la vista principal todos los perfiles ficticios/demo (Gonzalo Alfaro, Rodrigo Gómez, Karla Martínez, Andrés Peña, Representante USAID), el panel "Probar con un rol demo" y leyendas técnicas desactualizadas.
    - **Elementos Autorizados en Portada:** Identidad y branding PROYECTY, botón destacado "Continuar con Google", opción de acceso seguro "Continuar con correo" (Magic Link / OTP de un solo uso), modal de Aviso de Privacidad y modal del Centro de Soporte Institucional (`soporte@proyecty.org`).
-   - **Versión Oficial:** `PROYECTY v1.5.0 • Plataforma Institucional SaaS`.
+   - **Versión Oficial:** `PROYECTY v1.5.1 • Plataforma Institucional SaaS`.
    - **Aislamiento de Modo Demo:** El catálogo y botones de inicio de sesión de roles demo institucionales quedan estrictamente confinados a la ruta interna protegida `/internal-demo` (o parámetro `mode=internal-demo`).
 2. **Monedas Autorizadas (BOB, USD, EUR):**
    - Eliminación estricta de monedas no autorizadas (`MXN`, `COP`, `ARS`, `BRL`, `CLP`, `PEN`, `UYU`).
