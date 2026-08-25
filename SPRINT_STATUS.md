@@ -1,7 +1,15 @@
-# PROYECTY — Sprint Status Board
+# 📊 Estado del Sprint y Roadmap de Desarrollo
+*Última actualización: 24 de Agosto de 2026 (Cierre Formal de Fase 3 — Ola 3: `v1.3.2-wave-3-fix`)*
 
-> Última actualización: 2026-08-24  
-> Propósito: registro canónico de avance por sprint y resolución de auditoría AUD-PROY-001.
+---
+
+## 🎯 Resumen Ejecutivo
+
+- **Fase Actual**: Fase 3 — Ola 3 (Operaciones y Gobierno Documental: M-07, M-12, M-13) ✅ **SUBSANADO Y SINCRONIZADO EN PRODUCCIÓN**
+- **Siguiente Hito**: Fase 3 — Ola 4 (Cierre de Fase: M-02 Dashboard Ejecutivo y M-14 Reportes Financieros)
+- **Tag Oficial de Producción**: `v1.3.2-wave-3-fix`
+- **Estado de Regresión Global**: **113/113 Tests PASSED (100%)** (Ola 1: 35/35, Ola 2: 43/43, Ola 3: 35/35)
+- **Salud del Despliegue (Render)**: `/api/health` 200 OK, BD conectada (31 ms), RSS 136 MB, Sincronización Transaccional Multisuperficie: 75% exacta (Portafolio, Ficha, Cronograma y DB).
 
 ---
 
@@ -9,13 +17,13 @@
 
 | Campo | Detalle |
 |---|---|
-| **Estado** | ✅ COMPLETADO, INTEGRADO END-TO-END Y ETIQUETADO (`v1.3.1-wave-3-fix`) |
+| **Estado** | ✅ COMPLETADO, INTEGRADO END-TO-END Y ETIQUETADO (`v1.3.2-wave-3-fix`) |
 | **Módulos Canónicos** | `M-07` (Planificación y Cronograma Gantt), `M-12` (Gobierno Documental DOC-01), `M-13` (Análisis Documental con IA de Documentos CLEAN) |
 | **Control M-07 (Cronograma & Gantt)** | • **Persistencia Real:** Columnas `weight` y `progress` en tabla `tasks`, y tabla `task_dependencies` expuestas en endpoints productivos.<br>• **Detección de Ciclos E2E:** Algoritmo DAG DFS con rechazo HTTP 409 (`ConflictError`) ante dependencias circulares directas o indirectas (A -> B -> C, intento C -> A).<br>• **Validación Temporal:** `startDate <= dueDate` y `predecessor.dueDate <= task.startDate`.<br>• **Avance Ponderado:** Cálculo persistido `sum(w * p) / sum(w)` y actualización automática de `projects.physicalProgress`. Manejo seguro de denominador 0 y normalización de pesos.<br>• Control `assigned` para Responsable de Proyecto y RBAC canónico (**10/10 tests**). |
 | **Control M-12 (Gobierno DOC-01)** | • **Cobertura MIME Completa:** Inspección de Magic Bytes para PDF, PNG, JPEG, WEBP, DOCX OOXML (`[Content_Types].xml` + `word/`), XLSX OOXML (`[Content_Types].xml` + `xl/`), ZIP genérico y rechazo de binarios ejecutables MZ.<br>• **Matriz de Autenticación de Escáner:** Comparación `timingSafeEqual` de credenciales, bloqueo HTTP 403 a solicitudes sin clave o con clave inválida.<br>• **Máquina de Estados:** Bloqueo de transiciones prohibidas (`INFECTED -> CLEAN` con HTTP 409).<br>• **Fail-Closed & Papelera:** Bloqueo HTTP 423 a estados no `CLEAN`, soft delete, restauración auditada y retención legal de 5 años (**20/20 tests**). |
 | **Control M-13 (IA Documental CLEAN)** | • Análisis con IA condicionado estrictamente a documentos `CLEAN` (bloqueo HTTP 423 a `PENDING_SCAN` / `INFECTED` / papelera).<br>• **Extracción Estructurada:** Cláusulas con nivel de riesgo y ubicación de cita textual, entidades categorizadas, fechas clave y resumen ejecutivo.<br>• **Fallback Explícito:** Salida etiquetada con `analysisMode: 'DETERMINISTIC_NLP_FALLBACK'`, `providerAvailable: false`, `requiresHumanReview: true` y `confidence: 'LOW'`.<br>• Aislamiento cross-tenant y RBAC (**4/4 tests**). |
 | **Descontaminación Tenant Demo** | Reseteo verificado con 0 fixtures residuales y exclusivamente el proyecto oficial `PRJ-DEMO-2026` (**1/1 test**). |
-| **Verificación Técnica** | • Suite de Ola 3 `tests/ola3-operations-governance.test.ts` (**34/34 PASSED**).<br>• Regresión Ola 2 `tests/ola2-financial-integrity.test.ts` (**43/43 PASSED**).<br>• Regresión Ola 1 `tests/ola1-security-structure.test.ts` (**35/35 PASSED**).<br>• **Total Suite Consolidada:** **112/112 PASSED (100%)**.<br>• Compilación limpia `npm run build` y tag oficial `v1.3.1-wave-3-fix`. |
+| **Verificación Técnica** | • Suite de Ola 3 `tests/ola3-operations-governance.test.ts` (**34/34 PASSED**).<br>• Regresión Ola 2 `tests/ola2-financial-integrity.test.ts` (**43/43 PASSED**).<br>• Regresión Ola 1 `tests/ola1-security-structure.test.ts` (**35/35 PASSED**).<br>• **Total Suite Consolidada:** **112/112 PASSED (100%)**.<br>• Compilación limpia `npm run build` y tag oficial `v1.3.2-wave-3-fix`. |
 
 ---
 
