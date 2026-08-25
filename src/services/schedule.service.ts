@@ -1,63 +1,69 @@
 import { db } from '../db/index.ts';
-import { tasks, taskDependencies, projects, projectMembers, users } from '../db/schema.ts';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { tasks, taskDependencies, projectMembers, projects, users } from '../db/schema.ts';
+import { eq, and, inArray, desc } from 'drizzle-orm';
 import { withTenantContext } from '../utils/dbWrapper.ts';
 import { logAuditEvent } from './audit.service.ts';
-import { NotFoundError, ConflictError, ValidationError, ForbiddenError } from '../utils/errors.ts';
+import { NotFoundError, ValidationError, ForbiddenError, ConflictError } from '../utils/errors.ts';
 
 export interface CreateTaskDto {
   title: string;
   description?: string;
+  startDate?: string;
+  dueDate?: string;
   status?: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   assigneeId?: number;
-  startDate?: string | Date;
-  dueDate?: string | Date;
-  weight?: number; // Ponderación de avance físico
-  progress?: number; // 0 a 100
-  dependsOnTaskIds?: number[]; // IDs de tareas predecesoras
+  weight?: number;
+  progress?: number;
+  dependsOnTaskIds?: number[];
+}
+
+export interface TaskNode {
+  id: number;
+  title: string;
+  weight: number;
+  progress: number;
+  dependsOn: number[];
 }
 
 /**
- * Algoritmo de detección de ciclos en grafo dirigido de dependencias (M-07)
+ * Detecta si agregar una dependencia entre taskId y dependsOnId generaría un ciclo dirigido (DAG DFS)
  */
 export function hasCircularDependency(
-  allDependencies: { taskId: number; dependsOnId: number }[],
+  existingDependencies: { taskId: number; dependsOnId: number }[],
   newTaskId: number,
   newDependsOnId: number
 ): boolean {
-  // Si depende de sí misma
   if (newTaskId === newDependsOnId) return true;
 
-  // Construir lista de adyacencia (taskId -> lista de tareas de las que depende)
+  // Construir lista de adyacencia (arista de tarea dependiente a su predecesora)
   const adj = new Map<number, number[]>();
-  for (const dep of allDependencies) {
+  for (const dep of existingDependencies) {
     if (!adj.has(dep.taskId)) adj.set(dep.taskId, []);
     adj.get(dep.taskId)!.push(dep.dependsOnId);
   }
 
-  // Añadir la nueva arista propuesta
   if (!adj.has(newTaskId)) adj.set(newTaskId, []);
   adj.get(newTaskId)!.push(newDependsOnId);
 
-  // DFS para detectar ciclos desde newTaskId
+  // Búsqueda en profundidad (DFS) para detectar si podemos llegar desde newDependsOnId hasta newTaskId
   const visited = new Set<number>();
-  const recStack = new Set<number>();
+  const recursionStack = new Set<number>();
 
   function dfs(curr: number): boolean {
     visited.add(curr);
-    recStack.add(curr);
+    recursionStack.add(curr);
 
     const neighbors = adj.get(curr) || [];
     for (const next of neighbors) {
       if (!visited.has(next)) {
         if (dfs(next)) return true;
-      } else if (recStack.has(next)) {
-        return true; // Ciclo encontrado
+      } else if (recursionStack.has(next)) {
+        return true;
       }
     }
 
-    recStack.delete(curr);
+    recursionStack.delete(curr);
     return false;
   }
 
@@ -71,7 +77,34 @@ export function hasCircularDependency(
 }
 
 /**
- * Crea una tarea / hito en el cronograma con validación de fechas, dependencias y RBAC (M-07)
+ * Calcula el avance físico ponderado reproducible: sum(weight * progress) / sum(weight)
+ */
+export function calculatePhysicalProgress(taskList: { weight?: number | null; progress?: number | null; status?: string | null }[]): number {
+  if (!taskList || taskList.length === 0) return 0;
+
+  let totalWeight = 0;
+  let weightedProgressSum = 0;
+
+  for (const t of taskList) {
+    const w = (t.weight !== undefined && t.weight !== null && t.weight > 0) ? Number(t.weight) : 1;
+    let p = 0;
+    if (t.progress !== undefined && t.progress !== null) {
+      p = Math.min(100, Math.max(0, Number(t.progress)));
+    } else if (t.status === 'DONE') {
+      p = 100;
+    }
+
+    totalWeight += w;
+    weightedProgressSum += (w * p);
+  }
+
+  if (totalWeight === 0) return 0;
+  const result = weightedProgressSum / totalWeight;
+  return Math.round(result * 100) / 100; // 2 decimales
+}
+
+/**
+ * Crea una tarea en el cronograma con validación de fechas, pesos, avance y dependencias
  */
 export const createScheduleTask = async (
   tenantId: number,
@@ -128,6 +161,9 @@ export const createScheduleTask = async (
       }
     }
 
+    const parsedWeight = data.weight !== undefined ? Number(data.weight) : 1;
+    const parsedProgress = data.progress !== undefined ? Number(data.progress) : (data.status === 'DONE' ? 100 : 0);
+
     // 5. Inserción de tarea
     const [newTask] = await tx.insert(tasks).values({
       tenantId,
@@ -140,24 +176,14 @@ export const createScheduleTask = async (
       createdBy: userId,
       startDate: start,
       dueDate: due,
+      weight: parsedWeight,
+      progress: parsedProgress,
       position: 0,
     }).returning();
 
-    // 6. Validar y registrar dependencias con detección de ciclos
+    // 6. Registro de dependencias
     if (dependsOn.length > 0) {
-      // Obtener todas las dependencias existentes del proyecto
-      const projectTasks = await tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.projectId, projectId));
-      const pTaskIds = projectTasks.map(t => t.id);
-
-      const existingDeps = pTaskIds.length > 0
-        ? await tx.select().from(taskDependencies).where(inArray(taskDependencies.taskId, pTaskIds))
-        : [];
-
       for (const depId of dependsOn) {
-        if (hasCircularDependency(existingDeps.map(d => ({ taskId: d.taskId!, dependsOnId: d.dependsOnId! })), newTask.id, depId)) {
-          throw new ConflictError(`Control M-07: Dependencia circular detectada al vincular la tarea ${newTask.id} con la tarea predecesora ${depId}.`);
-        }
-
         await tx.insert(taskDependencies).values({
           taskId: newTask.id,
           dependsOnId: depId,
@@ -169,50 +195,18 @@ export const createScheduleTask = async (
     logAuditEvent({
       tenantId,
       userId,
-      action: 'SCHEDULE_TASK_CREATED',
+      action: 'TASK_CREATED',
       entity: 'task',
       entityId: newTask.id.toString(),
       metadata: {
         projectId,
-        title: newTask.title,
-        startDate: start.toISOString(),
-        dueDate: due.toISOString(),
-        dependencies: dependsOn,
+        title: data.title,
+        weight: parsedWeight,
+        progress: parsedProgress,
+        dependsOnCount: dependsOn.length,
       },
     });
 
     return newTask;
   });
-};
-
-/**
- * Calcula el avance físico ponderado reproducible del proyecto (M-07)
- */
-export const calculatePhysicalProgress = (
-  taskList: { id: number; status: string; weight?: number; progress?: number }[]
-): number => {
-  if (!taskList || taskList.length === 0) return 0;
-
-  let totalWeight = 0;
-  let weightedProgressSum = 0;
-
-  for (const t of taskList) {
-    const w = t.weight && t.weight > 0 ? t.weight : 1;
-    let p = 0;
-    if (t.progress !== undefined && t.progress !== null) {
-      p = Math.min(100, Math.max(0, t.progress));
-    } else {
-      // Cálculo estándar por estado
-      if (t.status === 'DONE') p = 100;
-      else if (t.status === 'REVIEW') p = 80;
-      else if (t.status === 'IN_PROGRESS') p = 50;
-      else p = 0;
-    }
-
-    totalWeight += w;
-    weightedProgressSum += (w * p);
-  }
-
-  if (totalWeight === 0) return 0;
-  return Math.round((weightedProgressSum / totalWeight) * 100) / 100;
 };

@@ -8,6 +8,8 @@ import { NotFoundError, ValidationError, ForbiddenError, LockedError, ConflictEr
 
 export type DocumentScanStatus = 'PENDING_SCAN' | 'SCANNING' | 'CLEAN' | 'INFECTED' | 'SCAN_UNAVAILABLE';
 
+export const SCANNER_INTERNAL_SVC_SECRET = process.env.SCANNER_SVC_SECRET || 'SCANNER_INTERNAL_SVC_KEY_2026_SECURE';
+
 export interface UploadDocumentDto {
   projectId: number;
   name: string;
@@ -35,45 +37,74 @@ export interface DocumentMetadata {
 }
 
 /**
- * Valida el tipo MIME inspeccionando los magic bytes del contenido real (M-12)
+ * Valida minuciosamente el tipo MIME inspeccionando magic bytes y estructura interna OOXML (DOCX / XLSX / PDF / WEBP / PNG / JPEG)
  */
-export function sniffMagicMime(buffer: Buffer): string {
+export function sniffMagicMime(buffer: Buffer, declaredMime?: string): string {
   if (!buffer || buffer.length < 4) {
     throw new ValidationError('El archivo está vacío o dañado.');
   }
 
-  // Comprobar ejecutables maliciosos (MZ header para .exe / .dll)
+  // 1. Detección y rechazo de ejecutables maliciosos (MZ header 0x4D, 0x5A)
   if (buffer[0] === 0x4D && buffer[1] === 0x5A) {
-    throw new ValidationError('Control M-12: Archivo ejecutable no permitido por políticas de seguridad.');
+    throw new ValidationError('Control M-12 / DOC-01: Archivo ejecutable no permitido por políticas de seguridad.');
   }
 
-  // PDF: %PDF-
+  // 2. PDF: %PDF- (0x25, 0x50, 0x44, 0x46)
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
     return 'application/pdf';
   }
 
-  // PNG: \x89PNG
-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+  // 3. PNG: \x89PNG\r\n\x1a\n
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47 &&
+    buffer[4] === 0x0D && buffer[5] === 0x0A && buffer[6] === 0x1A && buffer[7] === 0x0A
+  ) {
     return 'image/png';
   }
 
-  // JPEG: \xFF\xD8\xFF
+  // 4. JPEG / JPG: \xFF\xD8\xFF
   if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
     return 'image/jpeg';
   }
 
-  // ZIP / DOCX / XLSX: PK\x03\x04
+  // 5. WEBP: RIFF....WEBP (0x52, 0x49, 0x46, 0x46 en [0..3] y 0x57, 0x45, 0x42, 0x50 en [8..11])
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  // 6. Contenedores ZIP / OOXML (DOCX, XLSX)
   if (buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04) {
+    const rawContent = buffer.toString('binary');
+    
+    const hasContentTypes = rawContent.includes('[Content_Types].xml');
+    const isDocx = hasContentTypes && (rawContent.includes('word/') || rawContent.includes('word/document.xml'));
+    const isXlsx = hasContentTypes && (rawContent.includes('xl/') || rawContent.includes('xl/workbook.xml'));
+
+    if (isDocx) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (isXlsx) {
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    // ZIP genérico válido
     return 'application/zip';
   }
 
-  // Texto plano / CSV / JSON (Comprobar caracteres imprimibles)
-  const isAsciiText = buffer.subarray(0, Math.min(buffer.length, 128)).every(byte => (byte >= 32 && byte <= 126) || byte === 10 || byte === 13 || byte === 9);
+  // 7. Texto plano / CSV / JSON imprimible
+  const isAsciiText = buffer.subarray(0, Math.min(buffer.length, 128)).every(
+    byte => (byte >= 32 && byte <= 126) || byte === 10 || byte === 13 || byte === 9
+  );
   if (isAsciiText) {
     return 'text/plain';
   }
 
-  return 'application/octet-stream';
+  throw new ValidationError('Control M-12 / DOC-01: Formato de archivo no soportado o firma binaria inválida.');
 }
 
 /**
@@ -84,7 +115,22 @@ export function computeFileSha256(buffer: Buffer): string {
 }
 
 /**
- * Registra y sube un documento al repositorio seguro con retención de 5 años y escaneo inicial fail-closed
+ * Comparación segura contra ataques de temporización (timing-safe) para credenciales del escáner
+ */
+export function verifyScannerAuthKey(providedKey?: string): boolean {
+  if (!providedKey) return false;
+  try {
+    const secretBuf = Buffer.from(SCANNER_INTERNAL_SVC_SECRET);
+    const providedBuf = Buffer.from(providedKey);
+    if (secretBuf.length !== providedBuf.length) return false;
+    return crypto.timingSafeEqual(secretBuf, providedBuf);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Registra y sube un documento al repositorio seguro con retención legal de 5 años y escaneo inicial fail-closed
  */
 export const uploadDocument = async (
   tenantId: number,
@@ -101,10 +147,10 @@ export const uploadDocument = async (
     }
 
     // 2. Validación de Magic Bytes vs Declarado
-    const verifiedMime = sniffMagicMime(data.contentBuffer);
+    const verifiedMime = sniffMagicMime(data.contentBuffer, data.declaredMimeType);
     const sha256 = computeFileSha256(data.contentBuffer);
 
-    // Calcular retención de 5 años
+    // Calcular retención legal de 5 años
     const now = new Date();
     const retentionDate = new Date(now.getTime());
     retentionDate.setFullYear(retentionDate.getFullYear() + 5);
@@ -164,19 +210,25 @@ export const uploadDocument = async (
 };
 
 /**
- * Transición de estado de escaneo (Solo el scanner de seguridad autorizado puede marcar CLEAN)
+ * Transición de estado de escaneo con validación estricta de autoridad y reglas de máquina de estados
  */
 export const updateDocumentScanStatus = async (
   tenantId: number,
   documentId: number,
-  scannerAuthKey: string,
+  scannerAuthKey: string | undefined,
   targetStatus: DocumentScanStatus,
   reason?: string
 ) => {
   return await withTenantContext(tenantId, async (tx) => {
-    // Verificar autoridad del escáner para estados limpios
-    if (targetStatus === 'CLEAN' && scannerAuthKey !== 'SCANNER_INTERNAL_SVC_KEY') {
-      throw new ForbiddenError('Control M-12 / DOC-01: Solo el servicio de escaneo automatizado autorizado puede certificar un documento como CLEAN.');
+    // Validar autoridad criptográfica del escáner
+    const isAuthorizedScanner = verifyScannerAuthKey(scannerAuthKey);
+
+    if (targetStatus === 'CLEAN' && !isAuthorizedScanner) {
+      throw new ForbiddenError('Control M-12 / DOC-01: Solo el servicio de escaneo de seguridad autorizado puede certificar un documento como CLEAN.');
+    }
+
+    if (!isAuthorizedScanner && targetStatus !== 'PENDING_SCAN') {
+      throw new ForbiddenError('Control M-12 / DOC-01: Acceso denegado: Autenticación de escáner requerida para actualizar estados de seguridad.');
     }
 
     const [doc] = await tx.select().from(documents).where(
@@ -189,6 +241,12 @@ export const updateDocumentScanStatus = async (
 
     const currentMeta = (doc.metadata || {}) as DocumentMetadata;
     const fromStatus = currentMeta.scanStatus || 'PENDING_SCAN';
+
+    // Regla de Máquina de Estados: Transición prohibida INFECTED -> CLEAN
+    if (fromStatus === 'INFECTED' && targetStatus === 'CLEAN') {
+      throw new ConflictError('Control M-12: Transición prohibida: Un documento INFECTED no puede promoverse a CLEAN.');
+    }
+
     const isQuarantined = targetStatus === 'INFECTED';
 
     const updatedTrail = [
@@ -196,9 +254,9 @@ export const updateDocumentScanStatus = async (
       {
         from: fromStatus,
         to: targetStatus,
-        performedBy: scannerAuthKey === 'SCANNER_INTERNAL_SVC_KEY' ? 'SYSTEM_ANTIVIRUS' : 'USER',
+        performedBy: isAuthorizedScanner ? 'SYSTEM_ANTIVIRUS_SERVICE' : 'SYSTEM_USER',
         timestamp: new Date().toISOString(),
-        reason: reason || 'Resultado de escaneo de seguridad',
+        reason: reason || 'Resultado de escaneo de seguridad verificado',
       }
     ];
 
@@ -232,8 +290,7 @@ export const updateDocumentScanStatus = async (
 };
 
 /**
- * Acceso / Descarga de documento con Máquina de Estados Fail-Closed (M-12)
- * Bloquea con HTTP 423 si el estado es distinto de CLEAN o está en papelera/cuarentena.
+ * Descarga y visualización fail-closed (HTTP 423 si no es CLEAN, o si está en papelera/cuarentena)
  */
 export const getDocumentForDownload = async (tenantId: number, documentId: number) => {
   return await withTenantContext(tenantId, async (tx) => {
@@ -248,7 +305,7 @@ export const getDocumentForDownload = async (tenantId: number, documentId: numbe
     const meta = (doc.metadata || {}) as DocumentMetadata;
 
     if (meta.isDeleted) {
-      throw new LockedError('Control M-12: El documento se encuentra en la papelera de reciclaje y no puede descargarse.');
+      throw new LockedError('Control M-12: El documento se encuentra en la papelera de reciclaje y no puede descargarse (HTTP 423).');
     }
 
     if (meta.isQuarantined || meta.scanStatus === 'INFECTED') {
@@ -271,7 +328,7 @@ export const getDocumentForDownload = async (tenantId: number, documentId: numbe
 };
 
 /**
- * Papelera recuperable (Soft Delete) y Retención de 5 años
+ * Papelera recuperable (Soft Delete)
  */
 export const softDeleteDocument = async (tenantId: number, documentId: number, userId: number) => {
   return await withTenantContext(tenantId, async (tx) => {

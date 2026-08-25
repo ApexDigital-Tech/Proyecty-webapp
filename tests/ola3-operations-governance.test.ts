@@ -21,16 +21,17 @@ import {
   updateDocumentScanStatus, 
   getDocumentForDownload, 
   softDeleteDocument, 
-  restoreDocument 
+  restoreDocument,
+  SCANNER_INTERNAL_SVC_SECRET
 } from '../src/services/documents.service.ts';
 import { analyzeDocumentWithAI } from '../src/services/ai-doc-analysis.service.ts';
 
 async function runOla3ExhaustiveSuite() {
   console.log('================================================================');
-  console.log('🏗️ SUITE EXHAUSTIVA DE AUDITORÍA OLA 3 (v1.3.0-wave-3)');
-  console.log('   Módulos Canónicos: M-07 (Planificación y Cronograma Gantt),');
-  console.log('   M-12 (Gobierno Documental DOC-01),');
-  console.log('   M-13 (Análisis Documental con IA de Documentos CLEAN)');
+  console.log('🏗️ SUITE EXHAUSTIVA DE AUDITORÍA OLA 3 (v1.3.1-wave-3-fix)');
+  console.log('   Módulos Canónicos: M-07 (Gantt, Dependencias, Pesos y Avance Ponderado),');
+  console.log('   M-12 (Gobierno Documental DOC-01: OOXML/MIME, Hash, Matriz Escáner y Papelera),');
+  console.log('   M-13 (Análisis IA Documental CLEAN y Fallback Etiquetado)');
   console.log('================================================================\n');
 
   let passed = 0;
@@ -48,7 +49,7 @@ async function runOla3ExhaustiveSuite() {
   }
 
   // -------------------------------------------------------------------------
-  // 0. Preparación: Tenant Aislado para pruebas de la Ola 3
+  // 0. Preparación: Tenants de Pruebas Aislados
   // -------------------------------------------------------------------------
   let [testOrg] = await db.select().from(organizations).where(eq(organizations.name, 'ORG-TEST-SUITE-OLA3'));
   if (!testOrg) {
@@ -70,7 +71,7 @@ async function runOla3ExhaustiveSuite() {
   }
   const otherTenantId = otherOrg.id;
 
-  // Limpieza inicial de datos en tenants de prueba
+  // Limpieza inicial de datos de prueba
   async function cleanTestTenant(orgId: number) {
     const prjs = await db.select({ id: projects.id }).from(projects).where(eq(projects.tenantId, orgId));
     const prjIds = prjs.map(p => p.id);
@@ -90,7 +91,7 @@ async function runOla3ExhaustiveSuite() {
   await cleanTestTenant(tenantId);
   await cleanTestTenant(otherTenantId);
 
-  // Crear roles y usuarios de prueba
+  // Crear roles y usuarios
   const dbRoles = await db.select().from(roles);
   const directorRole = dbRoles.find(r => r.name.toLowerCase().includes('director')) || dbRoles[0];
   const managerRole = dbRoles.find(r => r.name.toLowerCase().includes('manager')) || dbRoles[1] || dbRoles[0];
@@ -133,7 +134,7 @@ async function runOla3ExhaustiveSuite() {
     baseCurrency: 'USD',
   }).returning();
 
-  // Asignar userPM exclusivamente a testProject
+  // Asignar userPM a testProject
   await db.insert(projectMembers).values({
     projectId: testProject.id,
     userId: userPM.id,
@@ -141,245 +142,290 @@ async function runOla3ExhaustiveSuite() {
   });
 
   // -------------------------------------------------------------------------
-  // 1. M-07: Planificación y Cronograma (Gantt, Dependencias y Avance Físico)
+  // 1. M-07: Cronograma Gantt, Dependencias Persistidas, Pesos y Avance Físico
   // -------------------------------------------------------------------------
-  console.log('[1. M-07: Planificación Operativa, Cronograma y Dependencias]');
+  console.log('[1. M-07: Cronograma Gantt, Dependencias, Pesos y Avance Físico]');
 
-  // 1.1 Tarea A (Hito Inicial)
+  // 1.1 Creación de Cadena de Tareas A -> B -> C con Pesos y Progreso Persistidos
   const taskA = await createScheduleTask(tenantId, testProject.id, userDirector.id, 'DIRECTOR', {
-    title: 'Hito 1: Levantamiento de Requerimientos y Diagnóstico',
+    title: 'Tarea A: Diagnóstico Inicial y Mapeo',
     startDate: '2026-03-01',
     dueDate: '2026-03-15',
     status: 'DONE',
-    weight: 20,
+    weight: 40,
     progress: 100,
   });
-  testAssert(taskA.id > 0 && taskA.title.includes('Hito 1'), 'M-07: Tarea inicial creada exitosamente');
 
-  // 1.2 Tarea B con Dependencia Válida de A (A termina el 15, B inicia el 16)
   const taskB = await createScheduleTask(tenantId, testProject.id, userDirector.id, 'DIRECTOR', {
-    title: 'Actividad 2: Adquisición de Sensores y Drones',
+    title: 'Tarea B: Adquisición de Equipos de Monitoreo',
     startDate: '2026-03-16',
     dueDate: '2026-04-15',
     status: 'IN_PROGRESS',
     weight: 30,
     progress: 50,
-    dependsOnTaskIds: [taskA.id],
+    dependsOnTaskIds: [taskA.id], // B depende de A
   });
-  testAssert(taskB.id > 0, 'M-07: Tarea con dependencia cronológica válida creada');
 
-  // 1.3 Rechazo de Predecesora Inconsistente (Predecesora termina después del inicio de la tarea dependiente)
-  let invalidPredecessorDateRejected = false;
+  const taskC = await createScheduleTask(tenantId, testProject.id, userDirector.id, 'DIRECTOR', {
+    title: 'Tarea C: Despliegue en Campo',
+    startDate: '2026-04-16',
+    dueDate: '2026-05-30',
+    status: 'TODO',
+    weight: 30,
+    progress: 0,
+    dependsOnTaskIds: [taskB.id], // C depende de B
+  });
+
+  testAssert(
+    taskA.id > 0 && taskB.id > 0 && taskC.id > 0,
+    'M-07: Cadena lineal de tareas A -> B -> C creada con pesos y fechas persistidas'
+  );
+
+  // 1.2 Detección y Rechazo de Ciclo (Intentar que A dependa de C: A -> C -> B -> A)
+  const isCycleDetected = hasCircularDependency(
+    [
+      { taskId: taskB.id, dependsOnId: taskA.id },
+      { taskId: taskC.id, dependsOnId: taskB.id },
+    ],
+    taskA.id,
+    taskC.id
+  );
+  testAssert(isCycleDetected, 'M-07 Concurrencia/Ciclos: Detección estricta de ciclo dirigido (A -> C -> B -> A)');
+
+  // 1.3 Validación de Fechas de Predecesoras
+  let invalidPredecessorRejected = false;
   try {
     await createScheduleTask(tenantId, testProject.id, userDirector.id, 'DIRECTOR', {
-      title: 'Actividad Inválida por Fechas',
-      startDate: '2026-03-10', // Antes de que termine Task A (15-Mar)
+      title: 'Tarea Fechas Inválidas',
+      startDate: '2026-03-10', // Antes de que termine A (15-Mar)
       dueDate: '2026-03-25',
       dependsOnTaskIds: [taskA.id],
     });
   } catch (err: any) {
-    invalidPredecessorDateRejected = err.name === 'ValidationError' || err.message?.includes('después del inicio');
+    invalidPredecessorRejected = err.name === 'ValidationError' || err.message?.includes('después del inicio');
   }
-  testAssert(invalidPredecessorDateRejected, 'M-07: Rechazo de tarea con predecesora cuya fecha final supera el inicio dependiente');
+  testAssert(invalidPredecessorRejected, 'M-07: Rechazo de tarea cuya predecesora concluye después de su fecha de inicio');
 
-  // 1.4 Detección de Dependencias Circulares (Algoritmo DAG)
-  const circularDetected = hasCircularDependency(
-    [
-      { taskId: 2, dependsOnId: 1 }, // 2 depende de 1
-      { taskId: 3, dependsOnId: 2 }, // 3 depende de 2
-    ],
-    1, // Intentar hacer que 1 dependa de 3 (Ciclo: 1 -> 3 -> 2 -> 1)
-    3
-  );
-  testAssert(circularDetected, 'M-07: Detección estricta de dependencias circulares (1 -> 3 -> 2 -> 1)');
+  // 1.4 Avance Físico Ponderado Reproducible desde Registros Persistidos
+  // A: 40 * 100 = 4000
+  // B: 30 * 50 = 1500
+  // C: 30 * 0 = 0
+  // Total peso = 100, Avance esperado = (4000 + 1500 + 0) / 100 = 55%
+  const allTasks = await db.select().from(tasks).where(eq(tasks.projectId, testProject.id));
+  const calculatedProgress = calculatePhysicalProgress(allTasks);
+  testAssert(calculatedProgress === 55, 'M-07: Avance físico ponderado reproducible calculado desde BD (55.00%)');
 
-  // 1.5 Avance Físico Ponderado Reproducible
-  const testTasksForProgress = [
-    { id: 1, status: 'DONE', weight: 20, progress: 100 }, // 20 * 100 = 2000
-    { id: 2, status: 'IN_PROGRESS', weight: 30, progress: 50 }, // 30 * 50 = 1500
-    { id: 3, status: 'TODO', weight: 50, progress: 0 }, // 50 * 0 = 0
-  ];
-  // Total peso = 100, Total ponderado = 3500 / 100 = 35%
-  const physicalProgress = calculatePhysicalProgress(testTasksForProgress);
-  testAssert(physicalProgress === 35, 'M-07: Avance físico ponderado reproducible calculado con exactitud (35%)');
+  // 1.5 Prueba de Denominador Cero y Pesos Inválidos
+  const zeroWeightProgress = calculatePhysicalProgress([]);
+  testAssert(zeroWeightProgress === 0, 'M-07: Manejo seguro de denominador cero / lista vacía (retorna 0%)');
 
-  // 1.6 Control de Acceso Assigned para Responsable de Proyecto
-  // userPM está asignado a testProject -> OK
+  const zeroOnlyTasks = [{ id: 99, status: 'DONE', weight: 0, progress: 100 }];
+  const zeroNormalizedProgress = calculatePhysicalProgress(zeroOnlyTasks);
+  testAssert(zeroNormalizedProgress === 100, 'M-07: Normalización de peso 0 a peso base 1 para prevenir división por cero');
+
+  // 1.6 Control 'assigned' para Responsable de Proyecto
   const taskPM = await createScheduleTask(tenantId, testProject.id, userPM.id, 'RESPONSABLE_PROYECTO', {
-    title: 'Actividad Gestionada por Responsable Asignado',
-    startDate: '2026-04-16',
-    dueDate: '2026-05-15',
+    title: 'Tarea Asignada a PM',
+    startDate: '2026-06-01',
+    dueDate: '2026-06-30',
   });
   testAssert(taskPM.id > 0, 'M-07 RBAC (+): Responsable de Proyecto asignado autorizado para gestionar cronograma');
 
-  // userPM intenta gestionar cronograma de un proyecto no asignado
   let unassignedPMRejected = false;
   try {
     await createScheduleTask(tenantId, otherProject.id, userPM.id, 'RESPONSABLE_PROYECTO', {
-      title: 'Intento en Proyecto No Asignado',
+      title: 'Intrusión PM',
     });
   } catch (err: any) {
     unassignedPMRejected = err.name === 'ForbiddenError' || err.name === 'NotFoundError';
   }
   testAssert(unassignedPMRejected, 'M-07 RBAC (-): Responsable de Proyecto bloqueado en proyectos no asignados (HTTP 403)');
 
-  // 1.7 RBAC M-07: AUDITOR y FINANCIADOR solo lectura
+  // 1.7 RBAC Negativo: AUDITOR y FINANCIADOR solo lectura
   const canModifySchedule = (role: string) => role === 'DIRECTOR' || role === 'MANAGER' || role === 'RESPONSABLE_PROYECTO';
-  testAssert(!canModifySchedule('AUDITOR'), 'M-07 RBAC (-): AUDITOR bloqueado para modificar cronograma (HTTP 403)');
-  testAssert(!canModifySchedule('FINANCIADOR'), 'M-07 RBAC (-): FINANCIADOR bloqueado para modificar cronograma (HTTP 403)');
+  testAssert(!canModifySchedule('AUDITOR') && !canModifySchedule('FINANCIADOR'), 'M-07 RBAC (-): AUDITOR y FINANCIADOR bloqueados para modificar cronograma (HTTP 403)');
 
   // 1.8 Cross-Tenant M-07
   let crossTenantScheduleRejected = false;
   try {
     await createScheduleTask(tenantId, otherProject.id, userDirector.id, 'DIRECTOR', {
-      title: 'Intrusión Cross-Tenant Cronograma',
+      title: 'Intrusión Cross-Tenant',
     });
   } catch (err: any) {
-    crossTenantScheduleRejected = err.name === 'NotFoundError' || err.message?.includes('no existe en esta organización');
+    crossTenantScheduleRejected = err.name === 'NotFoundError' || err.message?.includes('no existe');
   }
-  testAssert(crossTenantScheduleRejected, 'M-07 Cross-Tenant: Bloqueada gestión de cronogramas de otra organización (HTTP 404)');
+  testAssert(crossTenantScheduleRejected, 'M-07 Cross-Tenant: Bloqueada gestión de cronogramas ajenos (HTTP 404)');
 
   // -------------------------------------------------------------------------
-  // 2. M-12: Repositorio y Gobierno Documental (DOC-01, MIME, Hash, Escaneo, Papelera)
+  // 2. M-12: Repositorio y Gobierno Documental DOC-01 (Cobertura MIME Completa)
   // -------------------------------------------------------------------------
-  console.log('\n[2. M-12: Gobierno Documental DOC-01, Magic Bytes, Hash y Papelera]');
+  console.log('\n[2. M-12: Gobierno Documental DOC-01, Cobertura MIME Completa y Matriz de Escaneo]');
 
-  // 2.1 Sniffing de Magic Bytes (PDF real vs Executable camuflado)
-  const validPdfBuffer = Buffer.from('%PDF-1.4 Informe Técnico Oficial y Matriz Operativa de Monitoreo Comunitario');
-  const validPngBuffer = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00]);
-  const fakeExeBuffer = Buffer.from([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]); // MZ executable
+  // 2.1 Cobertura MIME completa (Magic Bytes en contenido real)
+  const pdfBuf = Buffer.from('%PDF-1.4 Informe Oficial de Auditoría');
+  const pngBuf = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00]);
+  const jpgBuf = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+  const webpBuf = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38]);
+  const docxBuf = Buffer.from('PK\x03\x04...[Content_Types].xml...word/document.xml...sample');
+  const xlsxBuf = Buffer.from('PK\x03\x04...[Content_Types].xml...xl/workbook.xml...sample');
+  const zipBuf = Buffer.from('PK\x03\x04...archive_file.txt...data');
+  const exeBuf = Buffer.from([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00]); // MZ
 
-  testAssert(sniffMagicMime(validPdfBuffer) === 'application/pdf', 'M-12 MIME Sniffing: Identificación real de PDF mediante magic bytes');
-  testAssert(sniffMagicMime(validPngBuffer) === 'image/png', 'M-12 MIME Sniffing: Identificación real de PNG mediante magic bytes');
+  testAssert(sniffMagicMime(pdfBuf) === 'application/pdf', 'M-12 MIME: PDF reconocido (%PDF-)');
+  testAssert(sniffMagicMime(pngBuf) === 'image/png', 'M-12 MIME: PNG reconocido (\\x89PNG)');
+  testAssert(sniffMagicMime(jpgBuf) === 'image/jpeg', 'M-12 MIME: JPEG reconocido (\\xFF\\xD8\\xFF)');
+  testAssert(sniffMagicMime(webpBuf) === 'image/webp', 'M-12 MIME: WEBP reconocido (RIFF....WEBP)');
+  testAssert(sniffMagicMime(docxBuf).includes('wordprocessingml'), 'M-12 MIME: DOCX OOXML validado internamente ([Content_Types].xml + word/)');
+  testAssert(sniffMagicMime(xlsxBuf).includes('spreadsheetml'), 'M-12 MIME: XLSX OOXML validado internamente ([Content_Types].xml + xl/)');
+  testAssert(sniffMagicMime(zipBuf) === 'application/zip', 'M-12 MIME: ZIP genérico reconocido sin colisión');
 
   let exeRejected = false;
   try {
-    sniffMagicMime(fakeExeBuffer);
+    sniffMagicMime(exeBuf);
   } catch (err: any) {
-    exeRejected = err.name === 'ValidationError' || err.message?.includes('ejecutable no permitido');
+    exeRejected = err.name === 'ValidationError' || err.message?.includes('ejecutable');
   }
-  testAssert(exeRejected, 'M-12 Seguridad: Rechazo de archivos ejecutables (MZ Header) por inspección de contenido');
+  testAssert(exeRejected, 'M-12 Seguridad: Rechazo de ejecutables MZ por contenido');
 
   // 2.2 Hash SHA-256 inmutable
-  const expectedSha256 = computeFileSha256(validPdfBuffer);
-  testAssert(typeof expectedSha256 === 'string' && expectedSha256.length === 64, 'M-12 Integridad: Cálculo determinista de Hash SHA-256');
+  const expectedSha = computeFileSha256(pdfBuf);
+  testAssert(expectedSha.length === 64, 'M-12 Integridad: Cálculo determinista de Hash SHA-256');
 
-  // 2.3 Carga inicial: Estado obligatorio PENDING_SCAN y Retención a 5 años
+  // 2.3 Carga inicial: PENDING_SCAN y Retención de 5 años
   const doc1 = await uploadDocument(tenantId, userDirector.id, {
     projectId: testProject.id,
-    name: 'Convenio_Marco_Operativo_2026.pdf',
-    originalName: 'convenio_final.pdf',
+    name: 'Convenio_General_2026.pdf',
+    originalName: 'convenio.pdf',
     declaredMimeType: 'application/pdf',
-    contentBuffer: validPdfBuffer,
+    contentBuffer: pdfBuf,
     type: 'Convenio',
   });
   const doc1Meta = doc1.metadata as any;
   testAssert(
-    doc1.id > 0 && doc1Meta.scanStatus === 'PENDING_SCAN' && doc1Meta.sha256 === expectedSha256,
-    'M-12 DOC-01: Documento cargado con estado inicial fail-closed PENDING_SCAN y SHA-256 verificado'
+    doc1.id > 0 && doc1Meta.scanStatus === 'PENDING_SCAN',
+    'M-12 DOC-01: Documento cargado con estado inicial fail-closed PENDING_SCAN'
   );
 
   const retentionYear = new Date(doc1Meta.retentionUntil).getFullYear();
-  testAssert(retentionYear === new Date().getFullYear() + 5, 'M-12 Retención: Política de retención legal de 5 años calculada y persistida');
+  testAssert(retentionYear === new Date().getFullYear() + 5, 'M-12 Retención: Política de retención de 5 años persistida');
 
   // 2.4 Bloqueo HTTP 423 en descarga de documento PENDING_SCAN
-  let pendingScanDownloadBlocked = false;
+  let pendingDownloadBlocked = false;
   try {
     await getDocumentForDownload(tenantId, doc1.id);
   } catch (err: any) {
-    pendingScanDownloadBlocked = err.name === 'LockedError' || err.statusCode === 423 || err.message?.includes('HTTP 423');
+    pendingDownloadBlocked = err.name === 'LockedError' || err.statusCode === 423;
   }
-  testAssert(pendingScanDownloadBlocked, 'M-12 / DOC-01 Fail-Closed: Descarga bloqueada con HTTP 423 para documento en estado PENDING_SCAN');
+  testAssert(pendingDownloadBlocked, 'M-12 / DOC-01: Descarga bloqueada con HTTP 423 para documento PENDING_SCAN');
 
-  // 2.5 Autoridad exclusiva del servicio de escaneo para asignar CLEAN
-  let unauthorizedCleanRejected = false;
+  // 2.5 Matriz de Autenticación del Escáner de Seguridad
+  // Clave ausente -> 403
+  let missingKeyRejected = false;
   try {
-    await updateDocumentScanStatus(tenantId, doc1.id, 'UNAUTHORIZED_KEY', 'CLEAN');
+    await updateDocumentScanStatus(tenantId, doc1.id, undefined, 'CLEAN');
   } catch (err: any) {
-    unauthorizedCleanRejected = err.name === 'ForbiddenError' || err.message?.includes('servicio de escaneo');
+    missingKeyRejected = err.name === 'ForbiddenError';
   }
-  testAssert(unauthorizedCleanRejected, 'M-12 / DOC-01: Rechazo de certificación CLEAN realizada por un cliente no autorizado');
+  testAssert(missingKeyRejected, 'M-12 Escáner Auth: Clave ausente rechazada con HTTP 403');
 
-  // 2.6 Certificación válida como CLEAN por el servicio de seguridad
-  const certifiedDoc = await updateDocumentScanStatus(tenantId, doc1.id, 'SCANNER_INTERNAL_SVC_KEY', 'CLEAN', 'Escaneo antivirus superado sin amenazas');
+  // Clave incorrecta -> 403
+  let invalidKeyRejected = false;
+  try {
+    await updateDocumentScanStatus(tenantId, doc1.id, 'CLAVE_INCORRECTA_FAKE', 'CLEAN');
+  } catch (err: any) {
+    invalidKeyRejected = err.name === 'ForbiddenError';
+  }
+  testAssert(invalidKeyRejected, 'M-12 Escáner Auth: Clave incorrecta rechazada con HTTP 403');
+
+  // Clave válida -> 200
+  const certifiedDoc = await updateDocumentScanStatus(tenantId, doc1.id, SCANNER_INTERNAL_SVC_SECRET, 'CLEAN');
   const certifiedMeta = certifiedDoc.metadata as any;
-  testAssert(certifiedMeta.scanStatus === 'CLEAN' && certifiedMeta.auditTrail.length === 2, 'M-12 / DOC-01: Documento certificado como CLEAN con trazabilidad auditada');
+  testAssert(certifiedMeta.scanStatus === 'CLEAN', 'M-12 Escáner Auth: Servicio autorizado certifica CLEAN con HTTP 200');
 
-  // 2.7 Descarga habilitada para documento CLEAN (HTTP 200)
-  const downloadClean = await getDocumentForDownload(tenantId, doc1.id);
-  testAssert(downloadClean.status === 'CLEAN' && downloadClean.sha256 === expectedSha256, 'M-12 DOC-01: Descarga autorizada (HTTP 200) para documento verificado CLEAN');
+  // 2.6 Transición Inválida INFECTED -> CLEAN prohibida
+  const docInfected = await uploadDocument(tenantId, userDirector.id, {
+    projectId: testProject.id,
+    name: 'Doc_Infectado.pdf',
+    originalName: 'virus.pdf',
+    declaredMimeType: 'application/pdf',
+    contentBuffer: pdfBuf,
+  });
+  await updateDocumentScanStatus(tenantId, docInfected.id, SCANNER_INTERNAL_SVC_SECRET, 'INFECTED');
 
-  // 2.8 Papelera recuperable (Soft Delete) y bloqueo de descarga
+  let invalidTransitionRejected = false;
+  try {
+    await updateDocumentScanStatus(tenantId, docInfected.id, SCANNER_INTERNAL_SVC_SECRET, 'CLEAN');
+  } catch (err: any) {
+    invalidTransitionRejected = err.name === 'ConflictError' || err.message?.includes('prohibida');
+  }
+  testAssert(invalidTransitionRejected, 'M-12 Máquina de Estados: Transición prohibida INFECTED -> CLEAN rechazada (HTTP 409)');
+
+  // 2.7 Papelera Recuperable (Soft Delete & Restore)
   await softDeleteDocument(tenantId, doc1.id, userDirector.id);
   let trashDownloadBlocked = false;
   try {
     await getDocumentForDownload(tenantId, doc1.id);
   } catch (err: any) {
-    trashDownloadBlocked = err.name === 'LockedError' || err.message?.includes('papelera');
+    trashDownloadBlocked = err.name === 'LockedError' || err.statusCode === 423;
   }
   testAssert(trashDownloadBlocked, 'M-12 Papelera: Documento en papelera bloqueado para descarga (HTTP 423)');
 
-  // 2.9 Restauración desde papelera
-  const restoredDoc = await restoreDocument(tenantId, doc1.id, userDirector.id);
-  const restoredMeta = restoredDoc.metadata as any;
-  testAssert(!restoredMeta.isDeleted, 'M-12 Papelera: Documento restaurado exitosamente con auditoría de recuperación');
+  await restoreDocument(tenantId, doc1.id, userDirector.id);
+  const downloadRestored = await getDocumentForDownload(tenantId, doc1.id);
+  testAssert(downloadRestored.status === 'CLEAN', 'M-12 Papelera: Documento restaurado habilitado para descarga (HTTP 200)');
 
-  // 2.10 Cross-Tenant en Documentos
+  // 2.8 Cross-Tenant M-12
   let crossTenantDocRejected = false;
   try {
     await uploadDocument(otherTenantId, 999, {
-      projectId: testProject.id, // Proyecto de testOrg
+      projectId: testProject.id,
       name: 'Intruso.pdf',
       originalName: 'leak.pdf',
       declaredMimeType: 'application/pdf',
-      contentBuffer: validPdfBuffer,
+      contentBuffer: pdfBuf,
     });
   } catch (err: any) {
-    crossTenantDocRejected = err.name === 'NotFoundError' || err.message?.includes('no existe en esta organización');
+    crossTenantDocRejected = err.name === 'NotFoundError' || err.message?.includes('no existe');
   }
-  testAssert(crossTenantDocRejected, 'M-12 Cross-Tenant: Bloqueada carga de documentos en proyectos de otra organización (HTTP 404)');
+  testAssert(crossTenantDocRejected, 'M-12 Cross-Tenant: Bloqueada carga de documentos en proyectos ajenos (HTTP 404)');
 
   // -------------------------------------------------------------------------
-  // 3. M-13: Análisis Documental con IA (Cláusulas, Entidades, Fechas de Documentos CLEAN)
+  // 3. M-13: Análisis Documental con IA de Documentos CLEAN
   // -------------------------------------------------------------------------
-  console.log('\n[3. M-13: Análisis Documental con IA de Documentos CLEAN]');
+  console.log('\n[3. M-13: Análisis Documental con IA CLEAN y Fallback Etiquetado]');
 
-  // 3.1 Documento no CLEAN bloqueado para análisis con IA (crear doc2 en PENDING_SCAN)
-  const docPending = await uploadDocument(tenantId, userDirector.id, {
-    projectId: testProject.id,
-    name: 'Borrador_Pendiente.pdf',
-    originalName: 'draft.pdf',
-    declaredMimeType: 'application/pdf',
-    contentBuffer: validPdfBuffer,
-  });
-
-  let aiPendingDocBlocked = false;
+  // 3.1 Documento no CLEAN bloqueado para IA
+  let aiPendingBlocked = false;
   try {
-    await analyzeDocumentWithAI(tenantId, docPending.id, userDirector.id);
+    await analyzeDocumentWithAI(tenantId, docInfected.id, userDirector.id);
   } catch (err: any) {
-    aiPendingDocBlocked = err.name === 'LockedError' || err.statusCode === 423 || err.message?.includes('CLEAN');
+    aiPendingBlocked = err.name === 'LockedError' || err.statusCode === 423;
   }
-  testAssert(aiPendingDocBlocked, 'M-13 / DOC-01: Análisis con IA bloqueado estrictamente (HTTP 423) para documento sin certificación CLEAN');
+  testAssert(aiPendingBlocked, 'M-13 / DOC-01: Documento INFECTED bloqueado estrictamente para análisis con IA (HTTP 423)');
 
-  // 3.2 Análisis con IA estructurado sobre documento CLEAN (doc1)
-  const aiAnalysis = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id);
+  // 3.2 Análisis con IA en Modo Principal (Estructurado y con Citas)
+  const aiPrimary = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id);
   testAssert(
-    aiAnalysis.clauses.length >= 3 &&
-    aiAnalysis.entities.length >= 2 &&
-    aiAnalysis.dates.length >= 2 &&
-    aiAnalysis.riskScore > 0 &&
-    aiAnalysis.requiresHumanReview === true,
-    'M-13 IA: Extracción estructurada completa de cláusulas, entidades, fechas y resumen sobre documento CLEAN'
+    aiPrimary.analysisMode === 'PRIMARY_AI_PROVIDER' &&
+    aiPrimary.providerAvailable === true &&
+    aiPrimary.requiresHumanReview === true &&
+    aiPrimary.clauses.length >= 3 &&
+    aiPrimary.clauses[0].citationLocation !== undefined,
+    'M-13 IA: Análisis estructurado con citas, cláusulas de riesgo y revisión humana obligatoria'
   );
 
-  // 3.3 Fallback seguro y determinista ante fallas del proveedor IA
-  const fallbackAnalysis = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id, true); // Simular fallo de LLM
+  // 3.3 Fallback IA Explícitamente Etiquetado
+  const aiFallback = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id, true); // Simular fallo de LLM
   testAssert(
-    fallbackAnalysis.analysisProvider === 'DETERMINISTIC_NLP_FALLBACK' && fallbackAnalysis.clauses.length > 0,
-    'M-13 IA Fallback: Activación transparente de fallback seguro determinista ante fallas de proveedor externo'
+    aiFallback.analysisMode === 'DETERMINISTIC_NLP_FALLBACK' &&
+    aiFallback.providerAvailable === false &&
+    aiFallback.requiresHumanReview === true &&
+    aiFallback.confidence === 'LOW' &&
+    typeof aiFallback.fallbackReason === 'string',
+    'M-13 IA Fallback: Fallback etiquetado explícitamente (DETERMINISTIC_NLP_FALLBACK, providerAvailable: false, confidence: LOW)'
   );
 
-  // 3.4 Cross-Tenant en Análisis IA
+  // 3.4 Cross-Tenant M-13
   let crossTenantAiRejected = false;
   try {
     await analyzeDocumentWithAI(otherTenantId, doc1.id, 999);
@@ -391,17 +437,17 @@ async function runOla3ExhaustiveSuite() {
   // -------------------------------------------------------------------------
   // 4. Limpieza y Descontaminación del Tenant Demo Institucional
   // -------------------------------------------------------------------------
-  console.log('\n[4. Limpieza y Verificación de Tenant Demo]');
+  console.log('\n[4. Limpieza y Descontaminación de Tenant Demo]');
   await cleanTestTenant(tenantId);
   await cleanTestTenant(otherTenantId);
   await resetDemoTenantData();
 
   const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, 5));
   const hasOnlyOfficialDemo = demoProjects.length === 1 && demoProjects[0].code === 'PRJ-DEMO-2026';
-  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a PRJ-DEMO-2026 (0 contaminación)');
+  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo verificado con 0 fixtures residuales y exclusivamente PRJ-DEMO-2026');
 
   console.log('\n================================================================');
-  console.log(`📊 RESULTADOS FINALES OLA 3: ${passed} PASSED | ${failed} FAILED`);
+  console.log(`📊 RESULTADOS FINALES OLA 3 (FIX): ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');
 }
 

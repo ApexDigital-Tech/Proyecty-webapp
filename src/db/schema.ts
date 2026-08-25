@@ -305,6 +305,8 @@ export const tasks = pgTable('tasks', {
   dueDate: timestamp('due_date'),
   completedAt: timestamp('completed_at'),
   estimatedHours: doublePrecision('estimated_hours'),
+  weight: doublePrecision('weight').notNull().default(1), // Ponderación de avance físico (M-07)
+  progress: integer('progress').notNull().default(0), // Avance porcentual 0-100 (M-07)
   position: integer('position').notNull().default(0), // Orden dentro de la columna Kanban
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()),
