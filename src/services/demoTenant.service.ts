@@ -173,7 +173,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     status: 'EJECUCIÓN',
     riskLevel: 'Bajo',
     approvedBudget: 150000.0,
-    physicalProgress: 45,
+    physicalProgress: 75,
     financialProgress: 38,
     nextMilestoneDate: '2026-09-15',
     nextMilestoneTitle: 'Presentación de Informe Semestral de Ejecución',
@@ -208,7 +208,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   }).returning();
   const budgetVersionId = insertedVersion[0].id;
 
-  await db.insert(budgetLines).values([
+  const insertedBudgetLines = await db.insert(budgetLines).values([
     {
       projectId,
       budgetVersionId,
@@ -252,6 +252,62 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       executedAmount: 3000.0,
       balance: 12000.0,
       progress: 20,
+    },
+  ]).returning();
+
+  // 5.1 Seed Approved Expenses for the 4 budget lines to ensure 100% data consistency
+  await db.insert(expenses).values([
+    {
+      tenantId: orgId,
+      projectId,
+      budgetLineId: insertedBudgetLines[0].id,
+      title: 'Honorarios Especialista Técnico en Desarrollo Comunitario (Q1-Q2)',
+      amount: 24000.0,
+      category: 'Talento Humano',
+      currency: 'USD',
+      date: new Date('2026-02-15T00:00:00Z'),
+      status: 'approved',
+      registeredBy: managerUser.dbId,
+      approvedBy: directorUser.dbId,
+    },
+    {
+      tenantId: orgId,
+      projectId,
+      budgetLineId: insertedBudgetLines[1].id,
+      title: 'Adquisición de Lote 1 - Equipamiento Comunitario e Insumos',
+      amount: 21500.0,
+      category: 'Infraestructura',
+      currency: 'USD',
+      date: new Date('2026-03-01T00:00:00Z'),
+      status: 'approved',
+      registeredBy: managerUser.dbId,
+      approvedBy: directorUser.dbId,
+    },
+    {
+      tenantId: orgId,
+      projectId,
+      budgetLineId: insertedBudgetLines[2].id,
+      title: 'Desarrollo de Talleres Participativos y Material Didáctico',
+      amount: 8500.0,
+      category: 'Capacitación',
+      currency: 'USD',
+      date: new Date('2026-03-10T00:00:00Z'),
+      status: 'approved',
+      registeredBy: managerUser.dbId,
+      approvedBy: directorUser.dbId,
+    },
+    {
+      tenantId: orgId,
+      projectId,
+      budgetLineId: insertedBudgetLines[3].id,
+      title: 'Auditoría Financiera de Medio Término',
+      amount: 3000.0,
+      category: 'Monitoreo y Auditoría',
+      currency: 'USD',
+      date: new Date('2026-03-20T00:00:00Z'),
+      status: 'approved',
+      registeredBy: managerUser.dbId,
+      approvedBy: directorUser.dbId,
     },
   ]);
 
@@ -297,8 +353,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     });
   }
 
-  // Actualizar avance físico del proyecto demo: (50*100 + 50*50)/100 = 75%
-  await db.update(projects).set({ physicalProgress: 75 }).where(eq(projects.id, projectId));
+  // Actualizar avance físico y financiero del proyecto demo: (50*100 + 50*50)/100 = 75% físico, 57000/150000 = 38% financiero
+  await db.update(projects).set({ physicalProgress: 75, financialProgress: 38 }).where(eq(projects.id, projectId));
 
   // 7. Log audit event
   await db.insert(auditLogs).values({

@@ -19,7 +19,7 @@ import {
 } from '../src/db/schema.ts';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { resetDemoTenantData } from '../src/services/demoTenant.service.ts';
-import { getDashboardMetricsForUser } from '../src/services/dashboard.service.ts';
+import { getDashboardMetricsForUser, invalidateDashboardCache } from '../src/services/dashboard.service.ts';
 import { 
   createReportDraft, 
   approveReport, 
@@ -30,6 +30,7 @@ import {
   validateProjectScope
 } from '../src/services/reporting-export.service.ts';
 import { generateFinancialReport } from '../src/services/ai.service.ts';
+import { exportReportsPdf, exportReportsCsv } from '../src/controllers/reports.controller.ts';
 
 async function runOla4ExhaustiveSuite() {
   console.log('================================================================');
@@ -418,7 +419,7 @@ async function runOla4ExhaustiveSuite() {
   const max = latencies[latencies.length - 1];
 
   console.log(`  ⏱️ Benchmark Dashboard (N=100, Concurrencia=5): Mediana=${median.toFixed(2)}ms | P95=${p95.toFixed(2)}ms | P99=${p99.toFixed(2)}ms | Max=${max.toFixed(2)}ms`);
-  testAssert(latencies.length === 100 && !Number.isNaN(p95), `M-02 Benchmark: Muestra de 100 requests concurrentes ejecutada exitosamente (P95=${p95.toFixed(2)}ms)`);
+  testAssert(latencies.length === 100 && p95 < 150, `M-02 Benchmark: P95 (${p95.toFixed(2)}ms) dentro del umbral canónico (<150ms)`);
 
   // -------------------------------------------------------------------------
   // 2. M-14: Versionado de Reportes, Segregación de Aprobación e Inmutabilidad
@@ -571,19 +572,118 @@ async function runOla4ExhaustiveSuite() {
   testAssert(crossTenantScopeRejected, 'M-14 Cross-Tenant: Bloqueada validación y exportación de proyectos ajenos (HTTP 404)');
 
   // -------------------------------------------------------------------------
-  // 6. Limpieza y Descontaminación del Tenant Demo Institucional
+  // 6. Validación de Exportaciones PDF y CSV en Controladores Productivos
   // -------------------------------------------------------------------------
-  console.log('\n[6. Limpieza y Descontaminación de Tenant Demo]');
+  console.log('\n[6. M-14: Validación de Controladores HTTP de Exportación PDF y CSV]');
+
+  function createMockRes() {
+    return {
+      statusCode: 200,
+      headers: {} as Record<string, string>,
+      body: null as any,
+      status(code: number) { this.statusCode = code; return this; },
+      setHeader(key: string, val: string) { this.headers[key] = val; return this; },
+      send(data: any) { this.body = data; return this; },
+      json(data: any) { this.body = data; return this; },
+    };
+  }
+
+  // 6.1 Exportación PDF por Director, Manager, Finance, Auditor
+  for (const role of ['DIRECTOR', 'MANAGER', 'FINANCE', 'AUDITOR']) {
+    const mockReq: any = {
+      user: { id: userDirector.id, tenantId, role },
+      query: { type: 'financiero' }
+    };
+    const mockRes = createMockRes();
+    await exportReportsPdf(mockReq, mockRes as any, (() => {}) as any);
+    
+    testAssert(
+      mockRes.statusCode === 200 && mockRes.headers['Content-Type'] === 'application/pdf' && Buffer.isBuffer(mockRes.body),
+      `M-14 PDF Controller: Exportación PDF exitosa (HTTP 200, Buffer PDF válido) para rol ${role}`
+    );
+  }
+
+  // 6.2 Exportación CSV Financiero con filtrado estricto de partidas activas del tenant
+  const mockCsvReq: any = {
+    user: { id: userDirector.id, tenantId, role: 'DIRECTOR' },
+    query: { type: 'financiero', projectId: String(project1.id) }
+  };
+  const mockCsvRes = createMockRes();
+  await exportReportsCsv(mockCsvReq, mockCsvRes as any, (() => {}) as any);
+  const csvContent = mockCsvRes.body ? mockCsvRes.body.toString('utf-8') : '';
+  testAssert(
+    mockCsvRes.statusCode === 200 && csvContent.includes('BL-OLA4-01') && !csvContent.includes('BL-01'),
+    'M-14 CSV Controller: Exportación CSV financiero delimita estrictamente las partidas activas del proyecto'
+  );
+
+  // -------------------------------------------------------------------------
+  // 7. Limpieza y Descontaminación del Tenant Demo Institucional
+  // -------------------------------------------------------------------------
+  console.log('\n[7. Limpieza, Descontaminación y Conciliación del Tenant Demo]');
   await cleanTestTenant(tenantId);
   await cleanTestTenant(otherTenantId);
-  await resetDemoTenantData();
+  const { orgId: demoOrgId } = await resetDemoTenantData();
 
-  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, 5));
+  // 7.1 Conciliación de KPIs Productivos en Tenant Demo
+  const demoUsersList = await db.select().from(users).where(eq(users.tenantId, demoOrgId));
+  const demoDirectorUser = demoUsersList.find(u => u.roleId === 1) || demoUsersList[0];
+  
+  // Invalidar cache de dashboard para obtener datos frescos del demo
+  invalidateDashboardCache(demoOrgId);
+  const demoMetrics = await getDashboardMetricsForUser(demoOrgId, demoDirectorUser.id, 'DIRECTOR');
+
+  testAssert(demoMetrics.totalBudget === 150000, 'M-02 Demo Conciliación: Presupuesto total es exactamente USD 150,000');
+  testAssert(demoMetrics.totalExecuted === 57000, 'M-02 Demo Conciliación: Ejecución total suma exactamente USD 57,000');
+  testAssert(demoMetrics.availableBalance === 93000, 'M-02 Demo Conciliación: Saldo disponible es exactamente USD 93,000');
+  testAssert(demoMetrics.avgFinancial === 38, 'M-02 Demo Conciliación: Avance financiero global es exactamente 38%');
+  testAssert(demoMetrics.avgPhysical === 75, 'M-02 Demo Conciliación: Avance físico global es exactamente 75%');
+  testAssert(
+    demoMetrics.projectsList.length === 1 && 
+    demoMetrics.projectsList[0].financialProgress === 38 &&
+    demoMetrics.projectsList[0].physicalProgress === 75,
+    'M-02 Demo Conciliación: Proyecto institucional sincronizado en 38% financiero y 75% físico'
+  );
+
+  const demoExpensesList = await db.select().from(expenses).where(eq(expenses.tenantId, demoOrgId));
+  const demoExpensesTotal = demoExpensesList.reduce((sum, e) => sum + Number(e.amount), 0);
+  testAssert(
+    demoExpensesList.length === 4 && demoExpensesTotal === 57000,
+    'M-02 / M-10 Conciliación: 4 gastos aprobados en base de datos suman exactamente USD 57,000'
+  );
+
+  // 7.2 Verificación de CSV en Tenant Demo (Solo las 4 partidas activas)
+  const demoCsvReq: any = {
+    user: { id: demoDirectorUser.id, tenantId: demoOrgId, role: 'DIRECTOR' },
+    query: { type: 'financiero' }
+  };
+  const demoCsvRes = createMockRes();
+  await exportReportsCsv(demoCsvReq, demoCsvRes as any, (() => {}) as any);
+  const demoCsvContent = demoCsvRes.body ? demoCsvRes.body.toString('utf-8') : '';
+  const hasAllDemoLines = demoCsvContent.includes('BL-01') && 
+                          demoCsvContent.includes('BL-02') && 
+                          demoCsvContent.includes('BL-03') && 
+                          demoCsvContent.includes('BL-04');
+  const hasNoTestLines = !demoCsvContent.includes('BL-OLA4-01') && !demoCsvContent.includes('BL-TEST');
+  testAssert(hasAllDemoLines && hasNoTestLines, 'M-14 Demo CSV: Exportación contiene única y exclusivamente las 4 partidas activas de PRJ-DEMO-2026');
+
+  // 7.3 Verificación de PDF en Tenant Demo
+  const demoPdfReq: any = {
+    user: { id: demoDirectorUser.id, tenantId: demoOrgId, role: 'DIRECTOR' },
+    query: { type: 'financiero' }
+  };
+  const demoPdfRes = createMockRes();
+  await exportReportsPdf(demoPdfReq, demoPdfRes as any, (() => {}) as any);
+  testAssert(
+    demoPdfRes.statusCode === 200 && demoPdfRes.headers['Content-Type'] === 'application/pdf',
+    'M-14 Demo PDF: Exportación PDF del tenant demo responde exitosamente HTTP 200'
+  );
+
+  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
   const hasOnlyOfficialDemo = demoProjects.length === 1 && demoProjects[0].code === 'PRJ-DEMO-2026';
   testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a PRJ-DEMO-2026 (0 fixtures residuales)');
 
   console.log('\n================================================================');
-  console.log(`📊 RESULTADOS FINALES OLA 4 (v1.4.0): ${passed} PASSED | ${failed} FAILED`);
+  console.log(`📊 RESULTADOS FINALES OLA 4 (v1.4.1-wave-4-fix): ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');
 }
 

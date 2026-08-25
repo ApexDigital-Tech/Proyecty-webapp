@@ -6,6 +6,8 @@ import {
   agreements, 
   disbursements, 
   budgetLines, 
+  budgetVersions,
+  organizations,
   receiptsVouchers, 
   documents, 
   auditLogs, 
@@ -14,13 +16,19 @@ import {
   donors,
   users
 } from '../db/schema.ts';
-import { eq, and, inArray, desc, gte, lte, asc, sql } from 'drizzle-orm';
+import { eq, and, or, inArray, desc, gte, lte, asc, sql } from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
-import { getGeminiClient } from '../../server.ts';
+import { GoogleGenAI } from '@google/genai';
 import { logActivity } from '../db/audit.ts';
 import { getExpensesByTenant } from '../services/expenses.service.ts';
 import { generateFinancialReport } from '../services/ai.service.ts';
 import { logger } from '../lib/logger.ts';
+
+function getGeminiInstance() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || key.includes('YOUR_')) return null;
+  return new GoogleGenAI({ apiKey: key });
+}
 import { getDashboardMetricsForUser } from '../services/dashboard.service.ts';
 import { 
   createReportDraft, 
@@ -163,22 +171,74 @@ export const exportReportsCsv = async (req: AuthRequest, res: Response, next: Ne
 
     if (type === 'financiero') {
       headers = ['Código Partida', 'Categoría', 'Subcategoría', 'Presupuesto Aprobado', 'Presupuesto Reformulado', 'Ejecutado', 'Saldo', 'Progreso (%)', 'Estado'];
-      
-      const linesQuery = pId
-        ? await db.select().from(budgetLines).where(and(eq(budgetLines.projectId, pId)))
-        : await db.select().from(budgetLines);
 
-      rows = linesQuery.map(l => [
-        l.code,
-        l.category,
-        l.subcategory,
-        l.approvedAmount,
-        l.reformulatedAmount,
-        l.executedAmount,
-        l.balance,
-        l.progress,
-        l.status
-      ]);
+      // Determinar los proyectos alcanzables por el usuario dentro del tenant
+      let projectConditions = [eq(projects.tenantId, tenantId)];
+      if (pId) {
+        projectConditions.push(eq(projects.id, pId));
+      }
+      if (userRole === 'RESPONSABLE_PROYECTO') {
+        const assigned = await db.select({ projectId: projectMembers.projectId })
+          .from(projectMembers).where(eq(projectMembers.userId, userId));
+        const assignedIds = assigned.map(a => a.projectId);
+        projectConditions.push(inArray(projects.id, assignedIds.length > 0 ? assignedIds : [-1]));
+      } else if (userRole === 'FINANCIADOR') {
+        const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, userId));
+        if (userRecord && userRecord.donorId) {
+          projectConditions.push(eq(projects.donorId, userRecord.donorId));
+        } else {
+          projectConditions.push(eq(projects.id, -1));
+        }
+      }
+
+      const tenantProjects = await db.select({ id: projects.id })
+        .from(projects)
+        .where(and(...projectConditions));
+      
+      const targetProjectIds = tenantProjects.map(p => p.id);
+
+      if (targetProjectIds.length === 0) {
+        rows = [];
+      } else {
+        // Consultar exclusivamente versiones presupuestarias activas/aprobadas para estos proyectos
+        const activeVersions = await db.select({ id: budgetVersions.id, projectId: budgetVersions.projectId })
+          .from(budgetVersions)
+          .where(
+            and(
+              eq(budgetVersions.tenantId, tenantId),
+              inArray(budgetVersions.projectId, targetProjectIds),
+              or(eq(budgetVersions.status, 'APPROVED'), eq(budgetVersions.isApproved, true))
+            )
+          );
+
+        const activeVersionIds = activeVersions.map(v => v.id);
+
+        if (activeVersionIds.length === 0) {
+          rows = [];
+        } else {
+          // Consultar exclusivamente las partidas presupuestarias de las versiones aprobadas activas
+          const linesQuery = await db.select()
+            .from(budgetLines)
+            .where(
+              and(
+                inArray(budgetLines.projectId, targetProjectIds),
+                inArray(budgetLines.budgetVersionId, activeVersionIds)
+              )
+            );
+
+          rows = linesQuery.map(l => [
+            l.code,
+            l.category,
+            l.subcategory,
+            l.approvedAmount,
+            l.reformulatedAmount,
+            l.executedAmount,
+            l.balance,
+            l.progress,
+            l.status
+          ]);
+        }
+      }
     } else {
       headers = ['Código Proyecto', 'Nombre', 'Estado', 'Riesgo', 'Presupuesto Aprobado', 'Progreso Físico (%)', 'Progreso Financiero (%)', 'Score'];
       
@@ -189,6 +249,13 @@ export const exportReportsCsv = async (req: AuthRequest, res: Response, next: Ne
           .from(projectMembers).where(eq(projectMembers.userId, userId));
         const assignedIds = assigned.map(a => a.projectId);
         prjQuery.push(inArray(projects.id, assignedIds.length > 0 ? assignedIds : [-1]));
+      } else if (userRole === 'FINANCIADOR') {
+        const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, userId));
+        if (userRecord && userRecord.donorId) {
+          prjQuery.push(eq(projects.donorId, userRecord.donorId));
+        } else {
+          prjQuery.push(eq(projects.id, -1));
+        }
       }
 
       const projectsList = await db.select().from(projects).where(and(...prjQuery));
@@ -252,19 +319,28 @@ export const exportReportsPdf = async (req: AuthRequest, res: Response, next: Ne
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, tenantId));
     let projInfo = null;
-    let financialSummary = undefined;
+    let financialSummary: Record<string, string> | undefined = undefined;
 
     if (pId) {
-      const [p] = await db.select().from(projects).where(eq(projects.id, pId));
+      const [p] = await db.select().from(projects).where(and(eq(projects.id, pId), eq(projects.tenantId, tenantId)));
       if (p) {
         projInfo = { code: p.code, name: p.name };
         financialSummary = {
-          'Presupuesto Aprobado': `$${p.approvedBudget.toLocaleString()} USD`,
+          'Presupuesto Aprobado': `$${Number(p.approvedBudget).toLocaleString()} USD`,
           'Progreso Físico': `${p.physicalProgress}%`,
           'Progreso Financiero': `${p.financialProgress}%`,
           'Nivel de Riesgo': p.riskLevel,
         };
       }
+    } else {
+      const metrics = await getDashboardMetricsForUser(tenantId, userId, userRole);
+      financialSummary = {
+        'Presupuesto Total Tenant': `$${metrics.totalBudget.toLocaleString()} USD`,
+        'Ejecución Financiera Total': `$${metrics.totalExecuted.toLocaleString()} USD`,
+        'Saldo Disponible': `$${metrics.availableBalance.toLocaleString()} USD`,
+        'Avance Financiero Global': `${metrics.avgFinancial}%`,
+        'Avance Físico Global': `${metrics.avgPhysical}%`,
+      };
     }
 
     const reportTitle = type ? String(type).toUpperCase() : 'EJECUTIVO';
@@ -326,7 +402,7 @@ export const generateReport = async (req: AuthRequest, res: Response, next: Next
     const projectBudgetItems = await db.select().from(budgetLines).where(eq(budgetLines.projectId, p.id));
     const projectVouchers = await db.select().from(receiptsVouchers).where(eq(receiptsVouchers.projectId, p.id));
 
-    const gemini = getGeminiClient();
+    const gemini = getGeminiInstance();
     if (!gemini) {
       return res.status(503).json({
         error: 'El servicio de Inteligencia Artificial (Gemini API) no está configurado en este entorno. Por favor, agregue su clave GEMINI_API_KEY.',

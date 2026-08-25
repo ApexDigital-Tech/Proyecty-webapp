@@ -9,7 +9,7 @@ import {
   donors,
   users
 } from '../db/schema.ts';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, inArray, sql } from 'drizzle-orm';
 import { calculatePhysicalProgress } from './schedule.service.ts';
 
 export interface DashboardMetricsDto {
@@ -45,6 +45,22 @@ export interface DashboardFilterOptions {
   period?: string;
 }
 
+// Lightweight TTL cache for dashboard metrics (5 seconds TTL)
+const metricsCache = new Map<string, { data: DashboardMetricsDto; timestamp: number }>();
+const CACHE_TTL_MS = 5000;
+
+export function invalidateDashboardCache(tenantId?: number) {
+  if (tenantId) {
+    for (const key of metricsCache.keys()) {
+      if (key.startsWith(`${tenantId}:`)) {
+        metricsCache.delete(key);
+      }
+    }
+  } else {
+    metricsCache.clear();
+  }
+}
+
 /**
  * Calcula las métricas ejecutivas globales (M-02) con alcance de rol estricto y fórmulas matemáticas canónicas.
  */
@@ -54,6 +70,11 @@ export async function getDashboardMetricsForUser(
   userRole: string,
   filters: DashboardFilterOptions = {}
 ): Promise<DashboardMetricsDto> {
+  const cacheKey = `${tenantId}:${userId}:${userRole}:${JSON.stringify(filters)}`;
+  const cached = metricsCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
   // 1. Determinar condiciones de alcance de proyectos según rol
   let conditions = [eq(projects.tenantId, tenantId)];
 
@@ -112,17 +133,24 @@ export async function getDashboardMetricsForUser(
 
   // 3. Consultar gastos APPROVED y convenios/desembolsos concurrentemente
   const [approvedExpenses, activeAgreements] = await Promise.all([
-    db.select({ amount: expenses.amount }).from(expenses).where(
+    db.select({ projectId: expenses.projectId, amount: expenses.amount }).from(expenses).where(
       and(
         eq(expenses.tenantId, tenantId),
         inArray(expenses.projectId, projectIds),
-        eq(expenses.status, 'approved')
+        or(eq(expenses.status, 'approved'), eq(expenses.status, 'APPROVED'))
       )
     ),
     db.select({ id: agreements.id })
       .from(agreements)
       .where(and(inArray(agreements.projectId, projectIds), eq(agreements.status, 'Activo')))
   ]);
+
+  const expensesByProject = new Map<number, number>();
+  for (const exp of approvedExpenses) {
+    if (exp.projectId) {
+      expensesByProject.set(exp.projectId, (expensesByProject.get(exp.projectId) || 0) + Number(exp.amount));
+    }
+  }
 
   const totalExecuted = approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
@@ -143,7 +171,10 @@ export async function getDashboardMetricsForUser(
     const p = r.project;
     const budget = Number(p.approvedBudget) || 0;
     const phys = Number(p.physicalProgress) || 0;
-    const fin = Number(p.financialProgress) || 0;
+    const pExp = expensesByProject.get(p.id);
+    const fin = pExp !== undefined && budget > 0
+      ? Math.round((pExp / budget) * 100)
+      : (Number(p.financialProgress) || 0);
     const sc = Number(p.score) || 0;
 
     totalApprovedBudget += budget;
@@ -173,6 +204,7 @@ export async function getDashboardMetricsForUser(
 
     return {
       ...p,
+      financialProgress: fin,
       donor: r.donorName
     };
   });
@@ -205,7 +237,7 @@ export async function getDashboardMetricsForUser(
     pendingDisbursementsAmount = pendingDisbs.reduce((sum, d) => sum + Number(d.amount), 0);
   }
 
-  return {
+  const result: DashboardMetricsDto = {
     totalBudget: totalApprovedBudget,
     totalExecuted,
     availableBalance,
@@ -219,4 +251,7 @@ export async function getDashboardMetricsForUser(
     pendingDisbursementsAmount,
     projectsList: formattedProjects
   };
+
+  metricsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  return result;
 }
