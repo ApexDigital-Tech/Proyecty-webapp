@@ -100,14 +100,32 @@ export default function ReportsDashboard({ token, userRole }: ReportsDashboardPr
             Resumen visual y análisis impulsado por inteligencia artificial.
           </p>
         </div>
-        <button 
-          onClick={generateAiReport}
-          disabled={isGenerating}
-          className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-bold shadow hover:opacity-90 transition flex items-center justify-center space-x-2 disabled:opacity-50"
-        >
-          {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-          <span>Generar Reporte con IA</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <a
+            href={`/api/reports/export/csv?type=financiero`}
+            download
+            className="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold shadow-sm hover:bg-slate-50 transition flex items-center space-x-1.5"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>Exportar CSV</span>
+          </a>
+          <a
+            href={`/api/reports/export/pdf?type=financiero`}
+            download
+            className="px-3 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-semibold shadow-sm hover:bg-slate-50 transition flex items-center space-x-1.5"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-red-600" />
+            <span>Exportar PDF</span>
+          </a>
+          <button 
+            onClick={generateAiReport}
+            disabled={isGenerating}
+            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-bold shadow hover:opacity-90 transition flex items-center justify-center space-x-2 disabled:opacity-50"
+          >
+            {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            <span>Generar Reporte con IA</span>
+          </button>
+        </div>
       </div>
 
       {error && (

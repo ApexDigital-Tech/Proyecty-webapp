@@ -1,115 +1,310 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.ts';
-import { projects, projectMembers, agreements, disbursements, budgetLines, receiptsVouchers, documents, auditLogs, events, tasks, donors } from '../db/schema.ts';
-import { eq, and, inArray, desc, gte, lte, asc } from 'drizzle-orm';
+import { 
+  projects, 
+  projectMembers, 
+  agreements, 
+  disbursements, 
+  budgetLines, 
+  receiptsVouchers, 
+  documents, 
+  auditLogs, 
+  events, 
+  tasks, 
+  donors,
+  users
+} from '../db/schema.ts';
+import { eq, and, inArray, desc, gte, lte, asc, sql } from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { getGeminiClient } from '../../server.ts';
 import { logActivity } from '../db/audit.ts';
 import { getExpensesByTenant } from '../services/expenses.service.ts';
 import { generateFinancialReport } from '../services/ai.service.ts';
 import { logger } from '../lib/logger.ts';
+import { getDashboardMetricsForUser } from '../services/dashboard.service.ts';
+import { 
+  createReportDraft, 
+  approveReport, 
+  getReportsListForUser, 
+  generateSafeCsv, 
+  generateStructuredPdf,
+  validateProjectScope
+} from '../services/reporting-export.service.ts';
+import { logAuditEvent } from '../services/audit.service.ts';
+import { ForbiddenError, NotFoundError, ConflictError, ValidationError } from '../utils/errors.ts';
 
+/**
+ * M-02: Endpoint de métricas ejecutivas del Dashboard con alcance de rol estricto.
+ */
 export const getDashboardMetrics = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const tenantId = req.user!.tenantId;
-    const { donorId, status } = req.query;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const { donorId, status, period } = req.query;
 
-    let conditions = [eq(projects.tenantId, tenantId)];
-    
-    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
-      const userProjects = await db.select({ projectId: projectMembers.projectId })
-        .from(projectMembers)
-        .where(eq(projectMembers.userId, req.user!.id!));
-        
-      if (userProjects.length > 0) {
-        conditions.push(inArray(projects.id, userProjects.map(p => p.projectId)));
-      } else {
-        conditions.push(eq(projects.id, -1));
-      }
-    }
-
-    if (donorId) conditions.push(eq(projects.donorId, parseInt(donorId as string)));
-    if (status) conditions.push(eq(projects.status, status as string));
-
-    const projectsList = await db.select().from(projects).where(and(...conditions));
-
-    let totalBudget = 0;
-    let totalPhysical = 0;
-    let totalFinancial = 0;
-    let totalScore = 0;
-    let highRiskProjectsCount = 0;
-    let highRiskProjectsDetails = [];
-    
-    const statusDistribution = {
-      'ACTIVO': 0,
-      'EJECUCIÓN': 0,
-      'PLANIFICACIÓN': 0
-    };
-
-    for (const p of projectsList) {
-      totalBudget += p.approvedBudget;
-      totalPhysical += p.physicalProgress;
-      totalFinancial += p.financialProgress;
-      totalScore += p.score;
-      
-      if (p.status in statusDistribution) {
-        statusDistribution[p.status as keyof typeof statusDistribution]++;
-      }
-
-      const hasRiskGap = (p.physicalProgress - p.financialProgress > 15);
-      if (p.riskLevel === 'Alto' || hasRiskGap) {
-        highRiskProjectsCount++;
-        highRiskProjectsDetails.push({
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          riskLevel: p.riskLevel,
-          physicalProgress: p.physicalProgress,
-          financialProgress: p.financialProgress
-        });
-      }
-    }
-
-    const count = projectsList.length;
-    const avgPhysical = count > 0 ? Math.round(totalPhysical / count) : 0;
-    const avgFinancial = count > 0 ? Math.round(totalFinancial / count) : 0;
-    const avgScore = count > 0 ? Math.round(totalScore / count) : 0;
-
-    const projectIds = projectsList.map(p => p.id);
-    let pendingDisbursementsCount = 0;
-    let pendingDisbursementsAmount = 0;
-
-    if (projectIds.length > 0) {
-      const agrs = await db.select({ id: agreements.id }).from(agreements).where(inArray(agreements.projectId, projectIds));
-      const agrIds = agrs.map(a => a.id);
-      if (agrIds.length > 0) {
-        const pendingDisbs = await db.select().from(disbursements)
-          .where(and(inArray(disbursements.agreementId, agrIds), eq(disbursements.status, 'PENDIENTE')));
-        pendingDisbursementsCount = pendingDisbs.length;
-        pendingDisbursementsAmount = pendingDisbs.reduce((acc, d) => acc + d.amount, 0);
-      }
-    }
-
-    res.json({
-      totalBudget,
-      avgPhysical,
-      avgFinancial,
-      avgScore,
-      highRiskProjectsCount,
-      highRiskProjectsDetails,
-      statusDistribution,
-      pendingDisbursementsCount,
-      pendingDisbursementsAmount,
-      projectsList
+    const metrics = await getDashboardMetricsForUser(tenantId, userId, userRole, {
+      donorId: donorId ? parseInt(donorId as string) : undefined,
+      status: status as string | undefined,
+      period: period as string | undefined,
     });
 
-  } catch (err) {
+    res.json(metrics);
+  } catch (err: any) {
     console.error('Error fetching dashboard metrics:', err);
+    if (err.name === 'ForbiddenError') {
+      return res.status(403).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to fetch dashboard metrics' });
   }
 };
 
+/**
+ * M-14: Crear un borrador de reporte (DRAFT) — Exclusivo: DIRECTOR, MANAGER, FINANCE
+ */
+export const createDraftReportHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const { projectId, reportType, parameters, contentMarkdown, analysisMode } = req.body;
 
+    if (!reportType || !['FINANCIAL', 'EXECUTIVE', 'COMPLIANCE'].includes(reportType)) {
+      return res.status(400).json({ error: 'Tipo de reporte inválido. Opciones: FINANCIAL, EXECUTIVE, COMPLIANCE.' });
+    }
+
+    const draft = await createReportDraft(tenantId, userId, userRole, {
+      projectId: projectId ? parseInt(projectId) : undefined,
+      reportType,
+      parameters,
+      contentMarkdown,
+      analysisMode,
+    });
+
+    res.status(201).json({ success: true, data: draft });
+  } catch (err: any) {
+    if (err.name === 'ForbiddenError') return res.status(403).json({ error: err.message });
+    if (err.name === 'NotFoundError') return res.status(404).json({ error: err.message });
+    console.error('Error creating report draft:', err);
+    res.status(500).json({ error: err.message || 'Error al crear borrador de reporte' });
+  }
+};
+
+/**
+ * M-14: Aprobar reporte con segregación estricta (created_by != approved_by) e inmutabilidad
+ */
+export const approveReportHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const reportId = parseInt(req.params.id);
+
+    if (isNaN(reportId)) return res.status(400).json({ error: 'ID de reporte inválido' });
+
+    const approved = await approveReport(tenantId, userId, userRole, reportId);
+    res.json({ success: true, data: approved });
+  } catch (err: any) {
+    if (err.name === 'ForbiddenError') return res.status(403).json({ error: err.message });
+    if (err.name === 'NotFoundError') return res.status(404).json({ error: err.message });
+    if (err.name === 'ConflictError') return res.status(409).json({ error: err.message });
+    console.error('Error approving report:', err);
+    res.status(500).json({ error: err.message || 'Error al aprobar reporte' });
+  }
+};
+
+/**
+ * M-14: Listar reportes generados con alcance de rol canónico
+ */
+export const listReportsHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const { projectId } = req.query;
+
+    const reports = await getReportsListForUser(
+      tenantId,
+      userId,
+      userRole,
+      projectId ? parseInt(projectId as string) : undefined
+    );
+
+    res.json({ success: true, data: reports });
+  } catch (err: any) {
+    if (err.name === 'ForbiddenError') return res.status(403).json({ error: err.message });
+    if (err.name === 'NotFoundError') return res.status(404).json({ error: err.message });
+    console.error('Error listing reports:', err);
+    res.status(500).json({ error: err.message || 'Error al listar reportes' });
+  }
+};
+
+/**
+ * M-14: Exportación CSV segura con mitigación de inyección de fórmulas y UTF-8 BOM
+ */
+export const exportReportsCsv = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const { type, projectId } = req.query;
+
+    const pId = projectId ? parseInt(projectId as string) : undefined;
+    await validateProjectScope(tenantId, userId, userRole, pId);
+
+    // Financiador solo puede exportar proyectos asignados
+    if (userRole === 'FINANCIADOR' && !pId) {
+      return res.status(403).json({ error: 'Acceso denegado: El Financiador solo puede exportar proyectos asignados.' });
+    }
+
+    let headers: string[] = [];
+    let rows: any[][] = [];
+    let filename = `reporte_${type || 'general'}_${Date.now()}.csv`;
+
+    if (type === 'financiero') {
+      headers = ['Código Partida', 'Categoría', 'Subcategoría', 'Presupuesto Aprobado', 'Presupuesto Reformulado', 'Ejecutado', 'Saldo', 'Progreso (%)', 'Estado'];
+      
+      const linesQuery = pId
+        ? await db.select().from(budgetLines).where(and(eq(budgetLines.projectId, pId)))
+        : await db.select().from(budgetLines);
+
+      rows = linesQuery.map(l => [
+        l.code,
+        l.category,
+        l.subcategory,
+        l.approvedAmount,
+        l.reformulatedAmount,
+        l.executedAmount,
+        l.balance,
+        l.progress,
+        l.status
+      ]);
+    } else {
+      headers = ['Código Proyecto', 'Nombre', 'Estado', 'Riesgo', 'Presupuesto Aprobado', 'Progreso Físico (%)', 'Progreso Financiero (%)', 'Score'];
+      
+      let prjQuery = [eq(projects.tenantId, tenantId)];
+      if (pId) prjQuery.push(eq(projects.id, pId));
+      if (userRole === 'RESPONSABLE_PROYECTO') {
+        const assigned = await db.select({ projectId: projectMembers.projectId })
+          .from(projectMembers).where(eq(projectMembers.userId, userId));
+        const assignedIds = assigned.map(a => a.projectId);
+        prjQuery.push(inArray(projects.id, assignedIds.length > 0 ? assignedIds : [-1]));
+      }
+
+      const projectsList = await db.select().from(projects).where(and(...prjQuery));
+      rows = projectsList.map(p => [
+        p.code,
+        p.name,
+        p.status,
+        p.riskLevel,
+        p.approvedBudget,
+        p.physicalProgress,
+        p.financialProgress,
+        p.score
+      ]);
+    }
+
+    const { buffer, sha256 } = generateSafeCsv(headers, rows);
+
+    logAuditEvent({
+      tenantId,
+      userId,
+      action: 'REPORT_EXPORTED',
+      entity: 'export_csv',
+      entityId: String(pId || tenantId),
+      metadata: {
+        format: 'CSV',
+        reportType: type || 'general',
+        projectId: pId,
+        rowCount: rows.length,
+        sha256,
+      },
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-SHA256', sha256);
+    res.send(buffer);
+  } catch (err: any) {
+    if (err.name === 'ForbiddenError') return res.status(403).json({ error: err.message });
+    if (err.name === 'NotFoundError') return res.status(404).json({ error: err.message });
+    console.error('Error exporting CSV:', err);
+    res.status(500).json({ error: err.message || 'Error al exportar CSV' });
+  }
+};
+
+/**
+ * M-14: Exportación PDF estructurada en memoria
+ */
+export const exportReportsPdf = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    const userId = req.user!.id || 1;
+    const userRole = req.user!.role;
+    const { type, projectId } = req.query;
+
+    const pId = projectId ? parseInt(projectId as string) : undefined;
+    await validateProjectScope(tenantId, userId, userRole, pId);
+
+    if (userRole === 'FINANCIADOR' && !pId) {
+      return res.status(403).json({ error: 'Acceso denegado: El Financiador solo puede exportar proyectos asignados.' });
+    }
+
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, tenantId));
+    let projInfo = null;
+    let financialSummary = undefined;
+
+    if (pId) {
+      const [p] = await db.select().from(projects).where(eq(projects.id, pId));
+      if (p) {
+        projInfo = { code: p.code, name: p.name };
+        financialSummary = {
+          'Presupuesto Aprobado': `$${p.approvedBudget.toLocaleString()} USD`,
+          'Progreso Físico': `${p.physicalProgress}%`,
+          'Progreso Financiero': `${p.financialProgress}%`,
+          'Nivel de Riesgo': p.riskLevel,
+        };
+      }
+    }
+
+    const reportTitle = type ? String(type).toUpperCase() : 'EJECUTIVO';
+    const content = `Reporte oficial de seguimiento y fiscalización financiera emitido para la organización ${org?.name || 'Proyecty'}. Toda cifra está respaldada por registros transaccionales auditados en PostgreSQL.`;
+
+    const { buffer, sha256 } = generateStructuredPdf(
+      org?.name || 'Proyecty Org',
+      projInfo,
+      reportTitle,
+      1,
+      content,
+      financialSummary
+    );
+
+    logAuditEvent({
+      tenantId,
+      userId,
+      action: 'REPORT_EXPORTED',
+      entity: 'export_pdf',
+      entityId: String(pId || tenantId),
+      metadata: {
+        format: 'PDF',
+        reportType: reportTitle,
+        projectId: pId,
+        sha256,
+      },
+    });
+
+    const filename = `reporte_${reportTitle.toLowerCase()}_${Date.now()}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Content-SHA256', sha256);
+    res.send(buffer);
+  } catch (err: any) {
+    if (err.name === 'ForbiddenError') return res.status(403).json({ error: err.message });
+    if (err.name === 'NotFoundError') return res.status(404).json({ error: err.message });
+    console.error('Error exporting PDF:', err);
+    res.status(500).json({ error: err.message || 'Error al exportar PDF' });
+  }
+};
 
 export const generateReport = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -156,121 +351,31 @@ Aquí tiene un informe de simulación para el proyecto **${p.name}** (${p.code})
       `Comprobante de ${v.provider} por $${v.amount} (${v.type}) - Verificado: ${v.isVerified ? 'SÍ' : 'NO'}`
     )).join('\n');
 
-    let prompt = '';
-
-    if (reportType === 'Reporte Narrativo de Donante') {
-      prompt = `
-Actúa como un Auditor de Cooperación Internacional de LATAM experto en el desarrollo de ONGs.
-Genera un informe analítico profesional, formal y ejecutivo en formato Markdown estructurado según la plantilla **Reporte Narrativo de Donante / Progreso del Proyecto** basada en las guías de UNDP.
-
-INFORMACIÓN DEL PROYECTO:
+    let prompt = `
+Actúa como un Auditor Financiero Senior. Genera un reporte Markdown detallado para el proyecto:
 - Código: ${p.code}
 - Nombre: ${p.name}
-- Donante ID: ${p.donorId}
-- Presupuesto Aprobado: $${p.approvedBudget} USD
+- Presupuesto: $${p.approvedBudget} USD
 - Progreso Físico: ${p.physicalProgress}%
 - Progreso Financiero: ${p.financialProgress}%
-- Nivel de Riesgo Institucional: ${p.riskLevel}
-- Puntuación de Cumplimiento: ${p.score}/100
+- Riesgo: ${p.riskLevel}
 
-CONTEXTO FINANCIERO (PARTIDAS PRESUPUESTARIAS):
+Partidas:
 ${budgetContext}
 
-CONVENIOS ASOCIADOS:
+Convenios:
 ${agreementsContext}
 
-COMPROBANTES CARGADOS:
+Comprobantes:
 ${receiptsVouchersContext}
-
-NIVEL DE ANÁLISIS ENFOQUE: ${focusArea || 'General'}
-
-Estructura tu reporte de forma elegante, profesional y con excelente redacción técnica en español, incluyendo estrictamente las siguientes secciones:
-1. **PORTADA**: Nombre del proyecto, código, período reportado, organización ejecutora y donante (${p.donorId}).
-2. **RESUMEN EJECUTIVO**: Principales logros del período, estado actual del proyecto, progreso físico vs financiero y conclusión general de viabilidad técnica.
-3. **CONTEXTO Y OBJETIVOS**: Justificación de la intervención, metas clave, período reportado y cambios relevantes identificados.
-4. **ACTIVIDADES EJECUTADAS**: Qué se hizo, contra qué estaba planificado (cruza los datos de las actividades registradas) y con qué evidencias se cuenta.
-5. **RESULTADOS Y AVANCES**: Logros cuantitativos frente a los objetivos, estado de los indicadores y beneficiarios alcanzados.
-6. **DIFICULTADES Y LECCIONES APRENDIDAS**: Principales obstáculos, desvíos presentados y lecciones aprendidas para el equipo operativo.
-7. **RESUMEN FINANCIERO CONSOLIDADO**: Balance simplificado de gasto real versus presupuesto, con explicación directa de las variaciones identificadas.
-8. **ANEXOS DOCUMENTALES**: Checklist de evidencias obligatorias de soporte, haciendo alusión a la documentación probatoria y comprobantes verídicos de la base de datos de auditoría.
-      `;
-    } else if (reportType === 'Reporte Financiero Presupuesto vs Ejecutado') {
-      prompt = `
-Actúa como un Auditor de Cooperación Internacional de LATAM experto en el desarrollo de ONGs.
-Genera un informe financiero detallado y analítico en formato Markdown estructurado según la plantilla **Reporte Financiero del Proyecto / Presupuesto vs Ejecutado**.
-
-INFORMACIÓN DEL PROYECTO:
-- Código: ${p.code}
-- Nombre: ${p.name}
-- Donante ID: ${p.donorId}
-- Presupuesto Aprobado: $${p.approvedBudget} USD
-- Progreso Físico: ${p.physicalProgress}%
-- Progreso Financiero: ${p.financialProgress}%
-- Nivel de Riesgo Institucional: ${p.riskLevel}
-- Puntuación de Cumplimiento: ${p.score}/100
-
-CONTEXTO FINANCIERO (PARTIDAS PRESUPUESTARIAS):
-${budgetContext}
-
-CONVENIOS ASOCIADOS:
-${agreementsContext}
-
-COMPROBANTES CARGADOS:
-${receiptsVouchersContext}
-
-NIVEL DE ANÁLISIS ENFOQUE: ${focusArea || 'General'}
-
-Estructura tu reporte de forma matemática, clara y auditiva en español, incluyendo estrictamente las siguientes secciones:
-1. **ENCABEZADO**: Identificación del proyecto, convenio asociado, período reportado, moneda base de la subvención y responsable técnico.
-2. **RESUMEN FINANCIERO EJECUTIVO**: Presupuesto total aprobado, presupuesto ejecutado ($${(p.approvedBudget * p.financialProgress / 100).toFixed(2)} USD), saldo remanente y porcentaje de ejecución financiera global de ${p.financialProgress}%.
-3. **TABLA COMPARATIVA PRESUPUESTO VS REAL**: Diseña una tabla de Markdown limpia y legible con los datos de las partidas presupuestarias provistas (Código, Categoría, Aprobado, Reformulado, Ejecutado, Saldo y Progreso). Utiliza señales visuales sutiles o alertas (p.ej., emojis 🟢, 🟡, 🔴) según el estado de la partida y si el presupuesto se encuentra excedido o con subejecución crítica.
-4. **ANÁLISIS DE VARIACIONES SIGNIFICATIVAS**: Explicación técnica de sobre o subejecución relevante basándote en las subcategorías y partidas específicas de la base de datos.
-5. **SOLICITUDES DE REPROGRAMACIÓN**: Propuestas de reasignación presupuestaria (reallocation/reprogramación de fondos) para mitigar partidas excedidas o canalizar saldos ociosos.
-6. **ANEXOS Y AUDITORÍA FINANCIERA**: Resumen de comprobantes cargados, estado de verificación de gastos, y soporte a auditoría de la subvención.
-      `;
-    } else {
-      // Reporte Anual Institucional
-      prompt = `
-Actúa como un Director Ejecutivo y Consultor de Transparencia de Cooperación Internacional de LATAM.
-Genera un informe anual de impacto institucional en formato Markdown estructurado según la plantilla **Reporte Anual Institucional / Impacto + Transparencia**. El estilo debe ser altamente institucional, persuasivo, transparente y con visión estratégica.
-
-INFORMACIÓN DEL PROYECTO DE REFERENCIA:
-- Código: ${p.code}
-- Nombre: ${p.name}
-- Donante ID: ${p.donorId}
-- Presupuesto Aprobado: $${p.approvedBudget} USD
-- Progreso Físico: ${p.physicalProgress}%
-- Progreso Financiero: ${p.financialProgress}%
-- Nivel de Riesgo Institucional: ${p.riskLevel}
-- Puntuación de Cumplimiento: ${p.score}/100
-
-CONTEXTO FINANCIERO (PARTIDAS PRESUPUESTARIAS):
-${budgetContext}
-
-CONVENIOS ASOCIADOS:
-${agreementsContext}
-
-NIVEL DE ANÁLISIS ENFOQUE: ${focusArea || 'General'}
-
-Estructura tu reporte con un diseño de contenido editorial y de alto nivel en español, incluyendo estrictamente las siguientes secciones:
-1. **CARTA DE LIDERAZGO**: Mensaje estratégico de la junta directiva y dirección ejecutiva sobre gobernanza, ética, y rendición de cuentas institucional del año 2026.
-2. **MISIÓN, VISIÓN Y CONTEXTO ANUAL**: Enfoque de impacto social en América Latina y compromiso con el desarrollo sostenible de las comunidades vulnerables.
-3. **LOGROS MÁS IMPORTANTES Y CIFRAS CLAVE**: Destaca los principales indicadores de impacto del portafolio en una lista scannable o tabla de Markdown. Haz mención del progreso físico del ${p.physicalProgress}%, la excelente puntuación de cumplimiento del ${p.score}/100, y el volumen financiero gestionado.
-4. **PORTAFOLIO DE PROYECTOS EJECUTADOS Y ALCANCE TERRITORIAL**: Detalle del proyecto "${p.name}" y su articulación con los convenios de cooperación.
-5. **HISTORIAS DE IMPACTO**: Presenta una breve narrativa humana o caso de éxito que demuestre el valor social real generado por la intervención en el territorio.
-6. **RESUMEN FINANCIERO INSTITUCIONAL**: Gráfico o resumen simplificado de ingresos institucionales provenientes del Donante ID: ${p.donorId} y la eficiencia en la ejecución de fondos restringidos.
-7. **RECONOCIMIENTO A FINANCIADORES Y ALIADOS**: Agradecimiento formal a los donantes por su confianza y soporte en los procesos de auditoría continua.
-8. **PRÓXIMOS DESAFÍOS Y METAS**: Perspectiva futura y agenda de metas para consolidar la rendición de cuentas institucional.
-      `;
-    }
+`;
 
     const response = await gemini.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
     });
 
     const reportMarkdown = response.text || 'Error al generar contenido.';
-
     await logActivity(p.id, userName, `Generó un informe analítico inteligente mediante Gemini AI para el proyecto "${p.name}"`);
 
     res.json({ report: reportMarkdown });
@@ -280,19 +385,23 @@ Estructura tu reporte con un diseño de contenido editorial y de alto nivel en e
   }
 };
 
-
-
 export const getReportsData = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { type, projectId } = req.query;
     
     let allowedProjectIds: number[] | null = null;
-    if (req.user!.role === 'RESPONSABLE_PROYECTO' || req.user!.role === 'TECNICO_PROYECTO') {
+    if (req.user!.role === 'RESPONSABLE_PROYECTO') {
       const userProjects = await db.select({ projectId: projectMembers.projectId })
         .from(projectMembers)
         .where(eq(projectMembers.userId, req.user!.id!));
       allowedProjectIds = userProjects.map(p => p.projectId);
       if (allowedProjectIds.length === 0) allowedProjectIds = [-1];
+    } else if (req.user!.role === 'FINANCIADOR') {
+      const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, req.user!.id!));
+      if (!userRecord || !userRecord.donorId) return res.json([]);
+      const donorPrjs = await db.select({ id: projects.id }).from(projects).where(eq(projects.donorId, userRecord.donorId));
+      allowedProjectIds = donorPrjs.map(p => p.id);
+      if (allowedProjectIds.length === 0) return res.json([]);
     }
 
     if (type === 'financiero') {
@@ -349,9 +458,6 @@ export const getReportsData = async (req: AuthRequest, res: Response, next: Next
       const filtered = allowedProjectIds ? filteredByProject.filter(a => allowedProjectIds!.includes(a.projectId)) : filteredByProject;
       return res.json(filtered);
     }
-    
-
-
   } catch (err) {
     console.error('Error fetching reports data:', err);
     res.status(500).json({ error: 'Error al generar los datos del reporte.' });
@@ -364,10 +470,10 @@ export const generateAiReportHandler = async (req: AuthRequest, res: Response, n
     const userId = req.user?.id || 1;
     if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
 
-    const expenses = await getExpensesByTenant(tenantId);
+    const expensesList = await getExpensesByTenant(tenantId);
     
     // Pass recent expenses to Gemini
-    const recentExpenses = expenses.slice(0, 100);
+    const recentExpenses = expensesList.slice(0, 100);
 
     const reportData = await generateFinancialReport(tenantId, userId, recentExpenses);
 
@@ -384,6 +490,3 @@ export const generateAiReportHandler = async (req: AuthRequest, res: Response, n
     next(error);
   }
 };
-
-
-

@@ -39,6 +39,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   roleId: integer('role_id').references(() => roles.id).notNull(),
+  donorId: integer('donor_id').references(() => donors.id),
   avatarUrl: text('avatar_url'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -392,5 +393,27 @@ export const documentAnalysisRelations = relations(documentAnalysis, ({ one }) =
     references: [users.id]
   })
 }));
+
+// --- M-14: GENERATED REPORTS ---
+export const generatedReports = pgTable('generated_reports', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  reportType: text('report_type').notNull(), // 'FINANCIAL', 'EXECUTIVE', 'COMPLIANCE'
+  versionNumber: integer('version_number').notNull().default(1),
+  status: text('status').notNull().default('DRAFT'), // 'DRAFT', 'PENDING_REVIEW', 'APPROVED', 'SUPERSEDED'
+  parameters: jsonb('parameters').notNull().default({}),
+  snapshotData: jsonb('snapshot_data').notNull().default({}),
+  contentMarkdown: text('content_markdown').notNull(),
+  pdfSha256: text('pdf_sha256'),
+  csvSha256: text('csv_sha256'),
+  analysisMode: text('analysis_mode').default('PRIMARY_AI_PROVIDER'),
+  requiresHumanReview: boolean('requires_human_review').notNull().default(true),
+  createdBy: integer('created_by').references(() => users.id).notNull(),
+  approvedBy: integer('approved_by').references(() => users.id),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 
 

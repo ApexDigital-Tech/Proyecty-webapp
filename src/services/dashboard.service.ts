@@ -1,0 +1,222 @@
+import { db } from '../db/index.ts';
+import { 
+  projects, 
+  projectMembers, 
+  agreements, 
+  disbursements, 
+  expenses, 
+  budgetLines,
+  donors,
+  users
+} from '../db/schema.ts';
+import { eq, and, inArray, sql } from 'drizzle-orm';
+import { calculatePhysicalProgress } from './schedule.service.ts';
+
+export interface DashboardMetricsDto {
+  totalBudget: number;
+  totalExecuted: number;
+  availableBalance: number;
+  avgPhysical: number;
+  avgFinancial: number;
+  avgScore: number;
+  highRiskProjectsCount: number;
+  highRiskProjectsDetails: {
+    id: number;
+    code: string;
+    name: string;
+    riskLevel: string;
+    physicalProgress: number;
+    financialProgress: number;
+    gap: number;
+  }[];
+  statusDistribution: {
+    ACTIVO: number;
+    EJECUCIÓN: number;
+    PLANIFICACIÓN: number;
+  };
+  pendingDisbursementsCount: number;
+  pendingDisbursementsAmount: number;
+  projectsList: any[];
+}
+
+export interface DashboardFilterOptions {
+  donorId?: number;
+  status?: string;
+  period?: string;
+}
+
+/**
+ * Calcula las métricas ejecutivas globales (M-02) con alcance de rol estricto y fórmulas matemáticas canónicas.
+ */
+export async function getDashboardMetricsForUser(
+  tenantId: number,
+  userId: number,
+  userRole: string,
+  filters: DashboardFilterOptions = {}
+): Promise<DashboardMetricsDto> {
+  // 1. Determinar condiciones de alcance de proyectos según rol
+  let conditions = [eq(projects.tenantId, tenantId)];
+
+  if (userRole === 'RESPONSABLE_PROYECTO') {
+    const assigned = await db.select({ projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(eq(projectMembers.userId, userId));
+    
+    const assignedIds = assigned.map(a => a.projectId);
+    if (assignedIds.length > 0) {
+      conditions.push(inArray(projects.id, assignedIds));
+    } else {
+      conditions.push(eq(projects.id, -1)); // Sin proyectos asignados
+    }
+  } else if (userRole === 'FINANCIADOR') {
+    // Financiador: obtener donor_id vinculado al usuario
+    const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, userId));
+    if (userRecord && userRecord.donorId) {
+      conditions.push(eq(projects.donorId, userRecord.donorId));
+    } else {
+      conditions.push(eq(projects.id, -1));
+    }
+  }
+
+  // Filtros opcionales
+  if (filters.donorId) conditions.push(eq(projects.donorId, filters.donorId));
+  if (filters.status) conditions.push(eq(projects.status, filters.status));
+
+  // 2. Consultar proyectos del alcance
+  const rawProjects = await db.select({
+    project: projects,
+    donorName: donors.name
+  }).from(projects)
+    .leftJoin(donors, eq(projects.donorId, donors.id))
+    .where(and(...conditions));
+
+  const projectIds = rawProjects.map(r => r.project.id);
+
+  // Si no hay proyectos, retornar estado vacío seguro sin NaN
+  if (rawProjects.length === 0) {
+    return {
+      totalBudget: 0,
+      totalExecuted: 0,
+      availableBalance: 0,
+      avgPhysical: 0,
+      avgFinancial: 0,
+      avgScore: 0,
+      highRiskProjectsCount: 0,
+      highRiskProjectsDetails: [],
+      statusDistribution: { ACTIVO: 0, EJECUCIÓN: 0, PLANIFICACIÓN: 0 },
+      pendingDisbursementsCount: 0,
+      pendingDisbursementsAmount: 0,
+      projectsList: []
+    };
+  }
+
+  // 3. Consultar gastos APPROVED y convenios/desembolsos concurrentemente
+  const [approvedExpenses, activeAgreements] = await Promise.all([
+    db.select({ amount: expenses.amount }).from(expenses).where(
+      and(
+        eq(expenses.tenantId, tenantId),
+        inArray(expenses.projectId, projectIds),
+        eq(expenses.status, 'approved')
+      )
+    ),
+    db.select({ id: agreements.id })
+      .from(agreements)
+      .where(and(inArray(agreements.projectId, projectIds), eq(agreements.status, 'Activo')))
+  ]);
+
+  const totalExecuted = approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  // 4. Cálculos agregados por proyecto
+  let totalApprovedBudget = 0;
+  let weightedPhysicalSum = 0;
+  let totalScoreSum = 0;
+  let highRiskCount = 0;
+  const highRiskDetails: DashboardMetricsDto['highRiskProjectsDetails'] = [];
+
+  const statusDist = {
+    ACTIVO: 0,
+    EJECUCIÓN: 0,
+    PLANIFICACIÓN: 0
+  };
+
+  const formattedProjects = rawProjects.map(r => {
+    const p = r.project;
+    const budget = Number(p.approvedBudget) || 0;
+    const phys = Number(p.physicalProgress) || 0;
+    const fin = Number(p.financialProgress) || 0;
+    const sc = Number(p.score) || 0;
+
+    totalApprovedBudget += budget;
+    weightedPhysicalSum += (phys * budget);
+    totalScoreSum += sc;
+
+    if (p.status in statusDist) {
+      statusDist[p.status as keyof typeof statusDist]++;
+    }
+
+    // Alerta de brecha operativa estricta: |físico - financiero| > 15%
+    const gap = Math.abs(phys - fin);
+    const hasRiskGap = gap > 15; // Estrictamente mayor a 15%
+
+    if (p.riskLevel === 'Alto' || hasRiskGap) {
+      highRiskCount++;
+      highRiskDetails.push({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        riskLevel: p.riskLevel,
+        physicalProgress: phys,
+        financialProgress: fin,
+        gap
+      });
+    }
+
+    return {
+      ...p,
+      donor: r.donorName
+    };
+  });
+
+  const pCount = rawProjects.length;
+
+  // Avance físico global ponderado por presupuesto
+  const avgPhysical = totalApprovedBudget > 0
+    ? Math.round(weightedPhysicalSum / totalApprovedBudget)
+    : (pCount > 0 ? Math.round(rawProjects.reduce((s, r) => s + (r.project.physicalProgress || 0), 0) / pCount) : 0);
+
+  // Ejecución financiera global %
+  const avgFinancial = totalApprovedBudget > 0
+    ? Math.round((totalExecuted / totalApprovedBudget) * 100)
+    : 0;
+
+  const avgScore = pCount > 0 ? Math.round(totalScoreSum / pCount) : 0;
+  const availableBalance = Math.max(0, totalApprovedBudget - totalExecuted);
+
+  // 5. Desembolsos pendientes
+  let pendingDisbursementsCount = 0;
+  let pendingDisbursementsAmount = 0;
+
+  const agrIds = activeAgreements.map(a => a.id);
+  if (agrIds.length > 0) {
+    const pendingDisbs = await db.select({ amount: disbursements.amount }).from(disbursements).where(
+      and(inArray(disbursements.agreementId, agrIds), eq(disbursements.status, 'PENDIENTE'))
+    );
+    pendingDisbursementsCount = pendingDisbs.length;
+    pendingDisbursementsAmount = pendingDisbs.reduce((sum, d) => sum + Number(d.amount), 0);
+  }
+
+  return {
+    totalBudget: totalApprovedBudget,
+    totalExecuted,
+    availableBalance,
+    avgPhysical,
+    avgFinancial,
+    avgScore,
+    highRiskProjectsCount: highRiskCount,
+    highRiskProjectsDetails: highRiskDetails,
+    statusDistribution: statusDist,
+    pendingDisbursementsCount,
+    pendingDisbursementsAmount,
+    projectsList: formattedProjects
+  };
+}
