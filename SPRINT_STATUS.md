@@ -6,10 +6,23 @@
 ## 🎯 Resumen Ejecutivo
 
 - **Fase Actual**: Fase 3 — Ola 4 (Reportabilidad Ejecutiva, Dashboard y Exportaciones: M-02, M-14) ⚠️ **CIERRE FUNCIONAL APROBADO; CIERRE INTEGRAL CONDICIONADO POR `PERF-02`**
+- **Incidente Resuelto (P0/Alta)**: `UX-PORT-01` (Portafolio bloqueado por `a.filter is not a function` en respuestas paginadas) ✅ **RESUELTO Y VERIFICADO**.
 - **Tag Oficial de Producción**: `v1.4.2-wave-4-fix`
 - **Commit Funcional Asociado al Tag**: `098b945b66fbb75fc29a4521a182a9ee37d29bca`
-- **Estado de Regresión Global**: **163/163 Tests PASSED (100%)** (Ola 1: 35/35, Ola 2: 43/43, Ola 3: 35/35, Ola 4: 50/50)
+- **Estado de Regresión Global**: **169/169 Tests PASSED (100%)** (Ola 1: 35/35, Ola 2: 43/43, Ola 3: 35/35, Ola 4: 50/50, UX-PORT-01: 6/6)
 - **Salud del Despliegue (Render)**: `/api/health` 200 OK, PostgreSQL conectado, latencia de BD 2-4 ms, memoria RSS 135-150 MB, Conciliación Total en Tenant Demo: USD 150k presupuesto, USD 57k ejecutado (4 gastos aprobados), USD 93k disponible, 38% financiero, 75% físico, USD 150k desembolsos pendientes y 0 fixtures residuales.
+
+---
+
+## Hallazgo de Campo P0: UX-PORT-01 (Normalización Contrato PaginatedResponse)
+
+| Campo | Detalle |
+|---|---|
+| **Código** | `UX-PORT-01` |
+| **Severidad** | Alta (Bloqueante de módulo principal Portafolio) |
+| **Estado** | ✅ **RESUELTO Y VALIDADO** |
+| **Causa Raíz** | `GET /api/projects` entrega contrato paginado `{ data: [...], pagination: {...} }`. El componente `Portfolio.tsx` realizaba operaciones directas `.filter()` sobre la respuesta cuando esta no venía como arreglo plano, causando `TypeError: a.filter is not a function`. |
+| **Solución Arquitectónica** | • **Tipado Canónico:** Se definieron `PaginationInfo` y `PaginatedResponse<T>` en `src/types.ts`.<br>• **Normalizador Centralizado:** Módulo `src/lib/api-helpers.ts` con funciones puras y defensivas `normalizePaginatedResponse<T>` y `normalizeArrayResponse<T>`.<br>• **Validación Estructural Defensiva:** Componente `Portfolio.tsx` normaliza `data` y `pagination` antes de aplicar filtrado, búsqueda, ordenamiento y renderizado en grid.<br>• **Auditoría de Componentes:** Normalización aplicada transversalmente a `TabTareas.tsx`, `TabCronograma.tsx`, `Reports.tsx`, `Dashboard.tsx`, `GlobalAgenda.tsx` y `DocumentManager.tsx`.<br>• **Suite de Pruebas Automatizada:** `tests/ux-portfolio-contracts.test.ts` con 6/6 tests pasando para respuestas paginadas, planas, vacías, corruptas e integración con base de datos. |
 
 ---
 

@@ -84,18 +84,16 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
     return null;
   }
 
-  const {
-    totalBudget,
-    avgPhysical,
-    avgFinancial,
-    avgScore,
-    highRiskProjectsCount,
-    highRiskProjectsDetails,
-    statusDistribution,
-    pendingDisbursementsCount,
-    pendingDisbursementsAmount,
-    projectsList
-  } = metrics;
+  const totalBudget = Number(metrics.totalBudget) || 0;
+  const avgPhysical = Number(metrics.avgPhysical) || 0;
+  const avgFinancial = Number(metrics.avgFinancial) || 0;
+  const avgScore = Number(metrics.avgScore) || 0;
+  const highRiskProjectsCount = Number(metrics.highRiskProjectsCount) || 0;
+  const highRiskProjectsDetails = Array.isArray(metrics.highRiskProjectsDetails) ? metrics.highRiskProjectsDetails : [];
+  const statusDistribution = metrics.statusDistribution || {};
+  const pendingDisbursementsCount = Number(metrics.pendingDisbursementsCount) || 0;
+  const pendingDisbursementsAmount = Number(metrics.pendingDisbursementsAmount) || 0;
+  const projectsList = Array.isArray(metrics.projectsList) ? metrics.projectsList : [];
 
   return (
     <div id="dashboard-tab" className="p-6 space-y-6 max-w-7xl mx-auto select-none">

@@ -2,6 +2,18 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
+## [2026-08-25] Incidente de Campo Resuelto: UX-PORT-01 (Normalización Contrato PaginatedResponse en Portafolio)
+
+### Causa Raíz y Solución
+1. **Problema Detectado:** El endpoint productivo `GET /api/projects` entrega la estructura paginada `{ data: [...], pagination: { totalItems, currentPage, totalPages, limit } }`. En frontend, invocaciones directas a `.filter()` sobre respuestas no planas disparaban `TypeError: a.filter is not a function` bloqueando la vista de Portafolio.
+2. **Solución Implementada:**
+   - **Tipos Canónicos:** Se crearon `PaginationInfo` y `PaginatedResponse<T>` en `src/types.ts`.
+   - **Normalizador Defensivo Central:** `src/lib/api-helpers.ts` expone `normalizePaginatedResponse<T>` y `normalizeArrayResponse<T>` tolerantes a arreglos planos, objetos paginados, envolturas (`projects`, `items`), nulos o respuestas vacías.
+   - **Blindaje de Componentes:** Actualizados `Portfolio.tsx`, `TabTareas.tsx`, `TabCronograma.tsx`, `Reports.tsx`, `Dashboard.tsx`, `GlobalAgenda.tsx` y `DocumentManager.tsx` con validación estructural previa a `.filter()`, `.map()` o `.sort()`.
+   - **Verificación:** Suite automatizada `tests/ux-portfolio-contracts.test.ts` (**6/6 PASSED**), `npm run build` limpio y sin regresión.
+
+---
+
 ## [2026-08-25] Hito: Ejecución, Subsanación y Cierre Funcional de Fase 3 (Ola 4: Reportabilidad Ejecutiva, Dashboard y Exportaciones) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado

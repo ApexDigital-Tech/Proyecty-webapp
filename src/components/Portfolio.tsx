@@ -1,6 +1,7 @@
 import React from 'react';
-import { Project, UserRole } from '../types.ts';
+import { Project, UserRole, PaginationInfo } from '../types.ts';
 import { hasPermission } from '../lib/rbac.ts';
+import { normalizePaginatedResponse } from '../lib/api-helpers.ts';
 import {
   Search,
   Filter,
@@ -30,7 +31,7 @@ export default function Portfolio({
 }: PortfolioProps) {
   const [projectsList, setProjectsList] = React.useState<Project[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [pagination, setPagination] = React.useState({ currentPage: 1, totalPages: 1, totalItems: 0 });
+  const [pagination, setPagination] = React.useState<PaginationInfo>({ currentPage: 1, totalPages: 1, totalItems: 0, limit: 10 });
   const [searchTerm, setSearchTerm] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('ALL');
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -48,7 +49,7 @@ export default function Portfolio({
     try {
       const query = new URLSearchParams({
         page: pagination.currentPage.toString(),
-        limit: '10',
+        limit: (pagination.limit || 10).toString(),
       });
       if (searchTerm) query.append('search', searchTerm);
       if (filterStatus !== 'ALL') query.append('status', filterStatus);
@@ -58,21 +59,19 @@ export default function Portfolio({
       });
       if (res.ok) {
         const json = await res.json();
-        // Fallback for non-paginated old endpoint format during transition
-        if (Array.isArray(json)) {
-           setProjectsList(json);
-        } else {
-           const items = Array.isArray(json?.data) ? json.data : [];
-           setProjectsList(items);
-           if (json?.pagination) setPagination(json.pagination);
-        }
+        const { data: items, pagination: pag } = normalizePaginatedResponse<Project>(json);
+        setProjectsList(items);
+        setPagination(pag);
+      } else {
+        setProjectsList([]);
       }
     } catch (error) {
       console.error('Error fetching portfolio:', error);
+      setProjectsList([]);
     } finally {
       setIsLoading(false);
     }
-  }, [token, pagination.currentPage, searchTerm, filterStatus]);
+  }, [token, pagination.currentPage, pagination.limit, searchTerm, filterStatus]);
 
   React.useEffect(() => {
     // Basic debounce for search
@@ -82,8 +81,14 @@ export default function Portfolio({
     return () => clearTimeout(timer);
   }, [fetchProjects]);
 
-  // Derived variable for easy mapping below (no more client-side filtering needed)
-  const filteredProjects = (projectsList || []).filter(p => p && typeof p === 'object' && p.code);
+  // Validar estructuralmente la respuesta antes de ejecutar filter, map o sort (UX-PORT-01)
+  const safeProjects: Project[] = Array.isArray(projectsList)
+    ? projectsList
+    : Array.isArray((projectsList as any)?.data)
+      ? (projectsList as any).data
+      : [];
+
+  const filteredProjects = safeProjects.filter(p => p && typeof p === 'object' && p.code);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

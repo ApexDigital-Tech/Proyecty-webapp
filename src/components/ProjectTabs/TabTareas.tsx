@@ -3,6 +3,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { LayoutGrid, List, Plus, Clock, AlertCircle, MessageSquare, Flag, ArrowRight } from 'lucide-react';
 
 import TaskDetailModal from './TaskDetailModal';
+import { normalizeArrayResponse } from '../../lib/api-helpers.ts';
 
 interface Task {
   id: number;
@@ -55,9 +56,10 @@ export default function TabTareas({ project, isEditable, token }: TabTareasProps
       });
       if (!res.ok) throw new Error('Error al cargar las tareas');
       const data = await res.json();
-      setTasks(data);
+      setTasks(normalizeArrayResponse<Task>(data));
     } catch (err: any) {
       setError(err.message);
+      setTasks([]);
     } finally {
       setLoading(false);
     }

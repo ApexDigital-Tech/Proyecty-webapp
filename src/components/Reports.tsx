@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Download, Printer, Filter, Building2, TrendingUp, ShieldCheck } from 'lucide-react';
 import { Project } from '../types.ts';
 import { TableSkeleton } from './common/Skeletons.tsx';
+import { normalizeArrayResponse } from '../lib/api-helpers.ts';
 
 interface ReportsProps {
   token: string | null;
@@ -33,10 +34,11 @@ export default function Reports({ token }: ReportsProps) {
       });
       if (res.ok) {
         const data = await res.json();
-        setProjects(data.projects || []);
+        setProjects(normalizeArrayResponse<Project>(data));
       }
     } catch (err) {
       console.error('Error fetching projects:', err);
+      setProjects([]);
     }
   };
 

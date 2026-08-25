@@ -1,5 +1,17 @@
 export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR' | 'RESPONSABLE_PROYECTO' | 'TECNICO_PROYECTO';
 
+export interface PaginationInfo {
+  totalItems: number;
+  currentPage: number;
+  totalPages: number;
+  limit: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination?: PaginationInfo | null;
+}
+
 export interface User {
   id?: number;
   uid: string;

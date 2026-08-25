@@ -4,6 +4,7 @@ import 'gantt-task-react/dist/index.css';
 
 import { BarChart } from 'lucide-react';
 import moment from 'moment';
+import { normalizeArrayResponse } from '../../lib/api-helpers.ts';
 
 interface TabCronogramaProps {
   project: any;
@@ -25,7 +26,8 @@ export default function TabCronograma({ project, onRefreshProject, isEditable, t
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to fetch agenda');
-      const data = await res.json();
+      const rawData = await res.json();
+      const data = normalizeArrayResponse<any>(rawData);
       
       const formattedTasks: GanttTask[] = [];
 
