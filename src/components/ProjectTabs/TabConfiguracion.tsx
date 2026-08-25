@@ -1,6 +1,6 @@
 import React from 'react';
 import { Settings, Save } from 'lucide-react';
-import { UserRole } from '../../types.ts';
+import { UserRole, AUTHORIZED_CURRENCIES } from '../../types.ts';
 import { hasPermission } from '../../lib/rbac.ts';
 
 interface TabConfiguracionProps {
@@ -70,15 +70,9 @@ export default function TabConfiguracion({ project, userRole, token, onRefresh }
             disabled={!canEdit || isSaving}
             className="w-full max-w-sm p-2.5 text-xs bg-white border border-slate-200 rounded-lg outline-none"
           >
-            <option value="USD">Dólar Estadounidense (USD)</option>
-            <option value="EUR">Euro (EUR)</option>
-            <option value="MXN">Peso Mexicano (MXN)</option>
-            <option value="COP">Peso Colombiano (COP)</option>
-            <option value="ARS">Peso Argentino (ARS)</option>
-            <option value="BRL">Real Brasileño (BRL)</option>
-            <option value="CLP">Peso Chileno (CLP)</option>
-            <option value="PEN">Sol Peruano (PEN)</option>
-            <option value="UYU">Peso Uruguayo (UYU)</option>
+            {AUTHORIZED_CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.label}</option>
+            ))}
           </select>
         </div>
 

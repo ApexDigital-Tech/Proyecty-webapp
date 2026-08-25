@@ -1,5 +1,13 @@
 export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR' | 'RESPONSABLE_PROYECTO';
 
+export const AUTHORIZED_CURRENCIES = [
+  { code: 'BOB', name: 'Boliviano', label: 'BOB — Boliviano' },
+  { code: 'USD', name: 'Dólar estadounidense', label: 'USD — Dólar estadounidense' },
+  { code: 'EUR', name: 'Euro', label: 'EUR — Euro' },
+] as const;
+
+export type AuthorizedCurrency = 'BOB' | 'USD' | 'EUR';
+
 export interface PaginationInfo {
   totalItems: number;
   currentPage: number;

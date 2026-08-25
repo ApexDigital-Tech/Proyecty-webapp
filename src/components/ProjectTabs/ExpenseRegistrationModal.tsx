@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calculator, AlertCircle } from 'lucide-react';
+import { AUTHORIZED_CURRENCIES } from '../../types.ts';
 
 interface ExpenseRegistrationModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ export default function ExpenseRegistrationModal({ isOpen, onClose, project, tok
   
   const [budgetLineId, setBudgetLineId] = useState('');
   const [originalAmount, setOriginalAmount] = useState('');
-  const [originalCurrency, setOriginalCurrency] = useState(baseCurrency);
+  const [originalCurrency, setOriginalCurrency] = useState('BOB');
   const [exchangeRate, setExchangeRate] = useState('1');
   const [exchangeRateSource, setExchangeRateSource] = useState('');
   const [exchangeRateDate, setExchangeRateDate] = useState('');
@@ -152,15 +153,9 @@ export default function ExpenseRegistrationModal({ isOpen, onClose, project, tok
                   onChange={(e) => setOriginalCurrency(e.target.value)}
                   className="w-full p-2.5 bg-white border border-slate-200 rounded-lg outline-none cursor-pointer focus:border-[#008fa0]"
                 >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="MXN">MXN</option>
-                  <option value="COP">COP</option>
-                  <option value="ARS">ARS</option>
-                  <option value="BRL">BRL</option>
-                  <option value="CLP">CLP</option>
-                  <option value="PEN">PEN</option>
-                  <option value="UYU">UYU</option>
+                  {AUTHORIZED_CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
