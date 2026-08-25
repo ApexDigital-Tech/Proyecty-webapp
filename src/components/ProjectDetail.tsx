@@ -741,7 +741,7 @@ export default function ProjectDetail({
           { id: 'comprobantes', label: 'Comprobantes (Compliance)', icon: DollarSign },
           { id: 'documentos', label: 'Expediente Digital', icon: FileText },
           { id: 'reporte', label: 'Asistente de Reportes AI', icon: Sparkles },
-          ...(userRole !== 'TECNICO_PROYECTO' ? [{ id: 'configuracion', label: 'Configuración', icon: Settings }] : []),
+          ...(['DIRECTOR', 'MANAGER'].includes(userRole) ? [{ id: 'configuracion', label: 'Configuración', icon: Settings }] : []),
           ...(['DIRECTOR', 'MANAGER', 'RESPONSABLE_PROYECTO'].includes(userRole) ? [{ id: 'equipo', label: 'Equipo del Proyecto', icon: BookOpen }] : []),
         ].map((tab) => {
           const Icon = tab.icon;
@@ -900,7 +900,7 @@ export default function ProjectDetail({
         )}
 
         {/* TAB CONFIGURACION */}
-        {activeTab === 'configuracion' && userRole !== 'TECNICO_PROYECTO' && (
+        {activeTab === 'configuracion' && ['DIRECTOR', 'MANAGER'].includes(userRole) && (
           <TabConfiguracion
             project={project}
             userRole={userRole}

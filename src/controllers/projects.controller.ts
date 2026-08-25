@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.ts';
-import { projects, projectMembers, agreements, disbursements, budgetLines, receiptsVouchers, documents, auditLogs, events, tasks, donors, users, projectLogs, clauses , expenses, budgetVersions} from '../db/schema.ts';
+import { projects, projectMembers, agreements, disbursements, budgetLines, receiptsVouchers, documents, auditLogs, events, tasks, donors, users, projectLogs, clauses, expenses, budgetVersions, organizations } from '../db/schema.ts';
 import { eq, and, inArray, desc, gte, lte, asc , ilike, sql} from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts';
@@ -105,6 +105,32 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
 
     if (!code || !name || !donor || !approvedBudget) {
       return res.status(400).json({ error: 'Los campos Código, Nombre, Donante y Presupuesto son requeridos.' });
+    }
+
+    // --- TRIAL RESTRICTIONS ENFORCEMENT ---
+    const [currentOrg] = await db.select().from(organizations).where(eq(organizations.id, req.user!.tenantId)).limit(1);
+    if (currentOrg) {
+      const isTrial = currentOrg.subscriptionPlan === 'TRIAL_PRIVATE' || currentOrg.name.includes('TRIAL') || currentOrg.name.includes('VOSERDEM');
+      if (isTrial) {
+        // 1. Expiration check (after 2026-09-24 or renewsAt)
+        const expiryDate = currentOrg.renewsAt || new Date('2026-09-24T23:59:59Z');
+        if (new Date() > new Date(expiryDate)) {
+          return res.status(409).json({
+            error: 'El período de evaluación privada (Trial) ha concluido. La plataforma está disponible en modo consulta y exportación.',
+            code: 'TRIAL_EXPIRED'
+          });
+        }
+
+        // 2. Project quota check (max 6 projects)
+        const currentProjects = await db.select({ count: sql`count(*)` }).from(projects).where(eq(projects.tenantId, req.user!.tenantId));
+        const projectCount = Number(currentProjects[0]?.count || 0);
+        if (projectCount >= 6) {
+          return res.status(409).json({
+            error: 'Límite de proyectos de evaluación alcanzado (máximo 6 proyectos en plan Trial).',
+            code: 'TRIAL_PROJECT_LIMIT_REACHED'
+          });
+        }
+      }
     }
 
     try {

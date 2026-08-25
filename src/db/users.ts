@@ -3,8 +3,10 @@ import { users, organizations, roles } from './schema.ts';
 import { eq } from 'drizzle-orm';
 import { sendWelcomeEmail } from '../services/email.service.ts';
 
-export async function getOrCreateUser(uid: string, email: string, name: string, roleName: string) {
+export async function getOrCreateUser(uid: string, rawEmail: string, name: string, defaultRoleName: string = 'MANAGER') {
   try {
+    const email = rawEmail.toLowerCase().trim();
+
     // --- STEP 1: Check by UID first (fast path for returning users) ---
     const byUid = await db.select({
       id: users.id,
@@ -27,11 +29,11 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
         .where(eq(users.uid, uid));
       return {
         ...existing,
-        role: existing.roleName || 'Project Manager'
+        role: existing.roleName || 'MANAGER'
       };
     }
 
-    // --- STEP 2: Check by EMAIL (handles admin pre-registration with placeholder uid) ---
+    // --- STEP 2: Check by EMAIL (handles pre-registered users with placeholder uid) ---
     const byEmail = await db.select({
       id: users.id,
       uid: users.uid,
@@ -48,15 +50,15 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
     if (byEmail.length > 0) {
       const existing = byEmail[0];
       // Link the real Supabase UID to the pre-registered row.
-      // DO NOT overwrite roleId — admin assigned it intentionally.
+      // DO NOT overwrite roleId or tenantId — pre-authorized intentionally.
       await db.update(users)
         .set({ uid, name })
         .where(eq(users.id, existing.id));
-      console.log(`[Auth] Linked Google UID ${uid} to pre-registered email ${email} (role preserved: ${existing.roleName})`);
+      console.log(`[Auth] Linked Google UID ${uid} to pre-registered email ${email} (Tenant: ${existing.tenantId}, Role: ${existing.roleName})`);
       return {
         ...existing,
-        uid, // return the now-linked uid
-        role: existing.roleName || 'Project Manager'
+        uid,
+        role: existing.roleName || 'MANAGER'
       };
     }
 
@@ -72,11 +74,11 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
     }
 
     let roleId: number;
-    const roleResult = await db.select().from(roles).where(eq(roles.name, roleName));
+    const roleResult = await db.select().from(roles).where(eq(roles.name, defaultRoleName));
     if (roleResult.length > 0) {
       roleId = roleResult[0].id;
     } else {
-      const newRole = await db.insert(roles).values({ name: roleName, isSystemRole: false }).returning();
+      const newRole = await db.insert(roles).values({ name: defaultRoleName, isSystemRole: false }).returning();
       roleId = newRole[0].id;
     }
 
@@ -99,7 +101,7 @@ export async function getOrCreateUser(uid: string, email: string, name: string, 
 
     return {
       ...result[0],
-      role: roleName
+      role: defaultRoleName
     };
   } catch (error) {
     console.error('Error in getOrCreateUser:', error);

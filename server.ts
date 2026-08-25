@@ -185,7 +185,7 @@ app.get('/api/health', async (req, res) => {
     
     res.status(200).json({
       status: 'healthy',
-      version: '1.0.0',
+      version: '1.5.0',
       timestamp: new Date().toISOString(),
       database: {
         status: 'connected',

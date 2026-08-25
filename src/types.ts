@@ -1,4 +1,4 @@
-export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR' | 'RESPONSABLE_PROYECTO' | 'TECNICO_PROYECTO';
+export type UserRole = 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'FINANCIADOR' | 'RESPONSABLE_PROYECTO';
 
 export interface PaginationInfo {
   totalItems: number;

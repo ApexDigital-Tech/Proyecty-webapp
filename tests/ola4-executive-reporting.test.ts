@@ -270,7 +270,6 @@ async function runOla4ExhaustiveSuite() {
       title: 'Gasto Mayor P1',
       status: 'approved',
       approvedBy: userFinance.id,
-      approvedAt: new Date(),
     },
     {
       tenantId,
@@ -284,7 +283,6 @@ async function runOla4ExhaustiveSuite() {
       title: 'Gasto Mayor P2',
       status: 'approved',
       approvedBy: userFinance.id,
-      approvedAt: new Date(),
     },
     {
       tenantId,

@@ -46,21 +46,22 @@ const ROLES_TO_SEED = [
     name: 'RESPONSABLE_PROYECTO',
     description: 'Responsable de Proyecto',
     permissions: [
-      { module: 'projects', action: 'read' }, { module: 'projects', action: 'create' },
+      { module: 'projects', action: 'read' }, { module: 'projects', action: 'create' }, { module: 'projects', action: 'update' },
       { module: 'expenses', action: 'read' }, { module: 'expenses', action: 'create' }
     ]
   },
   {
-    name: 'TECNICO_PROYECTO',
-    description: 'Técnico de Proyecto',
+    name: 'FINANCIADOR',
+    description: 'Donante / Financiador',
     permissions: [
       { module: 'projects', action: 'read' },
-      { module: 'expenses', action: 'read' }, { module: 'expenses', action: 'create' }
+      { module: 'reports', action: 'read' },
+      { module: 'budgets', action: 'read' }
     ]
   },
   {
     name: 'AUDITOR',
-    description: 'Auditor / Viewer',
+    description: 'Auditor Externo',
     permissions: ALL_MODULES.map(m => ({ module: m, action: 'read' }))
   }
 ];

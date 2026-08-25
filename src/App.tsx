@@ -20,37 +20,37 @@ import ExpensesDashboard from './components/expenses/ExpensesDashboard.tsx';
 import AuditLogsDashboard from './components/audit/AuditLogsDashboard.tsx';
 import ReportsDashboard from './components/reports/ReportsDashboard.tsx';
 
+import { onAuthFailure, clearClientSession, apiFetch } from './lib/api-client.ts';
+import { AlertTriangle, Clock, Shield } from 'lucide-react';
+
 export default function App() {
   const [token, setToken] = React.useState<string | null>(() => localStorage.getItem('proyecty_token'));
-  const [currentUser, setCurrentUser] = React.useState<{ name: string; email: string; role: UserRole; tenantId?: string; uid?: string } | null>(() => {
+  const [currentUser, setCurrentUser] = React.useState<{ name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string } | null>(() => {
     const cached = localStorage.getItem('proyecty_user');
     return cached ? JSON.parse(cached) : null;
   });
 
+  const [sessionNotice, setSessionNotice] = React.useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
   const [upgradeMessage, setUpgradeMessage] = React.useState('');
 
+  // Subscribe to centralized API client auth failure events
   React.useEffect(() => {
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
-      if (response.status === 403) {
-        try {
-          const cloned = response.clone();
-          const data = await cloned.json();
-          if (data?.code === 'USER_SUSPENDED') {
-            handleLogout();
-            alert("Acceso denegado: Usuario suspendido");
-          } else if (data?.code === 'UPGRADE_REQUIRED') {
-            setUpgradeMessage(data.message || 'Esta funcionalidad requiere un plan superior.');
-            setShowUpgradeModal(true);
-          }
-        } catch(e) {}
+    const unsubscribe = onAuthFailure((reason, message) => {
+      if (reason === 'SESSION_EXPIRED') {
+        handleLogout();
+        setSessionNotice(message || 'Tu sesión ha expirado o no es válida. Por favor inicia sesión nuevamente.');
+      } else if (reason === 'USER_SUSPENDED') {
+        handleLogout();
+        setSessionNotice(message || 'Acceso denegado: Tu cuenta ha sido suspendida.');
+      } else if (reason === 'UPGRADE_REQUIRED') {
+        setUpgradeMessage(message || 'Esta funcionalidad requiere un plan superior.');
+        setShowUpgradeModal(true);
       }
-      return response;
-    };
+    });
+
     return () => {
-      window.fetch = originalFetch;
+      unsubscribe();
     };
   }, []);
 
@@ -59,9 +59,9 @@ export default function App() {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           const u = session.user;
-          const email = u.email || '';
+          const email = (u.email || '').toLowerCase();
           const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
+          const role: UserRole = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
           handleLoginSuccess(session.access_token, { name: userName, email, role });
         }
       });
@@ -69,9 +69,9 @@ export default function App() {
       supabase.auth.onAuthStateChange((_event, session) => {
         if (session) {
           const u = session.user;
-          const email = u.email || '';
+          const email = (u.email || '').toLowerCase();
           const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          const role = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
+          const role: UserRole = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
           handleLoginSuccess(session.access_token, { name: userName, email, role });
         } else {
           handleLogout();
@@ -90,19 +90,16 @@ export default function App() {
   const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = React.useState(false);
 
-  // Load activity logs and validate session when authenticated or changing tabs
+  // Validate session when authenticated or changing tabs
   React.useEffect(() => {
     if (token) {
-      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      apiFetch('/api/auth/me')
         .then(async (res) => {
-          if (res.status === 403 || res.status === 401) {
-            try {
-              const data = await res.json();
-              if (data?.code === 'USER_SUSPENDED' || res.status === 401) {
-                handleLogout();
-                alert("Acceso denegado: Sesión inválida o usuario suspendido");
-              }
-            } catch(e) {}
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.role) {
+              setCurrentUser(prev => prev ? { ...prev, role: data.role as UserRole, tenantId: data.tenantId } : null);
+            }
           }
         })
         .catch(() => {});
@@ -115,9 +112,7 @@ export default function App() {
     if (!token) return;
     setIsLoadingLogs(true);
     try {
-      const res = await fetch('/api/activity-logs', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch('/api/activity-logs');
       if (res.ok) {
         const data = await res.json();
         const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
@@ -130,23 +125,23 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole }) => {
+  const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole; tenantId?: string | number }) => {
     if (userInfo.email === 'apexdigital70@gmail.com') {
       userInfo.role = 'DIRECTOR';
-      localStorage.removeItem('user_role'); // Clean up any old keys just in case
+      localStorage.removeItem('user_role');
       localStorage.removeItem('auth_user');
     }
     localStorage.setItem('proyecty_token', userToken);
     localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
     setToken(userToken);
     setCurrentUser(userInfo);
+    setSessionNotice(null);
     setTab('dashboard');
     setSelectedProjectId(null);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('proyecty_token');
-    localStorage.removeItem('proyecty_user');
+    clearClientSession();
     setToken(null);
     setCurrentUser(null);
   };
@@ -187,11 +182,13 @@ export default function App() {
   };
 
   if (!token || !currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+    return <Login onLoginSuccess={handleLoginSuccess} sessionNotice={sessionNotice} />;
   }
 
   // Find the selected project name for the Topbar breadcrumb
   const selectedProjectName = undefined;
+
+  const isTrialTenant = currentUser?.email === 'mirosromeroc@gmail.com' || (currentUser?.tenantId && String(currentUser.tenantId).includes('VOSERDEM'));
 
   return (
     <div id="proyecty-app-shell" className="flex bg-[#f8f9fc] min-h-screen overflow-x-hidden">
@@ -221,6 +218,20 @@ export default function App() {
           onLogout={handleLogout}
           onRoleSwitch={handleRoleSwitch}
         />
+
+        {/* Trial Restriction Notice Banner */}
+        {isTrialTenant && (
+          <div id="trial-evaluation-banner" className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-2 flex items-center justify-between text-xs text-amber-900">
+            <div className="flex items-center space-x-2">
+              <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span><strong>Evaluación Privada VOSERDEM:</strong> Vigencia hasta el 24 de septiembre de 2026 (Capacidad: máx. 6 proyectos).</span>
+            </div>
+            <div className="flex items-center space-x-1.5 text-[11px] text-amber-800 hidden md:flex">
+              <Shield className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+              <span>Entorno de evaluación: absténgase de cargar datos personales sensibles o información bancaria real.</span>
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Route Screen Swapper */}
         <main className="flex-grow pb-20 md:pb-0">

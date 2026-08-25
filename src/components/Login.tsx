@@ -4,6 +4,7 @@ import { UserRole } from '../types.ts';
 
 interface LoginProps {
   onLoginSuccess: (token: string, userInfo: { name: string; email: string; role: UserRole }) => void;
+  sessionNotice?: string | null;
 }
 
 interface DemoUserItem {
@@ -14,7 +15,7 @@ interface DemoUserItem {
   avatarUrl: string;
 }
 
-export default function Login({ onLoginSuccess }: LoginProps) {
+export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [loadingRole, setLoadingRole] = React.useState<string | null>(null);
@@ -145,6 +146,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             Control de Proyectos, Convenios y Presupuestos
           </p>
         </div>
+
+        {sessionNotice && (
+          <div id="session-notice-alert" className="bg-amber-50 border-l-4 border-amber-500 p-2.5 rounded-r flex items-center space-x-2 text-amber-800 text-xs font-sans">
+            <ShieldAlert className="w-4 h-4 flex-shrink-0 text-amber-600" />
+            <span>{sessionNotice}</span>
+          </div>
+        )}
 
         {error && (
           <div id="login-error-alert" className="bg-red-50 border-l-4 border-red-500 p-2.5 rounded-r flex items-center justify-between text-red-700 text-xs font-sans">

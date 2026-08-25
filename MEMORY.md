@@ -2,7 +2,40 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-25] Incidente de Campo Resuelto: UX-PORT-01 (Normalización Contrato PaginatedResponse en Portafolio)
+## [2026-08-25] Hito: Estabilización, Normalización de Usuarios y Habilitación del Entorno Privado VOSERDEM (v1.5.0-voserdem-trial)
+
+### Resumen Consolidado y Decisiones Arquitectónicas
+1. **Respaldo Cifrado y Privacidad de Datos:**
+   - Respaldo de 128 usuarios cifrado con AES-256-GCM (`respaldo_usuarios_2026-08-25T16-01-41-968Z.json.enc`) y verificado con hash SHA-256 (`A0BDD7589FF5A27F10968E7DD32CB794D57310A2F1912DD2CE20EFA0C86E0FCF`). Excluido de Git, Docker y logs.
+   - Teléfonos privados de directivos excluidos de catálogos y esquemas públicos.
+2. **Normalización Reversible de Usuarios:**
+   - Cero `DELETE` en BD: Fixtures de prueba suspendidos con `isActive: false` y auditados.
+   - Roles canónicos normalizados: `DIRECTOR`, `MANAGER`, `FINANCE`, `RESPONSABLE_PROYECTO`, `AUDITOR`, `FINANCIADOR` (eliminado `TECNICO_PROYECTO`).
+   - Resolución de usuarios normalizada a minúsculas (`email.toLowerCase().trim()`) preservando el tenant_id preautorizado sin sobreescrituras en login Google.
+3. **Cliente API Centralizado y Saneamiento de UI:**
+   - Implementado `src/lib/api-client.ts` con inyección de Bearer tokens y timeout estricto de 5 segundos (`AbortController`).
+   - Gestión limpia de sesiones: Cierre de sesión y purga de almacenamiento exclusivamente ante HTTP 401 y HTTP 403 `USER_SUSPENDED`. Errores 403 de RBAC ordinario mantienen la sesión activa.
+   - Reemplazados todos los `alert()` nativos bloqueantes por banners y toasts informativos de sesión (`sessionNotice`).
+   - Banner informativo en `Login.tsx` para evaluación privada VOSERDEM (advertencia de no ingresar PII sensible ni datos bancarios).
+4. **Tenant Privado VOSERDEM (`ORG-TRIAL-VOSERDEM`):**
+   - Configurado con 30 días de vigencia (vence 24/09/2026), límite de 6 proyectos (HTTP 409 `TRIAL_PROJECT_LIMIT_REACHED`), excluido del scheduler de reseteo demo (`RESET-VO-01`).
+   - Usuario preautorizado: Miroslava Romero (`mirosromeroc@gmail.com`, rol `DIRECTOR`).
+   - Proyecto introductorio `PRJ-VOS-EJEMPLO`: Presupuesto $45,000 USD, 3 partidas base, 2 tareas (peso 60 al 100%, peso 40 al 50% => avance físico exactamente 80.0%), avance financiero 0.0%.
+   - Segregación financiera FIN-01: Bloqueo estricto de autoaprobación de gastos creados por Miroslava (HTTP 409 `ConflictError`).
+   - Gobierno documental DOC-01: Documento demostrativo escaneado y certificado en estado `CLEAN`.
+5. **Verificación Automatizada Consolidada:**
+   - Suite VOSERDEM `tests/voserdem-trial-verification.test.ts`: **26/26 PASSED (100%)**.
+   - Suite Seguridad Fase 1 `tests/p0-audit-auth.test.ts`: **19/19 PASSED (100%)**.
+   - Suite UX Contratos `tests/ux-portfolio-contracts.test.ts`: **6/6 PASSED (100%)**.
+   - Suite Ola 1 `tests/ola1-security-structure.test.ts`: **35/35 PASSED (100%)**.
+   - Suite Ola 2 `tests/ola2-financial-integrity.test.ts`: **43/43 PASSED (100%)**.
+   - Suite Ola 3 `tests/ola3-operations-governance.test.ts`: **35/35 PASSED (100%)**.
+   - Suite Ola 4 `tests/ola4-executive-reporting.test.ts`: **50/50 PASSED (100%)**.
+   - **Total Tests Automatizados: 214/214 PASSED (100%)**.
+   - Compilación TypeScript (`tsc --noEmit`): **0 errores**.
+   - Build de producción Vite + Node (`npm run build`): **100% exitoso**.
+
+---
 
 ### Causa Raíz y Solución
 1. **Problema Detectado:** El endpoint productivo `GET /api/projects` entrega la estructura paginada `{ data: [...], pagination: { totalItems, currentPage, totalPages, limit } }`. En frontend, invocaciones directas a `.filter()` sobre respuestas no planas disparaban `TypeError: a.filter is not a function` bloqueando la vista de Portafolio.

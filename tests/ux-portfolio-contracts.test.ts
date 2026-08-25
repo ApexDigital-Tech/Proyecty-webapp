@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import assert from 'node:assert';
 import { db } from '../src/db/index.ts';
-import { projects, donors, users, tenants } from '../src/db/schema.ts';
+import { projects, donors, users } from '../src/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
 import { normalizePaginatedResponse, normalizeArrayResponse } from '../src/lib/api-helpers.ts';
 import { Project, PaginatedResponse, PaginationInfo } from '../src/types.ts';
