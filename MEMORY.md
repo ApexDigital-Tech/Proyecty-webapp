@@ -2,17 +2,17 @@
 
 > **Este documento preserva el contexto arquitectónico, el estado de desarrollo y las decisiones técnicas de PROYECTY para garantizar la continuidad inmediata en futuras sesiones.**
 
-## [2026-08-25] Hito: Ejecución, Subsanación Integral y Cierre de Fase 3 (Ola 4: Reportabilidad Ejecutiva, Dashboard y Exportaciones) — Auditoría AUD-PROY-001
+## [2026-08-25] Hito: Ejecución, Subsanación y Cierre Funcional de Fase 3 (Ola 4: Reportabilidad Ejecutiva, Dashboard y Exportaciones) — Auditoría AUD-PROY-001
 
 ### Resumen Consolidado
-Se completó, verificó y blindó la **Ola 4 (Reportabilidad Ejecutiva, Dashboard y Exportaciones)** subsanando la totalidad de los hallazgos de auditoría (`v1.4.2-wave-4-fix`):
+Se completó y verificó el **Cierre Funcional de la Ola 4 (Reportabilidad Ejecutiva, Dashboard y Exportaciones)** (`v1.4.2-wave-4-fix`), quedando el cierre integral formalmente condicionado por `PERF-02`:
 1. **`M-02` (Dashboard Ejecutivo y Métricas Globales):**
    - **Conciliación Financiera Directa:** `totalExecuted` suma exclusivamente gastos con estado `APPROVED`. `availableBalance = max(0, totalBudget - totalExecuted)`. `avgFinancial = (totalExecuted / totalBudget) * 100`.
    - **Avance Físico Global Ponderado:** `avgPhysical = sum(physicalProgress * approvedBudget) / totalApprovedBudget`.
    - **Alerta de Brecha Operativa Estricta:** Detección de proyectos con `|físico - financiero| > 15%` y riesgo alto.
    - **`M02-DISB-01` (Desembolsos Pendientes Canónicos):** `pendingDisbursementsAmount = max(0, totalCommittedAgreements - totalPaidDisbursed)`. Verificado para desembolso cero ($150k), parcial ($100k) y completo ($0).
    - **Alcance por Rol:** `assigned` para Responsable de Proyecto y Financiador vinculado; global para Director, Manager, Finance y Auditor.
-   - **Rendimiento `PERF-02`:** Caché reactiva P95 < 0.2 ms; rate limiter ampliado a `max: 1000` por 15 min y unificado en `server.ts` (**14/14 tests**).
+   - **Rendimiento `PERF-02` y Decisión Arquitectónica:** El benchmark interno del servicio no deberá presentarse como equivalente al rendimiento HTTP productivo. `PERF-02` se divide en: a) rendimiento interno/caché, cumplido (P95 < 0.2 ms); b) rate limiting, cumplido (100/100 HTTP 200, 0 HTTP 429 con `max: 1000`); y c) latencia HTTP end-to-end, pendiente de cumplimiento (P95 5.507 ms sobre Render Free) o recalibración formal según el nivel de infraestructura contratado.
 2. **`M-14` (Ciclo de Vida de Reportes, Seguridad CSV y PDF Estándar):**
    - **Versionado y Segregación:** Borradores correlativos (`V1`, `V2`), bloqueo de autoaprobación (`created_by != approved_by`), inmutabilidad de reportes `APPROVED` y transición automática a `SUPERSEDED`.
    - **`M14-PDF-02` (Generación de PDF Estándar con `pdf-lib`):** Generación de documentos binarios conformes a especificación estándar con árbol `/Catalog -> /Pages -> /Page`, metadatos completos (título, autor, productor), paginación A4, texto extraíble y validación por parser estructural `PDFDocument.load()`.
@@ -26,7 +26,7 @@ Se completó, verificó y blindó la **Ola 4 (Reportabilidad Ejecutiva, Dashboar
    - Regresión Ola 2 `tests/ola2-financial-integrity.test.ts`: **43/43 PASSED (100%)**.
    - Regresión Ola 1 `tests/ola1-security-structure.test.ts`: **35/35 PASSED (100%)**.
    - Total Suite Consolidada (4 Olas): **163/163 PASSED (100%)**.
-   - Build de producción limpio y tag oficial `v1.4.2-wave-4-fix`.
+   - Tag oficial: `v1.4.2-wave-4-fix` (Commit funcional: `098b945b66fbb75fc29a4521a182a9ee37d29bca`).
 
 ---
 
