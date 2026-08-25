@@ -28,8 +28,8 @@ import { analyzeDocumentWithAI } from '../src/services/ai-doc-analysis.service.t
 
 async function runOla3ExhaustiveSuite() {
   console.log('================================================================');
-  console.log('🏗️ SUITE EXHAUSTIVA DE AUDITORÍA OLA 3 (v1.3.1-wave-3-fix)');
-  console.log('   Módulos Canónicos: M-07 (Gantt, Dependencias, Pesos y Avance Ponderado),');
+  console.log('🏗️ SUITE EXHAUSTIVA DE AUDITORÍA OLA 3 (v1.3.2-wave-3-fix)');
+  console.log('   Módulos Canónicos: M-07 (Gantt, Dependencias, Pesos y Sincronización Transaccional),');
   console.log('   M-12 (Gobierno Documental DOC-01: OOXML/MIME, Hash, Matriz Escáner y Papelera),');
   console.log('   M-13 (Análisis IA Documental CLEAN y Fallback Etiquetado)');
   console.log('================================================================\n');
@@ -121,6 +121,7 @@ async function runOla3ExhaustiveSuite() {
     status: 'ACTIVO',
     riskLevel: 'Bajo',
     approvedBudget: 300000,
+    physicalProgress: 0,
     baseCurrency: 'USD',
   }).returning();
 
@@ -131,6 +132,7 @@ async function runOla3ExhaustiveSuite() {
     status: 'ACTIVO',
     riskLevel: 'Medio',
     approvedBudget: 150000,
+    physicalProgress: 0,
     baseCurrency: 'USD',
   }).returning();
 
@@ -142,9 +144,9 @@ async function runOla3ExhaustiveSuite() {
   });
 
   // -------------------------------------------------------------------------
-  // 1. M-07: Cronograma Gantt, Dependencias Persistidas, Pesos y Avance Físico
+  // 1. M-07: Cronograma Gantt, Dependencias Persistidas, Pesos y Sincronización
   // -------------------------------------------------------------------------
-  console.log('[1. M-07: Cronograma Gantt, Dependencias, Pesos y Avance Físico]');
+  console.log('[1. M-07: Cronograma Gantt, Dependencias, Pesos y Sincronización Transaccional]');
 
   // 1.1 Creación de Cadena de Tareas A -> B -> C con Pesos y Progreso Persistidos
   const taskA = await createScheduleTask(tenantId, testProject.id, userDirector.id, 'DIRECTOR', {
@@ -215,7 +217,46 @@ async function runOla3ExhaustiveSuite() {
   const calculatedProgress = calculatePhysicalProgress(allTasks);
   testAssert(calculatedProgress === 55, 'M-07: Avance físico ponderado reproducible calculado desde BD (55.00%)');
 
-  // 1.5 Prueba de Denominador Cero y Pesos Inválidos
+  // 1.5 Sincronización Transaccional Multisuperficie (75% con 2 tareas: 100% y 50% con pesos iguales)
+  const [syncProject] = await db.insert(projects).values({
+    tenantId,
+    code: `PRJ-SYNC-${Date.now()}`,
+    name: 'Proyecto Verificación Sincronización Avance',
+    status: 'ACTIVO',
+    riskLevel: 'Bajo',
+    approvedBudget: 100000,
+    physicalProgress: 0,
+    baseCurrency: 'USD',
+  }).returning();
+
+  await createScheduleTask(tenantId, syncProject.id, userDirector.id, 'DIRECTOR', {
+    title: 'Tarea 1: Fase Completa',
+    startDate: '2026-01-01',
+    dueDate: '2026-01-31',
+    status: 'DONE',
+    weight: 50,
+    progress: 100,
+  });
+
+  await createScheduleTask(tenantId, syncProject.id, userDirector.id, 'DIRECTOR', {
+    title: 'Tarea 2: Fase Media',
+    startDate: '2026-02-01',
+    dueDate: '2026-02-28',
+    status: 'IN_PROGRESS',
+    weight: 50,
+    progress: 50,
+  });
+
+  const [dbProjectAfterTasks] = await db.select().from(projects).where(eq(projects.id, syncProject.id));
+  const tasksForSync = await db.select().from(tasks).where(eq(tasks.projectId, syncProject.id));
+  const calculatedSync = calculatePhysicalProgress(tasksForSync);
+
+  testAssert(
+    dbProjectAfterTasks.physicalProgress === 75 && calculatedSync === 75,
+    'M-07 Sincronización Transaccional: projects.physical_progress y cálculo de tareas coinciden en exactamente 75%'
+  );
+
+  // 1.6 Prueba de Denominador Cero y Pesos Inválidos
   const zeroWeightProgress = calculatePhysicalProgress([]);
   testAssert(zeroWeightProgress === 0, 'M-07: Manejo seguro de denominador cero / lista vacía (retorna 0%)');
 
@@ -223,7 +264,7 @@ async function runOla3ExhaustiveSuite() {
   const zeroNormalizedProgress = calculatePhysicalProgress(zeroOnlyTasks);
   testAssert(zeroNormalizedProgress === 100, 'M-07: Normalización de peso 0 a peso base 1 para prevenir división por cero');
 
-  // 1.6 Control 'assigned' para Responsable de Proyecto
+  // 1.7 Control 'assigned' para Responsable de Proyecto
   const taskPM = await createScheduleTask(tenantId, testProject.id, userPM.id, 'RESPONSABLE_PROYECTO', {
     title: 'Tarea Asignada a PM',
     startDate: '2026-06-01',
@@ -241,11 +282,11 @@ async function runOla3ExhaustiveSuite() {
   }
   testAssert(unassignedPMRejected, 'M-07 RBAC (-): Responsable de Proyecto bloqueado en proyectos no asignados (HTTP 403)');
 
-  // 1.7 RBAC Negativo: AUDITOR y FINANCIADOR solo lectura
+  // 1.8 RBAC Negativo: AUDITOR y FINANCIADOR solo lectura
   const canModifySchedule = (role: string) => role === 'DIRECTOR' || role === 'MANAGER' || role === 'RESPONSABLE_PROYECTO';
   testAssert(!canModifySchedule('AUDITOR') && !canModifySchedule('FINANCIADOR'), 'M-07 RBAC (-): AUDITOR y FINANCIADOR bloqueados para modificar cronograma (HTTP 403)');
 
-  // 1.8 Cross-Tenant M-07
+  // 1.9 Cross-Tenant M-07
   let crossTenantScheduleRejected = false;
   try {
     await createScheduleTask(tenantId, otherProject.id, userDirector.id, 'DIRECTOR', {
@@ -319,7 +360,6 @@ async function runOla3ExhaustiveSuite() {
   testAssert(pendingDownloadBlocked, 'M-12 / DOC-01: Descarga bloqueada con HTTP 423 para documento PENDING_SCAN');
 
   // 2.5 Matriz de Autenticación del Escáner de Seguridad
-  // Clave ausente -> 403
   let missingKeyRejected = false;
   try {
     await updateDocumentScanStatus(tenantId, doc1.id, undefined, 'CLEAN');
@@ -328,7 +368,6 @@ async function runOla3ExhaustiveSuite() {
   }
   testAssert(missingKeyRejected, 'M-12 Escáner Auth: Clave ausente rechazada con HTTP 403');
 
-  // Clave incorrecta -> 403
   let invalidKeyRejected = false;
   try {
     await updateDocumentScanStatus(tenantId, doc1.id, 'CLAVE_INCORRECTA_FAKE', 'CLEAN');
@@ -337,7 +376,6 @@ async function runOla3ExhaustiveSuite() {
   }
   testAssert(invalidKeyRejected, 'M-12 Escáner Auth: Clave incorrecta rechazada con HTTP 403');
 
-  // Clave válida -> 200
   const certifiedDoc = await updateDocumentScanStatus(tenantId, doc1.id, SCANNER_INTERNAL_SVC_SECRET, 'CLEAN');
   const certifiedMeta = certifiedDoc.metadata as any;
   testAssert(certifiedMeta.scanStatus === 'CLEAN', 'M-12 Escáner Auth: Servicio autorizado certifica CLEAN con HTTP 200');
@@ -415,7 +453,7 @@ async function runOla3ExhaustiveSuite() {
   );
 
   // 3.3 Fallback IA Explícitamente Etiquetado
-  const aiFallback = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id, true); // Simular fallo de LLM
+  const aiFallback = await analyzeDocumentWithAI(tenantId, doc1.id, userDirector.id, true);
   testAssert(
     aiFallback.analysisMode === 'DETERMINISTIC_NLP_FALLBACK' &&
     aiFallback.providerAvailable === false &&
@@ -447,7 +485,7 @@ async function runOla3ExhaustiveSuite() {
   testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo verificado con 0 fixtures residuales y exclusivamente PRJ-DEMO-2026');
 
   console.log('\n================================================================');
-  console.log(`📊 RESULTADOS FINALES OLA 3 (FIX): ${passed} PASSED | ${failed} FAILED`);
+  console.log(`📊 RESULTADOS FINALES OLA 3 (v1.3.2): ${passed} PASSED | ${failed} FAILED`);
   console.log('================================================================\n');
 }
 

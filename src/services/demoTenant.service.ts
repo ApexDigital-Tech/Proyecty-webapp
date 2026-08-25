@@ -9,6 +9,7 @@ import {
   budgetVersions,
   budgetLines,
   tasks,
+  taskDependencies,
   expenses,
   receiptsVouchers,
   documents,

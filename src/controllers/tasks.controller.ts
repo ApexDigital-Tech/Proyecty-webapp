@@ -184,7 +184,7 @@ export const createTask = async (req: AuthRequest, res: Response, next: NextFunc
     // Actualizar avance físico del proyecto
     const allProjectTasks = await db.select().from(tasks).where(eq(tasks.projectId, projectId));
     const newProgress = calculatePhysicalProgress(allProjectTasks);
-    await db.update(projects).set({ physicalProgress: newProgress }).where(eq(projects.id, projectId));
+    await db.update(projects).set({ physicalProgress: Math.round(newProgress) }).where(eq(projects.id, projectId));
 
     await logActivity(projectId, req.user!.name, `Creó la tarea: "${title}" (Peso: ${parsedWeight}, Progreso: ${parsedProgress}%)`);
 
@@ -290,7 +290,7 @@ export const updateTask = async (req: AuthRequest, res: Response, next: NextFunc
     // Recomputar avance del proyecto
     const allProjectTasks = await db.select().from(tasks).where(eq(tasks.projectId, task.projectId));
     const newProgress = calculatePhysicalProgress(allProjectTasks);
-    await db.update(projects).set({ physicalProgress: newProgress }).where(eq(projects.id, task.projectId));
+    await db.update(projects).set({ physicalProgress: Math.round(newProgress) }).where(eq(projects.id, task.projectId));
 
     await logActivity(task.projectId, req.user!.name, `Actualizó la tarea: "${updatedTask[0].title}"`);
 
@@ -325,7 +325,7 @@ export const deleteTask = async (req: AuthRequest, res: Response, next: NextFunc
     // Recomputar avance del proyecto
     const allProjectTasks = await db.select().from(tasks).where(eq(tasks.projectId, existingTask[0].projectId));
     const newProgress = calculatePhysicalProgress(allProjectTasks);
-    await db.update(projects).set({ physicalProgress: newProgress }).where(eq(projects.id, existingTask[0].projectId));
+    await db.update(projects).set({ physicalProgress: Math.round(newProgress) }).where(eq(projects.id, existingTask[0].projectId));
 
     await logActivity(existingTask[0].projectId, req.user!.name, `Eliminó la tarea: "${existingTask[0].title}"`);
 

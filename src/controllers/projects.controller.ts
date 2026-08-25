@@ -5,6 +5,7 @@ import { eq, and, inArray, desc, gte, lte, asc , ilike, sql} from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts';
 import { withTenantContext, withRlsValidation } from '../utils/dbWrapper.ts';
+import { calculatePhysicalProgress } from '../services/schedule.service.ts';
 
 // Helper function from server.ts
 export async function verifyProjectTenant(projectId: number, tenantId: number): Promise<boolean> {
@@ -49,10 +50,31 @@ export const getProjects = async (req: AuthRequest, res, next: NextFunction) => 
       .limit(limitNum)
       .offset(offset);
 
-    const allProjects = rawProjects.map(r => ({
-      ...r.project,
-      donor: r.donorName
-    }));
+    const projectIds = rawProjects.map(r => r.project.id);
+    const allTasksForProjects = projectIds.length > 0
+      ? await db.select({
+          projectId: tasks.projectId,
+          weight: tasks.weight,
+          progress: tasks.progress,
+          status: tasks.status,
+        }).from(tasks).where(inArray(tasks.projectId, projectIds))
+      : [];
+
+    const tasksByProjectId = new Map<number, typeof allTasksForProjects>();
+    for (const t of allTasksForProjects) {
+      if (!tasksByProjectId.has(t.projectId)) tasksByProjectId.set(t.projectId, []);
+      tasksByProjectId.get(t.projectId)!.push(t);
+    }
+
+    const allProjects = rawProjects.map(r => {
+      const pTasks = tasksByProjectId.get(r.project.id) || [];
+      const computedProgress = pTasks.length > 0 ? calculatePhysicalProgress(pTasks) : (r.project.physicalProgress ?? 0);
+      return {
+        ...r.project,
+        physicalProgress: computedProgress,
+        donor: r.donorName
+      };
+    });
 
     const totalCountRes = await db.select({ count: sql`count(*)` }).from(projects).where(and(...conditions));
     const totalItems = Number(totalCountRes[0].count);
@@ -273,8 +295,19 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
       }
     }
 
+    const projectTaskList = await db.select({
+      weight: tasks.weight,
+      progress: tasks.progress,
+      status: tasks.status,
+    }).from(tasks).where(eq(tasks.projectId, projectId));
+
+    const realPhysicalProgress = projectTaskList.length > 0
+      ? calculatePhysicalProgress(projectTaskList)
+      : (projectResult[0].project.physicalProgress ?? 0);
+
     const project = {
       ...projectResult[0].project,
+      physicalProgress: realPhysicalProgress,
       donor: projectResult[0].donorName
     };
 

@@ -90,8 +90,12 @@ export function calculatePhysicalProgress(taskList: { weight?: number | null; pr
     let p = 0;
     if (t.progress !== undefined && t.progress !== null) {
       p = Math.min(100, Math.max(0, Number(t.progress)));
+      if (p === 0 && t.status === 'DONE') p = 100;
+      else if (p === 0 && t.status === 'IN_PROGRESS') p = 50;
     } else if (t.status === 'DONE') {
       p = 100;
+    } else if (t.status === 'IN_PROGRESS') {
+      p = 50;
     }
 
     totalWeight += w;
@@ -104,7 +108,8 @@ export function calculatePhysicalProgress(taskList: { weight?: number | null; pr
 }
 
 /**
- * Crea una tarea en el cronograma con validación de fechas, pesos, avance y dependencias
+ * Crea una tarea en el cronograma con validación de fechas, pesos, avance y dependencias,
+ * y sincroniza transaccionalmente projects.physical_progress.
  */
 export const createScheduleTask = async (
   tenantId: number,
@@ -161,8 +166,8 @@ export const createScheduleTask = async (
       }
     }
 
-    const parsedWeight = data.weight !== undefined ? Number(data.weight) : 1;
-    const parsedProgress = data.progress !== undefined ? Number(data.progress) : (data.status === 'DONE' ? 100 : 0);
+    const parsedWeight = (data.weight !== undefined && data.weight !== null && data.weight > 0) ? Number(data.weight) : 1;
+    const parsedProgress = data.progress !== undefined ? Math.min(100, Math.max(0, Number(data.progress))) : (data.status === 'DONE' ? 100 : 0);
 
     // 5. Inserción de tarea
     const [newTask] = await tx.insert(tasks).values({
@@ -191,7 +196,12 @@ export const createScheduleTask = async (
       }
     }
 
-    // 7. Auditoría
+    // 7. Sincronización Transaccional Obligatoria del Avance Físico del Proyecto
+    const allProjectTasks = await tx.select().from(tasks).where(eq(tasks.projectId, projectId));
+    const newProjectProgress = calculatePhysicalProgress(allProjectTasks);
+    await tx.update(projects).set({ physicalProgress: Math.round(newProjectProgress) }).where(eq(projects.id, projectId));
+
+    // 8. Auditoría
     logAuditEvent({
       tenantId,
       userId,
@@ -204,6 +214,7 @@ export const createScheduleTask = async (
         weight: parsedWeight,
         progress: parsedProgress,
         dependsOnCount: dependsOn.length,
+        projectPhysicalProgress: newProjectProgress,
       },
     });
 
