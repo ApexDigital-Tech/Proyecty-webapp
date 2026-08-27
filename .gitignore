@@ -12,3 +12,4 @@ respaldo_*.json
 *.enc
 *.backup
 temp_*
+scratch/
