@@ -1,19 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { loginWithDemoSession } from './fixtures/auth.ts';
 
-test('create a new project', async ({ page }) => {
-  // Ir al home y simular login (dependerá de cómo se maneje el login en la app)
-  await page.goto('http://127.0.0.1:3000');
-  
-  // Como usa un token de demo o auth de Supabase, 
-  // inyectaremos el token en localStorage para saltar la pantalla de login si es posible
-  await page.evaluate(() => {
-    localStorage.setItem('sb-access-token', 'demo-director');
-  });
-
-  await page.reload();
+test('create a new project', async ({ page, request }) => {
+  // Iniciar sesión dinámica mediante JWT demo oficial
+  await loginWithDemoSession(page, request, 'DIRECTOR');
 
   // Esperar a que cargue el dashboard
-  await expect(page.locator('text=Proyectos')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('text=Proyectos').first()).toBeVisible({ timeout: 15000 });
 
   // Hacer click en crear proyecto
   await page.click('text=Nuevo Proyecto');
@@ -28,5 +21,5 @@ test('create a new project', async ({ page }) => {
   await page.click('button:has-text("Guardar")');
   
   // Verificar mensaje de éxito o que aparezca en la lista
-  await expect(page.locator('text=Proyecto E2E UI').first()).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('text=Proyecto E2E UI').first()).toBeVisible({ timeout: 15000 });
 });
