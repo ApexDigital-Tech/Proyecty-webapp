@@ -263,19 +263,17 @@ app.use('/api/*', (req, res) => {
 app.use(errorHandler);
 
   async function initializeViteAndListen() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV === 'development') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    // ESM safe way to get __dirname
+    // ESM safe way to get directory
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    
-    // In production, server.js is bundled inside the dist/ folder
-    const clientDist = __dirname;
+    const clientDist = path.resolve(__dirname, 'dist');
     
     app.use('/assets', express.static(path.join(clientDist, 'assets')));
     app.use(express.static(clientDist));
