@@ -41,7 +41,7 @@ export const createExpense = async (tenantId: number, userId: number, data: Crea
     const newExpense = result[0];
 
     // Log audit event
-    logAuditEvent({
+    await logAuditEvent({
       tenantId,
       userId,
       action: 'EXPENSE_CREATED',
@@ -53,7 +53,7 @@ export const createExpense = async (tenantId: number, userId: number, data: Crea
         category: newExpense.category,
         registeredBy: userId,
       },
-    });
+    }, tx);
 
     // Notify Admins/Directors of the tenant
     try {
@@ -165,7 +165,7 @@ export const approveExpense = async (
         registeredBy: existingExpense.registeredBy,
         approvedBy: approvedByUserId,
       },
-    });
+    }, tx);
 
     return updatedExpense;
   });
