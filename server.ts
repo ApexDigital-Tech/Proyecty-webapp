@@ -30,7 +30,6 @@ import auditRouter from './src/routes/audit.routes.ts';
 
 import reportsRouter from './src/routes/reports.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
-import { applyAuditLogsImmutability } from './scripts/apply-audit-immutability.ts';
 
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -156,6 +155,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
     await seedDatabase();
     
     // Activar triggers de inmutabilidad estricta para audit_logs en PostgreSQL (M-15)
+    const { applyAuditLogsImmutability } = await import('./scripts/apply-audit-immutability.ts');
     await applyAuditLogsImmutability();
     
     console.log('Database verification, immutability triggers and optional seeding complete.');
