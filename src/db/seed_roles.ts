@@ -109,7 +109,21 @@ export async function seedRoles() {
   console.log('🎉 Seed de roles completado en una transacción atómica.');
 }
 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const isEntrypoint = () => {
+  if (!process.argv[1]) return false;
+  try {
+    const currentFilePath = path.resolve(fileURLToPath(import.meta.url));
+    const entrypointPath = path.resolve(process.argv[1]);
+    return currentFilePath === entrypointPath;
+  } catch {
+    return false;
+  }
+};
+
 // Ejecutar si se llama directamente
-if (process.argv[1]?.includes('seed_roles')) {
+if (isEntrypoint()) {
   seedRoles().catch(console.error).finally(() => process.exit(0));
 }

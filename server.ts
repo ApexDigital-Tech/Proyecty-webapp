@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import authRoutes from './src/routes/auth.routes.ts';
@@ -270,10 +271,12 @@ app.use(errorHandler);
     });
     app.use(vite.middlewares);
   } else {
-    // ESM safe way to get directory
+    // ESM safe way to resolve client distribution directory
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const clientDist = path.resolve(__dirname, 'dist');
+    const clientDist = fs.existsSync(path.join(__dirname, 'index.html'))
+      ? __dirname
+      : path.resolve(__dirname, 'dist');
     
     app.use('/assets', express.static(path.join(clientDist, 'assets')));
     app.use(express.static(clientDist));
