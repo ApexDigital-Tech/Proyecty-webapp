@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "test:integration": "tsx scripts/run-integration-tests.ts",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:demo": "tsx scripts/seed-prod-data.ts",
