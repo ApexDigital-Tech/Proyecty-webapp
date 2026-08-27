@@ -22,16 +22,24 @@ export async function getTestAuthToken(request: APIRequestContext, role: string 
  */
 export async function loginWithDemoSession(page: Page, request: APIRequestContext, role: string = 'DIRECTOR'): Promise<string> {
   const token = await getTestAuthToken(request, role);
+  
+  // Decodificar el tenant_id y user_id real del token
+  const payloadBase64 = token.split('.')[1];
+  const payloadStr = Buffer.from(payloadBase64, 'base64').toString('utf-8');
+  const payload = JSON.parse(payloadStr);
+  const realTenantId = payload.tenant_id || 1;
+  const realUserId = payload.user_id || 1;
+
   await page.goto('http://127.0.0.1:3000');
-  await page.evaluate(({ jwt, roleName }) => {
+  await page.evaluate(({ jwt, roleName, tenantId }) => {
     localStorage.setItem('proyecty_token', jwt);
     localStorage.setItem('proyecty_user', JSON.stringify({
       name: 'Gonzalo Alfaro (Test)',
       email: 'apexdigital70@gmail.com',
       role: roleName,
-      tenantId: 1
+      tenantId: tenantId
     }));
-  }, { jwt: token, roleName: role });
+  }, { jwt: token, roleName: role, tenantId: realTenantId });
   await page.goto('http://127.0.0.1:3000');
   await page.waitForLoadState('domcontentloaded');
   return token;

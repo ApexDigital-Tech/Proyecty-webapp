@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { getTestAuthToken, loginWithDemoSession } from './fixtures/auth.ts';
 import { generateDemoToken } from '../src/services/demoAuth.service.ts';
+import { db } from '../src/db/index.ts';
+import { organizations, users } from '../src/db/schema.ts';
 
 test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
   let authHeaders: Record<string, string> = {};
@@ -58,26 +60,61 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
   // PUNTO 2: Aislamiento RLS / Multi-tenant en APIs
   // ============================================
   test('Aislamiento RLS: Consulta entre organizaciones rechazada o vacía', async ({ request }) => {
-    // 1. Generar tokens criptográficos para dos tenants sintéticos independientes
+    // 1. Generar organizaciones reales independientes para Tenant A y Tenant B
+    const [orgA] = await db.insert(organizations).values({
+      name: `Tenant A (Synth ${Date.now()})`,
+      slug: `tenant-a-${Date.now()}`,
+      country: 'BO'
+    }).returning({ id: organizations.id });
+
+    const [orgB] = await db.insert(organizations).values({
+      name: `Tenant B (Synth ${Date.now()})`,
+      slug: `tenant-b-${Date.now()}`,
+      country: 'BO'
+    }).returning({ id: organizations.id });
+
+    // Generar usuarios reales en la DB (para evadir violaciones FK en logs de auditoría, etc.)
+    const [userA] = await db.insert(users).values({
+      tenantId: orgA.id,
+      uid: `user-tenant-a-synth-${Date.now()}`,
+      email: 'director.a@synth-tenant-a.org',
+      name: 'Director Tenant A',
+      roleId: 1, // DIRECTOR
+      isActive: true,
+      lastLoginAt: new Date()
+    }).returning({ id: users.id });
+
+    const [userB] = await db.insert(users).values({
+      tenantId: orgB.id,
+      uid: `user-tenant-b-synth-${Date.now()}`,
+      email: 'director.b@synth-tenant-b.org',
+      name: 'Director Tenant B',
+      roleId: 1, // DIRECTOR
+      isActive: true,
+      lastLoginAt: new Date()
+    }).returning({ id: users.id });
+
     const tenantAToken = generateDemoToken({
-      uid: 'user-tenant-a-synth',
-      userId: 101,
+      uid: `user-tenant-a-synth-${Date.now()}`,
+      userId: userA.id,
+      id: userA.id,
       email: 'director.a@synth-tenant-a.org',
       name: 'Director Tenant A',
       role: 'DIRECTOR',
       roleName: 'Director',
-      tenantId: 101,
+      tenantId: orgA.id,
     });
     const headersTenantA = { 'Authorization': `Bearer ${tenantAToken}`, 'Content-Type': 'application/json' };
 
     const tenantBToken = generateDemoToken({
-      uid: 'user-tenant-b-synth',
-      userId: 102,
+      uid: `user-tenant-b-synth-${Date.now()}`,
+      userId: userB.id,
+      id: userB.id,
       email: 'director.b@synth-tenant-b.org',
       name: 'Director Tenant B',
       role: 'DIRECTOR',
       roleName: 'Director',
-      tenantId: 102,
+      tenantId: orgB.id,
     });
     const headersTenantB = { 'Authorization': `Bearer ${tenantBToken}`, 'Content-Type': 'application/json' };
 
@@ -117,7 +154,7 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
 
     expect(projectsA.some((p: any) => p.id === projectBId)).toBe(false);
     for (const p of projectsA) {
-      expect(p.tenantId).toBe(101);
+      expect(p.tenantId).toBe(orgA.id);
     }
 
     // 5. Lectura directa cross-tenant: Tenant A intenta leer projectB -> Rechazado 404/403
