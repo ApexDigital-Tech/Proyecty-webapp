@@ -50,9 +50,11 @@ export async function withRlsValidation<T extends any[]>(
 import { db } from '../db/index.ts';
 import { sql } from 'drizzle-orm';
 
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function withTenantContext<T>(
   tenantId: number,
-  callback: (tx: any) => Promise<T> // 'any' for simplicity, should be ExtractTablesWithRelations<typeof schema>
+  callback: (tx: Tx) => Promise<T>
 ): Promise<T> {
   return await db.transaction(async (tx) => {
     // 1. Establecer el contexto del tenant (scope local a la transacción)

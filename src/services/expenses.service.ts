@@ -6,6 +6,7 @@ import { logAuditEvent } from './audit.service.ts';
 import { CreateExpenseDto } from '../schemas/expenses.schema.ts';
 import { logger } from '../lib/logger.ts';
 import { withTenantContext, withRlsValidation } from '../utils/dbWrapper.ts';
+import type { Tx } from '../utils/dbWrapper.ts';
 import { ConflictError, NotFoundError } from '../utils/errors.ts';
 
 export const createExpense = async (tenantId: number, userId: number, data: CreateExpenseDto) => {
@@ -165,7 +166,7 @@ export const approveExpense = async (
         registeredBy: existingExpense.registeredBy,
         approvedBy: approvedByUserId,
       },
-    }, tx);
+    }, tx, { required: true });
 
     return updatedExpense;
   });
