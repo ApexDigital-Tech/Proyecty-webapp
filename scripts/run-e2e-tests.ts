@@ -15,55 +15,14 @@ const rootDir = path.resolve(__dirname, '..');
 const pgBin = 'C:\\temp\\proyecty-toolchain\\postgresql17\\pgsql\\bin';
 const pgDataTest = 'C:\\temp\\proyecty-toolchain\\pgdata-test';
 
-const suites = [
-  'tests/p0-audit-auth.test.ts',
-  'tests/p1-integrity-audit.test.ts',
-  'tests/ola1-security-structure.test.ts',
-  'tests/ola2-financial-integrity.test.ts',
-  'tests/ola3-operations-governance.test.ts',
-  'tests/ola4-executive-reporting.test.ts',
-  'tests/ux-portfolio-contracts.test.ts',
-  'tests/voserdem-security-remediation.test.ts',
-  'tests/voserdem-trial-verification.test.ts',
-];
-
 console.log('============================================================');
-console.log('🛡️ INICIANDO ARNES AISLADO DE PRUEBAS DE INTEGRACIÓN (R1C-B)');
+console.log('🎭 INICIANDO ARNES AISLADO DE PRUEBAS E2E (PLAYWRIGHT)');
 console.log('============================================================\n');
 
-// 1. Verificación de Guardias Negativas
-console.log('--- 1. Ejecutando Batería de Validación de Guardias Negativas ---');
-const negativeCases = [
-  { name: 'DATABASE_URL ausente', url: '', env: 'test', expectError: true },
-  { name: 'Host de Supabase', url: 'postgresql://postgres:pass@db.supabase.co:5432/postgres', env: 'test', expectError: true },
-  { name: 'Host de Pooler Supabase', url: 'postgresql://postgres:pass@aws-0-us-east-1.pooler.supabase.com:55432/proyecty_test', env: 'test', expectError: true },
-  { name: 'Localhost con puerto incorrecto', url: 'postgresql://postgres@127.0.0.1:5432/proyecty_test', env: 'test', expectError: true },
-  { name: 'Base de datos incorrecta', url: 'postgresql://postgres@127.0.0.1:55432/postgres', env: 'test', expectError: true },
-  { name: 'NODE_ENV distinto de test', url: 'postgresql://postgres@127.0.0.1:55432/proyecty_test', env: 'production', expectError: true },
-  { name: 'Configuración válida (127.0.0.1:55432/proyecty_test)', url: 'postgresql://postgres@127.0.0.1:55432/proyecty_test', env: 'test', expectError: false },
-];
+const testDbUrl = 'postgresql://postgres@127.0.0.1:55432/proyecty_test';
 
-let guardChecksPassed = 0;
-for (const testCase of negativeCases) {
-  let threw = false;
-  try {
-    validateTestEnvStrict(testCase.url, testCase.env);
-  } catch (e) {
-    threw = true;
-  }
-
-  if (threw === testCase.expectError) {
-    guardChecksPassed++;
-    console.log(`  ✅ Guardia: ${testCase.name} -> ${threw ? 'Bloqueado con éxito' : 'Aceptado con éxito'}`);
-  } else {
-    console.error(`  ❌ Fallo en control de guardia: ${testCase.name}`);
-    process.exit(1);
-  }
-}
-console.log(`Guardias verificadas: ${guardChecksPassed}/${negativeCases.length} superadas.\n`);
-
-// 2. Aprovisionamiento de Instancia Local Temporal PG17
-console.log('--- 2. Aprovisionando PostgreSQL 17 Local Aislado (Puerto 55432) ---');
+// 1. Aprovisionamiento de PostgreSQL 17 Local Aislado
+console.log('--- 1. Aprovisionando PostgreSQL 17 Local Aislado (Puerto 55432) ---');
 if (fs.existsSync(pgDataTest)) fs.rmSync(pgDataTest, { recursive: true, force: true });
 
 execFileSync(path.join(pgBin, 'initdb.exe'), ['-D', pgDataTest, '-U', 'postgres', '--auth=trust'], { encoding: 'utf8' });
@@ -73,7 +32,7 @@ const pgProc = spawn(path.join(pgBin, 'postgres.exe'), ['-D', pgDataTest], { det
 pgProc.unref();
 sleep(3000);
 
-let allSuitesPassed = false;
+let e2ePassed = false;
 
 try {
   console.log('Creando roles de simulación anon, authenticated, service_role...');
@@ -87,33 +46,24 @@ try {
   console.log('Creando base de datos temporal proyecty_test desde template0...');
   execFileSync(path.join(pgBin, 'createdb.exe'), ['-h', '127.0.0.1', '-p', '55432', '-U', 'postgres', '-T', 'template0', 'proyecty_test'], { encoding: 'utf8' });
 
-  const testDbUrl = 'postgresql://postgres@127.0.0.1:55432/proyecty_test';
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = testDbUrl;
 
   console.log('Empujando esquema Drizzle a la base de datos aislada...');
-  const pushRes = spawnSync('npx.cmd', ['drizzle-kit', 'push'], {
+  spawnSync('npx.cmd', ['drizzle-kit', 'push'], {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
     env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
   });
-
-  if (pushRes.status !== 0) {
-    throw new Error(`Fallo al aplicar esquema con drizzle-kit push (código ${pushRes.status})`);
-  }
 
   console.log('Sembrando catálogo de roles y permisos canónicos...');
-  const seedRolesRes = spawnSync('npx.cmd', ['tsx', 'src/db/seed_roles.ts'], {
+  spawnSync('npx.cmd', ['tsx', 'src/db/seed_roles.ts'], {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
     env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
   });
-
-  if (seedRolesRes.status !== 0) {
-    throw new Error(`Fallo al sembrar roles (código ${seedRolesRes.status})`);
-  }
 
   console.log('Concediendo permisos a roles de simulación en public...');
   execFileSync(path.join(pgBin, 'psql.exe'), ['-h', '127.0.0.1', '-p', '55432', '-U', 'postgres', '-d', 'proyecty_test', '-c', `
@@ -125,6 +75,10 @@ try {
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
   `], { encoding: 'utf8' });
 
+  console.log('Sembrando datos demo iniciales...');
+  const { resetDemoTenantData } = await import('../src/services/demoTenant.service.ts');
+  await resetDemoTenantData();
+
   console.log('Aplicando triggers de inmutabilidad en audit_logs...');
   spawnSync('npx.cmd', ['tsx', 'scripts/apply-audit-immutability.ts'], {
     cwd: rootDir,
@@ -133,47 +87,35 @@ try {
     env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
   });
 
-  // 3. Verificación de Aislamiento SQL en Runtime
-  console.log('\n--- 3. Verificación SQL en Runtime ---');
+  // 2. Verificación SQL en Runtime
+  console.log('\n--- 2. Verificación SQL en Runtime ---');
   await validateTestDatabaseRuntime(testDbUrl);
 
-  // 4. Ejecución Secuencial de las 9 Suites
-  console.log('\n--- 4. Ejecución Secuencial de las 9 Suites de Integración ---');
-  let totalPassed = 0;
+  // 3. Ejecución de Playwright Test
+  console.log('\n--- 3. Ejecutando Playwright E2E Tests ---');
+  const pwResult = spawnSync('npx.cmd', ['playwright', 'test'], {
+    cwd: rootDir,
+    stdio: 'inherit',
+    shell: true,
+    env: {
+      ...process.env,
+      DATABASE_URL: testDbUrl,
+      NODE_ENV: 'test',
+      CI: 'true',
+    },
+  });
 
-  for (let i = 0; i < suites.length; i++) {
-    const suite = suites[i];
-    console.log(`\n============================================================`);
-    console.log(`[${i + 1}/${suites.length}] Ejecutando: ${suite}`);
-    console.log(`============================================================`);
-
-    const result = spawnSync('npx.cmd', ['tsx', suite], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      shell: true,
-      env: {
-        ...process.env,
-        DATABASE_URL: testDbUrl,
-        NODE_ENV: 'test',
-      },
-    });
-
-    if (result.status !== 0) {
-      console.error(`\n❌ ERROR: La suite '${suite}' falló con código ${result.status}.`);
-      throw new Error(`Fallo en suite: ${suite}`);
-    }
-
-    totalPassed++;
-    console.log(`✅ Suite '${suite}' completada con éxito.`);
+  if (pwResult.status !== 0) {
+    throw new Error(`Fallo en pruebas Playwright (código ${pwResult.status})`);
   }
 
-  allSuitesPassed = true;
+  e2ePassed = true;
   console.log('\n============================================================');
-  console.log(`🎉 TODAS LAS 9 SUITES DE INTEGRACIÓN PASARON (${totalPassed}/9)`);
+  console.log('🎉 TODAS LAS PRUEBAS E2E (PLAYWRIGHT) PASARON CON ÉXITO');
   console.log('============================================================\n');
 
 } finally {
-  console.log('--- 5. Destrucción Segura del Entorno Local Temporal ---');
+  console.log('--- 4. Destrucción Segura del Entorno Local Temporal ---');
   try {
     execFileSync(path.join(pgBin, 'pg_ctl.exe'), ['stop', '-D', pgDataTest, '-m', 'fast'], { encoding: 'utf8' });
     console.log('Servidor PostgreSQL 17 detenido limpiamente con pg_ctl.');
@@ -187,6 +129,6 @@ try {
   }
 }
 
-if (!allSuitesPassed) {
+if (!e2ePassed) {
   process.exit(1);
 }

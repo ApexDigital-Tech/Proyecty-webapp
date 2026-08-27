@@ -110,6 +110,6 @@ export async function seedRoles() {
 }
 
 // Ejecutar si se llama directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1]?.includes('seed_roles')) {
   seedRoles().catch(console.error).finally(() => process.exit(0));
 }

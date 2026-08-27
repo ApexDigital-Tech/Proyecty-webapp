@@ -273,9 +273,17 @@ async function runOla2ExhaustiveSuite() {
   // -------------------------------------------------------------------------
   console.log('\n[3. M-08: Partidas Presupuestarias Base]');
 
+  const [baseVersion] = await db.insert(budgetVersions).values({
+    tenantId,
+    projectId: testProject.id,
+    versionName: 'V0 - Base Temporal',
+    versionNumber: 0,
+    status: 'DRAFT',
+  }).returning();
+
   const [baseLine] = await db.insert(budgetLines).values({
     projectId: testProject.id,
-    budgetVersionId: 1,
+    budgetVersionId: baseVersion.id,
     code: 'BL-BASE-01',
     category: 'Infraestructura',
     subcategory: 'Obras Civiles',
@@ -503,7 +511,7 @@ async function runOla2ExhaustiveSuite() {
   // 6.6 Multi-divisa: Moneda diferente sin tasa
   let missingRateRejected = false;
   try {
-    convertCurrency(100, 'GBP', 'USD', undefined, 'BANCO_CENTRAL');
+    convertCurrency(100, 'EUR', 'USD', undefined, 'BANCO_CENTRAL');
   } catch (err: any) {
     missingRateRejected = err.name === 'ValidationError' || err.message?.includes('explícita');
   }
@@ -538,8 +546,8 @@ async function runOla2ExhaustiveSuite() {
   // 7. Limpieza y Descontaminación del Tenant Demo Institucional
   // -------------------------------------------------------------------------
   console.log('\n[7. Descontaminación y Reseteo Limpio del Tenant Demo]');
-  await resetDemoTenantData();
-  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, 5));
+  const { orgId: demoOrgId } = await resetDemoTenantData();
+  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
   const hasOnlyOfficialDemo = demoProjects.every(p => p.code === 'PRJ-DEMO-2026');
   testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente al proyecto institucional PRJ-DEMO-2026 (0 fixtures residuales)');
 

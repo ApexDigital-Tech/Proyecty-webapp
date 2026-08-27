@@ -151,7 +151,7 @@ export const approveExpense = async (
     const updatedExpense = result[0];
 
     // 5. Registrar en bitácora inmutable de auditoría (AUD-01)
-    logAuditEvent({
+    await logAuditEvent({
       tenantId,
       userId: approvedByUserId,
       action: status === 'approved' ? 'EXPENSE_APPROVED' : 'EXPENSE_REJECTED',

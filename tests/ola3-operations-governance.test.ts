@@ -478,9 +478,9 @@ async function runOla3ExhaustiveSuite() {
   console.log('\n[4. Limpieza y Descontaminación de Tenant Demo]');
   await cleanTestTenant(tenantId);
   await cleanTestTenant(otherTenantId);
-  await resetDemoTenantData();
+  const { orgId: demoOrgId } = await resetDemoTenantData();
 
-  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, 5));
+  const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
   const hasOnlyOfficialDemo = demoProjects.length === 1 && demoProjects[0].code === 'PRJ-DEMO-2026';
   testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo verificado con 0 fixtures residuales y exclusivamente PRJ-DEMO-2026');
 

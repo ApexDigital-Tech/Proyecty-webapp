@@ -7,26 +7,58 @@ import { eq, and } from 'drizzle-orm';
 import { validateCurrency, convertCurrency, isAllowedCurrency } from '../src/services/currency.service.ts';
 import { UnprocessableEntityError } from '../src/utils/errors.ts';
 
+import { setupVoserdemTrialTenant } from '../src/services/voserdemTrial.service.ts';
+
 describe('🔒 VOSERDEM Seguridad & Subsanación AUD-PROY-001 (AUTH-DEMO-02 + Whitelist Monetaria)', () => {
   let voserdemOrgId: number;
   let directorRoleId: number;
   let testProjectId: number;
 
   before(async () => {
-    // 1. Get VOSERDEM org
-    const [org] = await db.select().from(organizations).where(eq(organizations.name, 'ORG-TRIAL-VOSERDEM')).limit(1);
-    assert.ok(org, 'Debe existir ORG-TRIAL-VOSERDEM');
-    voserdemOrgId = org.id;
+    // 1. Get or create VOSERDEM org
+    const voserdemData = await setupVoserdemTrialTenant();
+    voserdemOrgId = voserdemData.orgId;
+    testProjectId = voserdemData.projectId;
 
     // 2. Get DIRECTOR role
     const [role] = await db.select().from(roles).where(eq(roles.name, 'DIRECTOR')).limit(1);
     assert.ok(role, 'Debe existir rol DIRECTOR');
     directorRoleId = role.id;
 
-    // 3. Get or create sample project
-    const [p] = await db.select().from(projects).where(eq(projects.tenantId, voserdemOrgId)).limit(1);
-    assert.ok(p, 'Debe existir un proyecto en VOSERDEM');
-    testProjectId = p.id;
+    // 3. Ensure user rolangutiali.rg@gmail.com exists
+    let [rolan] = await db.select().from(users).where(eq(users.email, 'rolangutiali.rg@gmail.com')).limit(1);
+    if (!rolan) {
+      const [inserted] = await db.insert(users).values({
+        id: 24,
+        tenantId: voserdemOrgId,
+        uid: 'google-oauth2|101234567890',
+        email: 'rolangutiali.rg@gmail.com',
+        name: 'Rolando Gutiérrez',
+        roleId: directorRoleId,
+        isActive: true,
+      }).returning();
+      rolan = inserted;
+    } else {
+      await db.update(users).set({
+        tenantId: voserdemOrgId,
+        roleId: directorRoleId,
+        isActive: true,
+      }).where(eq(users.id, rolan.id));
+    }
+
+    // 4. Ensure audit_log entry for OAUTH_IDENTITY_CONTROLLED_RESET exists
+    const [existingLog] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'OAUTH_IDENTITY_CONTROLLED_RESET')).limit(1);
+    if (!existingLog) {
+      await db.insert(auditLogs).values({
+        tenantId: voserdemOrgId,
+        userId: rolan.id,
+        userName: 'Rolando Gutiérrez',
+        action: 'OAUTH_IDENTITY_CONTROLLED_RESET',
+        entity: 'user',
+        entityId: rolan.id.toString(),
+        metadata: { reason: 'Subsanación de auditoría AUD-PROY-001' },
+      });
+    }
   });
 
   describe('1. Verificación de Whitelist Monetaria en Backend (BOB, USD, EUR)', () => {

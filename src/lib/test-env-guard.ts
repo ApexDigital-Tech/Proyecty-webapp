@@ -1,5 +1,4 @@
-import { sql } from 'drizzle-orm';
-import { db } from '../db/index.ts';
+import { Pool } from 'pg';
 
 /**
  * Validates strictly that the process environment and database connection are isolated
@@ -46,27 +45,33 @@ export function validateTestEnvStrict(dbUrlParam?: string, nodeEnvParam?: string
 /**
  * Validates the live database connection at runtime using PostgreSQL internal session attributes.
  */
-export async function validateTestDatabaseRuntime(): Promise<void> {
-  validateTestEnvStrict();
+export async function validateTestDatabaseRuntime(dbUrlParam?: string): Promise<void> {
+  const targetUrl = dbUrlParam || process.env.DATABASE_URL;
+  validateTestEnvStrict(targetUrl);
 
-  const res = await db.execute(sql`
-    SELECT current_database() as db_name, inet_server_addr()::text as srv_addr, inet_server_port() as srv_port;
-  `);
+  const pool = new Pool({ connectionString: targetUrl, connectionTimeoutMillis: 5000 });
+  try {
+    const res = await pool.query(`
+      SELECT current_database() as db_name, host(inet_server_addr()) as srv_addr, inet_server_port() as srv_port;
+    `);
 
-  const row = (res.rows || res)[0] as any;
-  const currentDb = row?.db_name || row?.current_database;
-  const srvAddr = row?.srv_addr || row?.inet_server_addr;
-  const srvPort = Number(row?.srv_port || row?.inet_server_port);
+    const row = res.rows[0];
+    const currentDb = row?.db_name;
+    const srvAddr = row?.srv_addr;
+    const srvPort = Number(row?.srv_port);
 
-  if (currentDb !== 'proyecty_test') {
-    throw new Error(`[SECURITY GUARD] Runtime DB check failed: expected "proyecty_test", got "${currentDb}"`);
+    if (currentDb !== 'proyecty_test') {
+      throw new Error(`[SECURITY GUARD] Runtime DB check failed: expected "proyecty_test", got "${currentDb}"`);
+    }
+    if (srvAddr !== '127.0.0.1' && srvAddr !== '::1' && srvAddr !== '127.0.0.1/32') {
+      throw new Error(`[SECURITY GUARD] Runtime Host check failed: expected "127.0.0.1", got "${srvAddr}"`);
+    }
+    if (srvPort !== 55432) {
+      throw new Error(`[SECURITY GUARD] Runtime Port check failed: expected 55432, got ${srvPort}`);
+    }
+
+    console.log('🛡️ [SECURITY GUARD] Database isolation verified:', { currentDb, srvAddr, srvPort });
+  } finally {
+    await pool.end();
   }
-  if (srvAddr !== '127.0.0.1' && srvAddr !== '::1') {
-    throw new Error(`[SECURITY GUARD] Runtime Host check failed: expected "127.0.0.1", got "${srvAddr}"`);
-  }
-  if (srvPort !== 55432) {
-    throw new Error(`[SECURITY GUARD] Runtime Port check failed: expected 55432, got ${srvPort}`);
-  }
-
-  console.log('🛡️ [SECURITY GUARD] Database isolation verified:', { currentDb, srvAddr, srvPort });
 }
