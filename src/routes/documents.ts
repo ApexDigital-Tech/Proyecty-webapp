@@ -5,7 +5,7 @@ import { db } from '../db/index.ts';
 import { documents, auditLogs } from '../db/schema.ts';
 import { requireAuth, AuthRequest } from '../middleware/auth.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseBackend as supabase } from '../lib/supabase-backend.ts';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { documentAnalysis } from '../db/schema.ts';
 
@@ -14,18 +14,6 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const router = express.Router();
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-
-let supabase: any;
-try {
-  if (supabaseUrl && supabaseKey) {
-    supabase = createClient(supabaseUrl, supabaseKey);
-  } else {
-    console.warn('WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Document endpoints will fail.');
-  }
-} catch (e) {
-  console.error('Failed to initialize Supabase client:', e);
-}
 
 // Multer config: Estricto 10MB y formatos autorizados (DOC-01)
 const storage = multer.memoryStorage();

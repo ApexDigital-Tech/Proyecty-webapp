@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../lib/supabase.ts';
+import { supabaseBackend as supabase } from '../lib/supabase-backend.ts';
 import { getOrCreateUser } from '../db/users.ts';
 import { verifyDemoToken } from '../services/demoAuth.service.ts';
 

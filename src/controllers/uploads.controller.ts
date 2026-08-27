@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.ts';
 import { db } from '../db/index.ts';
 import { receiptsVouchers, documents } from '../db/schema.ts';
-import { supabase } from '../lib/supabase.ts';
+import { supabaseBackend as supabase } from '../lib/supabase-backend.ts';
 import { logActivity } from '../db/audit.ts';
 
 export const uploadVoucher = async (req: AuthRequest, res: Response) => {

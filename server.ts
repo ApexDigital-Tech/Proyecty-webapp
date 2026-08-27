@@ -30,8 +30,6 @@ import auditRouter from './src/routes/audit.routes.ts';
 
 import reportsRouter from './src/routes/reports.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
-
-import { createClient } from '@supabase/supabase-js';
 import {
   projects,
   agreements,
@@ -132,11 +130,11 @@ export function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Initialize Supabase Client (Sync)
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://kwmvuuwinufksjjfsuls.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_zUPQ-kH3piQQoHvMu4tuIQ_ui7f-OUr';
-export const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabaseBackend as supabase } from './src/lib/supabase-backend.ts';
 
+// ----------------------------------------------------------------------
+// Express App Setup
+// ----------------------------------------------------------------------
 
 // Ensure database is seeded on startup (Async IIFE)
 (async function init() {
