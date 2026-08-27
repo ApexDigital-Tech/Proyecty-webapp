@@ -1,10 +1,9 @@
 import 'dotenv/config';
-import { db } from './src/db/index.ts';
-import { projects } from './src/db/schema.ts';
+import { db } from '../src/db/index.ts';
+import { projects, organizations } from '../src/db/schema.ts';
 import express from 'express';
-import { requireAuth } from './src/middleware/auth.ts';
+import { requireAuth } from '../src/middleware/auth.ts';
 import { eq, and } from 'drizzle-orm';
-import { organizations } from './src/db/schema.ts';
 
 const app = express();
 app.use(express.json());

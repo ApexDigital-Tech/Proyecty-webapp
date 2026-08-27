@@ -1,9 +1,15 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const fixturesDir = path.join(__dirname, 'fixtures');
 
 async function runTests() {
   const baseUrl = 'http://localhost:3000/api';
   let cookie = '';
+  let token = '';
   
   // Login
   console.log('--- LOGIN ---');
@@ -51,19 +57,19 @@ async function runTests() {
 
   // Test 1: Valid PDF (< 10MB)
   console.log('\n--- TEST 1: Valid PDF ---');
-  const res1 = await uploadFile('test_valid.pdf', 'test_valid.pdf', 'application/pdf');
+  const res1 = await uploadFile(path.join(fixturesDir, 'test_valid.pdf'), 'test_valid.pdf', 'application/pdf');
   const data1 = await res1.json();
   console.log('Upload valid PDF status:', res1.status, data1);
   const uploadedDocId = data1.id;
 
   // Test 2: Invalid Extension
   console.log('\n--- TEST 2: Invalid TXT ---');
-  const res2 = await uploadFile('test_invalid.txt', 'test_invalid.txt', 'text/plain');
+  const res2 = await uploadFile(path.join(fixturesDir, 'test_invalid.txt'), 'test_invalid.txt', 'text/plain');
   console.log('Upload invalid TXT status:', res2.status, await res2.text());
 
   // Test 3: Large File (> 10MB)
   console.log('\n--- TEST 3: Large PDF ---');
-  const res3 = await uploadFile('test_large.pdf', 'test_large.pdf', 'application/pdf');
+  const res3 = await uploadFile(path.join(fixturesDir, 'test_large.pdf'), 'test_large.pdf', 'application/pdf');
   console.log('Upload large PDF status:', res3.status, await res3.text());
 
   // Test 4: Delete File
