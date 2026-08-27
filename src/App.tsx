@@ -66,14 +66,14 @@ export default function App() {
         }
       });
 
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
           const u = session.user;
           const email = (u.email || '').toLowerCase();
           const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
           const role: UserRole = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
           handleLoginSuccess(session.access_token, { name: userName, email, role });
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           handleLogout();
         }
       });

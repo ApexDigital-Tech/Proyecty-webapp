@@ -18,14 +18,21 @@ export async function getTestAuthToken(request: APIRequestContext, role: string 
 }
 
 /**
- * Injects a dynamically fetched demo session token into the page's localStorage.
+ * Injects a dynamically fetched demo session token and user payload into the page's localStorage.
  */
 export async function loginWithDemoSession(page: Page, request: APIRequestContext, role: string = 'DIRECTOR'): Promise<string> {
   const token = await getTestAuthToken(request, role);
   await page.goto('http://127.0.0.1:3000');
-  await page.evaluate((jwt) => {
-    localStorage.setItem('sb-access-token', jwt);
-  }, token);
-  await page.reload();
+  await page.evaluate(({ jwt, roleName }) => {
+    localStorage.setItem('proyecty_token', jwt);
+    localStorage.setItem('proyecty_user', JSON.stringify({
+      name: 'Gonzalo Alfaro (Test)',
+      email: 'apexdigital70@gmail.com',
+      role: roleName,
+      tenantId: 1
+    }));
+  }, { jwt: token, roleName: role });
+  await page.goto('http://127.0.0.1:3000');
+  await page.waitForLoadState('domcontentloaded');
   return token;
 }
