@@ -63,14 +63,10 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
     // 1. Generar organizaciones reales independientes para Tenant A y Tenant B
     const [orgA] = await db.insert(organizations).values({
       name: `Tenant A (Synth ${Date.now()})`,
-      slug: `tenant-a-${Date.now()}`,
-      country: 'BO'
     }).returning({ id: organizations.id });
 
     const [orgB] = await db.insert(organizations).values({
       name: `Tenant B (Synth ${Date.now()})`,
-      slug: `tenant-b-${Date.now()}`,
-      country: 'BO'
     }).returning({ id: organizations.id });
 
     // Generar usuarios reales en la DB (para evadir violaciones FK en logs de auditoría, etc.)
@@ -81,7 +77,6 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
       name: 'Director Tenant A',
       roleId: 1, // DIRECTOR
       isActive: true,
-      lastLoginAt: new Date()
     }).returning({ id: users.id });
 
     const [userB] = await db.insert(users).values({
@@ -91,7 +86,6 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
       name: 'Director Tenant B',
       roleId: 1, // DIRECTOR
       isActive: true,
-      lastLoginAt: new Date()
     }).returning({ id: users.id });
 
     const tenantAToken = generateDemoToken({

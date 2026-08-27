@@ -54,28 +54,49 @@ export default function App() {
     };
   }, []);
 
+  const syncSessionWithBackend = async (accessToken: string) => {
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const email = data.email || '';
+        const name = data.name || email.split('@')[0] || 'Usuario';
+        handleLoginSuccess(accessToken, { 
+          name, 
+          email, 
+          role: data.role as UserRole, 
+          tenantId: data.tenantId,
+          uid: data.uid 
+        });
+      } else {
+        handleLogout();
+      }
+    } catch (err) {
+      handleLogout();
+    }
+  };
+
   React.useEffect(() => {
+    // INITIAL_SESSION handling
+    const initialToken = localStorage.getItem('proyecty_token');
+    
     import('./lib/supabase.ts').then(({ supabase }) => {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          const u = session.user;
-          const email = (u.email || '').toLowerCase();
-          const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          // Obtain canonical identity claims from Supabase app_metadata or user_metadata
-          const role = (u.app_metadata?.role || u.user_metadata?.role || 'MANAGER') as UserRole;
-          const tenantId = u.app_metadata?.tenant_id || u.user_metadata?.tenant_id;
-          handleLoginSuccess(session.access_token, { name: userName, email, role, tenantId });
+          syncSessionWithBackend(session.access_token);
+        } else if (initialToken) {
+          // Validate existing token even if Supabase has no session (e.g. demo tokens)
+          syncSessionWithBackend(initialToken);
+        } else {
+          handleLogout();
         }
       });
 
       supabase.auth.onAuthStateChange((event, session) => {
-        if (session) {
-          const u = session.user;
-          const email = (u.email || '').toLowerCase();
-          const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          const role = (u.app_metadata?.role || u.user_metadata?.role || 'MANAGER') as UserRole;
-          const tenantId = u.app_metadata?.tenant_id || u.user_metadata?.tenant_id;
-          handleLoginSuccess(session.access_token, { name: userName, email, role, tenantId });
+        if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
+          syncSessionWithBackend(session.access_token);
         } else if (event === 'SIGNED_OUT') {
           handleLogout();
         }
@@ -93,20 +114,8 @@ export default function App() {
   const [isLoadingProjects, setIsLoadingProjects] = React.useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = React.useState(false);
 
-  // Validate session when authenticated or changing tabs
   React.useEffect(() => {
     if (token) {
-      apiFetch('/api/auth/me')
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.role) {
-              setCurrentUser(prev => prev ? { ...prev, role: data.role as UserRole, tenantId: data.tenantId } : null);
-            }
-          }
-        })
-        .catch(() => {});
-      
       fetchAuditLogs();
     }
   }, [token, currentTab]);
@@ -128,7 +137,7 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole; tenantId?: string | number }) => {
+  const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string }) => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('auth_user');
     localStorage.setItem('proyecty_token', userToken);
