@@ -1,8 +1,13 @@
 import 'dotenv/config';
-import { db } from './src/db/index.ts';
+import { db } from '../src/db/index.ts';
 import { sql } from 'drizzle-orm';
 
 async function updateRole() {
+  if (process.env.ALLOW_DIRECT_ROLE_UPDATE !== 'true') {
+    console.warn('⛔ Ejecución bloqueada por seguridad: configure ALLOW_DIRECT_ROLE_UPDATE=true en su entorno para ejecutar esta utilidad.');
+    process.exit(0);
+  }
+
   try {
     await db.execute(sql`UPDATE users SET role_id = 1 WHERE email = 'apexdigital70@gmail.com'`);
     console.log('Role updated successfully');
