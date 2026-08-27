@@ -1,15 +1,21 @@
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 export function initSentry() {
+  const integrations: any[] = [];
+  try {
+    // Dynamically load profiling if native binary exists for Node runtime
+    const profiling = require('@sentry/profiling-node');
+    if (profiling?.nodeProfilingIntegration) {
+      integrations.push(profiling.nodeProfilingIntegration());
+    }
+  } catch {
+    // Profiling binary optional or unsupported on current Node version
+  }
+
   Sentry.init({
     dsn: process.env.SENTRY_DSN || '',
-    integrations: [
-      nodeProfilingIntegration(),
-    ],
-    // Tracing
-    tracesSampleRate: 1.0, //  Capture 100% of the transactions
-    // Set sampling rate for profiling - this is relative to tracesSampleRate
+    integrations,
+    tracesSampleRate: 1.0,
     profilesSampleRate: 1.0,
     environment: process.env.NODE_ENV || 'development',
   });

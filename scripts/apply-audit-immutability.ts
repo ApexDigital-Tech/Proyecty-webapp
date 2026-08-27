@@ -33,7 +33,21 @@ export async function applyAuditLogsImmutability() {
   console.log('✅ Triggers de inmutabilidad activados en PostgreSQL.');
 }
 
-if (process.argv[1]?.includes('apply-audit-immutability')) {
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const isEntrypoint = () => {
+  if (!process.argv[1]) return false;
+  try {
+    const currentFilePath = path.resolve(fileURLToPath(import.meta.url));
+    const entrypointPath = path.resolve(process.argv[1]);
+    return currentFilePath === entrypointPath;
+  } catch {
+    return false;
+  }
+};
+
+if (isEntrypoint()) {
   applyAuditLogsImmutability()
     .then(() => process.exit(0))
     .catch((err) => {
