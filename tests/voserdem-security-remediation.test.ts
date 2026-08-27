@@ -8,6 +8,7 @@ import { validateCurrency, convertCurrency, isAllowedCurrency } from '../src/ser
 import { UnprocessableEntityError } from '../src/utils/errors.ts';
 
 import { setupVoserdemTrialTenant } from '../src/services/voserdemTrial.service.ts';
+import { performControlledOAuthReset } from '../scripts/reset-oauth-identity.ts';
 
 describe('🔒 VOSERDEM Seguridad & Subsanación AUD-PROY-001 (AUTH-DEMO-02 + Whitelist Monetaria)', () => {
   let voserdemOrgId: number;
@@ -25,7 +26,7 @@ describe('🔒 VOSERDEM Seguridad & Subsanación AUD-PROY-001 (AUTH-DEMO-02 + Wh
     assert.ok(role, 'Debe existir rol DIRECTOR');
     directorRoleId = role.id;
 
-    // 3. Ensure user rolangutiali.rg@gmail.com exists
+    // 3. Ensure user rolangutiali.rg@gmail.com exists with pre-state before reset
     let [rolan] = await db.select().from(users).where(eq(users.email, 'rolangutiali.rg@gmail.com')).limit(1);
     if (!rolan) {
       const [inserted] = await db.insert(users).values({
@@ -42,23 +43,13 @@ describe('🔒 VOSERDEM Seguridad & Subsanación AUD-PROY-001 (AUTH-DEMO-02 + Wh
       await db.update(users).set({
         tenantId: voserdemOrgId,
         roleId: directorRoleId,
+        uid: 'google-oauth2|101234567890',
         isActive: true,
       }).where(eq(users.id, rolan.id));
     }
 
-    // 4. Ensure audit_log entry for OAUTH_IDENTITY_CONTROLLED_RESET exists
-    const [existingLog] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'OAUTH_IDENTITY_CONTROLLED_RESET')).limit(1);
-    if (!existingLog) {
-      await db.insert(auditLogs).values({
-        tenantId: voserdemOrgId,
-        userId: rolan.id,
-        userName: 'Rolando Gutiérrez',
-        action: 'OAUTH_IDENTITY_CONTROLLED_RESET',
-        entity: 'user',
-        entityId: rolan.id.toString(),
-        metadata: { reason: 'Subsanación de auditoría AUD-PROY-001' },
-      });
-    }
+    // 4. Ejecutar la operación real de reinicio controlado (provoca el registro en audit_logs de forma no tautológica)
+    await performControlledOAuthReset('rolangutiali.rg@gmail.com');
   });
 
   describe('1. Verificación de Whitelist Monetaria en Backend (BOB, USD, EUR)', () => {

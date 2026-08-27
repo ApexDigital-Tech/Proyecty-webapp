@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { getTestAuthToken, loginWithDemoSession } from './fixtures/auth.ts';
+import { generateDemoToken } from '../src/services/demoAuth.service.ts';
 
 test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
   let authHeaders: Record<string, string> = {};
@@ -57,20 +58,93 @@ test.describe('E2E Auditoría Funcional Completa (Fase 1)', () => {
   // PUNTO 2: Aislamiento RLS / Multi-tenant en APIs
   // ============================================
   test('Aislamiento RLS: Consulta entre organizaciones rechazada o vacía', async ({ request }) => {
-    // Attempt to access cross-tenant project or verify tenant isolation
-    const res = await request.get('http://localhost:3000/api/projects', {
-      headers: authHeaders,
+    // 1. Generar tokens criptográficos para dos tenants sintéticos independientes
+    const tenantAToken = generateDemoToken({
+      uid: 'user-tenant-a-synth',
+      userId: 101,
+      email: 'director.a@synth-tenant-a.org',
+      name: 'Director Tenant A',
+      role: 'DIRECTOR',
+      roleName: 'Director',
+      tenantId: 101,
     });
-    expect(res.ok()).toBe(true);
-    const body = await res.json();
-    const data = Array.isArray(body) ? body : (Array.isArray(body?.data) ? body.data : []);
+    const headersTenantA = { 'Authorization': `Bearer ${tenantAToken}`, 'Content-Type': 'application/json' };
 
-    // All returned projects must belong to tenant 1 (Apex Digital)
-    for (const project of data) {
-      if (project.tenantId) {
-        expect(project.tenantId).toBe(1);
-      }
+    const tenantBToken = generateDemoToken({
+      uid: 'user-tenant-b-synth',
+      userId: 102,
+      email: 'director.b@synth-tenant-b.org',
+      name: 'Director Tenant B',
+      role: 'DIRECTOR',
+      roleName: 'Director',
+      tenantId: 102,
+    });
+    const headersTenantB = { 'Authorization': `Bearer ${tenantBToken}`, 'Content-Type': 'application/json' };
+
+    // 2. Tenant B crea un proyecto en su propio tenant
+    const createBRes = await request.post('http://localhost:3000/api/projects', {
+      headers: headersTenantB,
+      data: {
+        code: `PRJ-SYNTH-B-${Date.now()}`,
+        name: 'Proyecto Privado Tenant B',
+        donor: 'Donante Confidencial B',
+        approvedBudget: '75000',
+        baseCurrency: 'USD',
+      },
+    });
+    expect(createBRes.status()).toBe(201);
+    const projectB = await createBRes.json();
+    const projectBId = projectB.id;
+
+    // 3. Tenant A crea un proyecto en su propio tenant
+    const createARes = await request.post('http://localhost:3000/api/projects', {
+      headers: headersTenantA,
+      data: {
+        code: `PRJ-SYNTH-A-${Date.now()}`,
+        name: 'Proyecto Privado Tenant A',
+        donor: 'Donante Confidencial A',
+        approvedBudget: '50000',
+        baseCurrency: 'USD',
+      },
+    });
+    expect(createARes.status()).toBe(201);
+
+    // 4. Colección: Tenant A consulta /api/projects -> no contiene projectB
+    const listARes = await request.get('http://localhost:3000/api/projects', { headers: headersTenantA });
+    expect(listARes.ok()).toBe(true);
+    const listABody = await listARes.json();
+    const projectsA = Array.isArray(listABody) ? listABody : (Array.isArray(listABody?.data) ? listABody.data : []);
+
+    expect(projectsA.some((p: any) => p.id === projectBId)).toBe(false);
+    for (const p of projectsA) {
+      expect(p.tenantId).toBe(101);
     }
+
+    // 5. Lectura directa cross-tenant: Tenant A intenta leer projectB -> Rechazado 404/403
+    const directReadRes = await request.get(`http://localhost:3000/api/projects/${projectBId}`, { headers: headersTenantA });
+    expect([403, 404]).toContain(directReadRes.status());
+
+    // 6. Actualización cross-tenant: Tenant A intenta modificar projectB -> Rechazado 404/403
+    const crossUpdateRes = await request.put(`http://localhost:3000/api/projects/${projectBId}`, {
+      headers: headersTenantA,
+      data: {
+        code: 'HACKED-CODE',
+        name: 'Intento de Inyección Cross-Tenant',
+        donor: 'Hacker',
+        approvedBudget: '999999',
+      },
+    });
+    expect([403, 404]).toContain(crossUpdateRes.status());
+
+    // 7. Eliminación cross-tenant: Tenant A intenta eliminar projectB -> Rechazado 404/403
+    const crossDeleteRes = await request.delete(`http://localhost:3000/api/projects/${projectBId}`, { headers: headersTenantA });
+    expect([403, 404]).toContain(crossDeleteRes.status());
+
+    // 8. Verificación de integridad: Tenant B puede leer su proyecto intacto
+    const verifyBRes = await request.get(`http://localhost:3000/api/projects/${projectBId}`, { headers: headersTenantB });
+    expect(verifyBRes.ok()).toBe(true);
+    const verifyBBody = await verifyBRes.json();
+    expect(verifyBBody.data.name).toBe('Proyecto Privado Tenant B');
   });
 
   test('GET y POST /api/tasks respetan autenticación y tenant', async ({ request }) => {

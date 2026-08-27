@@ -141,7 +141,19 @@ async function runOla1ExhaustiveSuite() {
   // 2.3 Cross-Tenant Isolation
   const tenantProjects = await db.select().from(projects).where(eq(projects.tenantId, tenantId));
   const hasLeak = tenantProjects.some(p => p.id === otherProject.id);
-  testAssert(!hasLeak, 'Aislamiento Cross-Tenant: 0 registros de otra organización visibles');
+  testAssert(!hasLeak, 'Aislamiento Colección Cross-Tenant: 0 registros de otra organización visibles');
+
+  // Lectura directa cross-tenant rechazada
+  const crossDirectRead = await db.select().from(projects).where(and(eq(projects.id, otherProject.id), eq(projects.tenantId, tenantId)));
+  testAssert(crossDirectRead.length === 0, 'Lectura directa Cross-Tenant: No retorna registro de otra organización');
+
+  // Actualización cross-tenant rechazada
+  const crossUpdateRes = await db.update(projects).set({ name: 'HACKED' }).where(and(eq(projects.id, otherProject.id), eq(projects.tenantId, tenantId))).returning();
+  testAssert(crossUpdateRes.length === 0, 'Actualización Cross-Tenant: 0 filas modificadas por aislamiento');
+
+  // Eliminación cross-tenant rechazada
+  const crossDeleteRes = await db.delete(projects).where(and(eq(projects.id, otherProject.id), eq(projects.tenantId, tenantId))).returning();
+  testAssert(crossDeleteRes.length === 0, 'Eliminación Cross-Tenant: 0 filas eliminadas por aislamiento');
 
   // 2.4 Ficha de Proyecto: Filtrado de partidas por versión activa (No Duplicidad)
   const [bv1] = await db.insert(budgetVersions).values({

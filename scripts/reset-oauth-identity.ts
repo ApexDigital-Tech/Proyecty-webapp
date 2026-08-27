@@ -6,9 +6,9 @@ import { eq } from 'drizzle-orm';
 const TARGET_EMAIL = 'rolangutiali.rg@gmail.com';
 const VOSERDEM_TENANT_NAME = 'ORG-TRIAL-VOSERDEM';
 
-async function resetOAuthIdentity() {
+export async function performControlledOAuthReset(targetEmail: string = TARGET_EMAIL) {
   console.log('================================================================');
-  console.log(`🔄 REINICIO CONTROLADO DE IDENTIDAD OAUTH: ${TARGET_EMAIL}`);
+  console.log(`🔄 REINICIO CONTROLADO DE IDENTIDAD OAUTH: ${targetEmail}`);
   console.log('================================================================');
 
   // 1. Snapshot Before State
@@ -27,11 +27,10 @@ async function resetOAuthIdentity() {
   .from(users)
   .leftJoin(roles, eq(users.roleId, roles.id))
   .leftJoin(organizations, eq(users.tenantId, organizations.id))
-  .where(eq(users.email, TARGET_EMAIL));
+  .where(eq(users.email, targetEmail));
 
   if (!u) {
-    console.error(`❌ Usuario ${TARGET_EMAIL} no encontrado.`);
-    process.exit(1);
+    throw new Error(`Usuario ${targetEmail} no encontrado.`);
   }
 
   const beforeState = {
@@ -57,7 +56,7 @@ async function resetOAuthIdentity() {
   const targetTenantId = voserdemOrg ? voserdemOrg.id : (u.tenantId || 13);
   const targetRoleId = directorRole ? directorRole.id : (u.roleId || 1);
 
-  const placeholderUid = `preauth-${TARGET_EMAIL}`;
+  const placeholderUid = `preauth-${targetEmail}`;
   await db.update(users).set({
     uid: placeholderUid, // Reset to preauth placeholder so next Google OAuth links fresh
     tenantId: targetTenantId,
@@ -66,7 +65,7 @@ async function resetOAuthIdentity() {
   }).where(eq(users.id, u.id));
 
   // 3. Register Audit Log
-  await db.insert(auditLogs).values({
+  const [insertedLog] = await db.insert(auditLogs).values({
     tenantId: targetTenantId,
     userId: u.id,
     userName: u.name || 'Rolando Gutiérrez',
@@ -76,22 +75,41 @@ async function resetOAuthIdentity() {
     metadata: {
       reason: 'Reinicio controlado de identidad OAuth para prueba limpia en incógnito',
       cleared_uid: u.uid,
-      kept_preauthorized_email: TARGET_EMAIL,
+      kept_preauthorized_email: targetEmail,
       tenant_id: targetTenantId,
       tenant_name: VOSERDEM_TENANT_NAME,
       role: 'DIRECTOR',
       before_state: beforeState,
       timestamp: new Date().toISOString(),
     },
-  });
+  }).returning();
 
   console.log('\n✅ Identidad Google/Supabase desvinculada exitosamente (uid puesto en NULL).');
-  console.log(`✅ Correo ${TARGET_EMAIL} conservado como preautorizado en ${VOSERDEM_TENANT_NAME} con rol DIRECTOR.`);
+  console.log(`✅ Correo ${targetEmail} conservado como preautorizado en ${VOSERDEM_TENANT_NAME} con rol DIRECTOR.`);
   console.log('✅ Evento registrado en audit_logs.');
   console.log('================================================================\n');
+
+  return { success: true, user: u, auditLog: insertedLog };
 }
 
-resetOAuthIdentity().catch(err => {
-  console.error('Error during OAuth reset:', err);
-  process.exit(1);
-});
+// Ejecutar si se invoca directamente desde CLI
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const isEntrypoint = () => {
+  if (!process.argv[1]) return false;
+  try {
+    const currentFilePath = path.resolve(fileURLToPath(import.meta.url));
+    const entrypointPath = path.resolve(process.argv[1]);
+    return currentFilePath === entrypointPath;
+  } catch {
+    return false;
+  }
+};
+
+if (isEntrypoint()) {
+  performControlledOAuthReset().catch(err => {
+    console.error('Error during OAuth reset:', err);
+    process.exit(1);
+  });
+}
