@@ -61,8 +61,10 @@ export default function App() {
           const u = session.user;
           const email = (u.email || '').toLowerCase();
           const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          const role: UserRole = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
-          handleLoginSuccess(session.access_token, { name: userName, email, role });
+          // Obtain canonical identity claims from Supabase app_metadata or user_metadata
+          const role = (u.app_metadata?.role || u.user_metadata?.role || 'MANAGER') as UserRole;
+          const tenantId = u.app_metadata?.tenant_id || u.user_metadata?.tenant_id;
+          handleLoginSuccess(session.access_token, { name: userName, email, role, tenantId });
         }
       });
 
@@ -71,8 +73,9 @@ export default function App() {
           const u = session.user;
           const email = (u.email || '').toLowerCase();
           const userName = u.user_metadata?.full_name || email.split('@')[0] || 'Usuario';
-          const role: UserRole = email === 'apexdigital70@gmail.com' ? 'DIRECTOR' : 'MANAGER';
-          handleLoginSuccess(session.access_token, { name: userName, email, role });
+          const role = (u.app_metadata?.role || u.user_metadata?.role || 'MANAGER') as UserRole;
+          const tenantId = u.app_metadata?.tenant_id || u.user_metadata?.tenant_id;
+          handleLoginSuccess(session.access_token, { name: userName, email, role, tenantId });
         } else if (event === 'SIGNED_OUT') {
           handleLogout();
         }
@@ -126,11 +129,8 @@ export default function App() {
   };
 
   const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole; tenantId?: string | number }) => {
-    if (userInfo.email === 'apexdigital70@gmail.com') {
-      userInfo.role = 'DIRECTOR';
-      localStorage.removeItem('user_role');
-      localStorage.removeItem('auth_user');
-    }
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('auth_user');
     localStorage.setItem('proyecty_token', userToken);
     localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
     setToken(userToken);
