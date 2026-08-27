@@ -62,7 +62,7 @@ async function verifyProjectTenant(projectId: number, tenantId: number): Promise
 
 const app = express();
 app.set('trust proxy', 1);
-initSentry(); // Initialize Sentry before routes
+await initSentry(); // Initialize Sentry before routes
 
 const PORT = 3000;
 
