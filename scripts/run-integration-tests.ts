@@ -16,6 +16,7 @@ const pgBin = 'C:\\temp\\proyecty-toolchain\\postgresql17\\pgsql\\bin';
 const pgDataTest = 'C:\\temp\\proyecty-toolchain\\pgdata-test';
 
 const suites = [
+  'tests/resolveClientDist.test.ts',
   'tests/p0-audit-auth.test.ts',
   'tests/p1-integrity-audit.test.ts',
   'tests/ola1-security-structure.test.ts',

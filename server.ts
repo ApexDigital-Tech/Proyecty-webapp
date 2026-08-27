@@ -271,13 +271,17 @@ app.use(errorHandler);
     });
     app.use(vite.middlewares);
   } else {
-    // ESM safe way to resolve client distribution directory
+    // ESM safe way to get directory
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const clientDist = fs.existsSync(path.join(__dirname, 'index.html'))
-      ? __dirname
-      : path.resolve(__dirname, 'dist');
+    const { resolveClientDist } = await import('./src/utils/resolveClientDist.ts');
+    const clientDist = resolveClientDist(__dirname);
     
+    // Validate that index.html and assets/ belong to the same dist
+    if (!fs.existsSync(path.join(clientDist, 'index.html')) || !fs.existsSync(path.join(clientDist, 'assets'))) {
+      console.warn(`[WARNING] Expected dist assets not found in ${clientDist}`);
+    }
+
     app.use('/assets', express.static(path.join(clientDist, 'assets')));
     app.use(express.static(clientDist));
     
@@ -290,6 +294,10 @@ app.use(errorHandler);
         return res.redirect(302, '/');
       }
 
+      // Exclude asset paths from fallback so they 404 properly instead of returning index.html
+      if (req.path.startsWith('/assets/')) {
+        return res.status(404).send('Not found');
+      }
       res.sendFile(path.join(clientDist, 'index.html'));
     });
   }
