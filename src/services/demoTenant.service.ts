@@ -1,122 +1,123 @@
 import { db } from '../db/index.ts';
 import {
   organizations,
-  roles,
   users,
-  donors,
+  roles,
   projects,
+  projectMembers,
   agreements,
   disbursements,
-  budgetVersions,
   budgetLines,
+  budgetVersions,
+  expenses,
+  documents,
   tasks,
   taskDependencies,
-  expenses,
   receiptsVouchers,
-  documents,
   auditLogs,
+  donors,
 } from '../db/schema.ts';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
+import { UserRole } from '../types.ts';
 
 export const DEMO_ORG_NAME = 'VOSERDEM — Entorno demostrativo';
 
-export interface DemoUserDefinition {
-  roleKey: 'DIRECTOR' | 'MANAGER' | 'FINANCE' | 'AUDITOR' | 'RESPONSABLE_PROYECTO' | 'FINANCIADOR';
-  roleName: string;
-  name: string;
+export interface DemoUserDef {
+  roleKey: UserRole;
   email: string;
-  uid: string;
+  name: string;
   title: string;
+  roleName: string;
+  uid: string;
 }
 
-export const DEMO_USERS_CATALOG: DemoUserDefinition[] = [
+export const DEMO_USERS_CATALOG: DemoUserDef[] = [
   {
     roleKey: 'DIRECTOR',
-    roleName: 'Director',
-    name: 'Director Demo VOSERDEM',
     email: 'director.demo@voserdem.test',
-    uid: 'demo-usr-director-isolated-001',
+    name: 'Director Demo VOSERDEM',
     title: 'Director General',
+    roleName: 'Director',
+    uid: 'demo-usr-director-isolated-001',
   },
   {
     roleKey: 'MANAGER',
-    roleName: 'Coordinador de Proyecto',
-    name: 'Coordinador Demo VOSERDEM',
     email: 'coordinador.demo@voserdem.test',
-    uid: 'demo-usr-manager-isolated-002',
+    name: 'Coordinador Demo VOSERDEM',
     title: 'Coordinador de Proyecto',
+    roleName: 'Manager',
+    uid: 'demo-usr-manager-isolated-002',
   },
   {
     roleKey: 'FINANCE',
-    roleName: 'Administrativo / Finanzas',
-    name: 'Finanzas Demo VOSERDEM',
     email: 'finanzas.demo@voserdem.test',
-    uid: 'demo-usr-finance-isolated-003',
+    name: 'Finanzas Demo VOSERDEM',
     title: 'Responsable de Finanzas',
+    roleName: 'Finanzas',
+    uid: 'demo-usr-finance-isolated-003',
   },
   {
     roleKey: 'AUDITOR',
-    roleName: 'Auditor',
-    name: 'Auditor Demo VOSERDEM',
     email: 'auditor.demo@voserdem.test',
-    uid: 'demo-usr-auditor-isolated-004',
+    name: 'Auditor Demo VOSERDEM',
     title: 'Auditor Externo',
+    roleName: 'Auditor',
+    uid: 'demo-usr-auditor-isolated-004',
   },
   {
     roleKey: 'RESPONSABLE_PROYECTO',
-    roleName: 'Responsable de Proyecto',
-    name: 'Responsable Proyecto Demo VOSERDEM',
     email: 'responsable.demo@voserdem.test',
-    uid: 'demo-usr-responsable-isolated-005',
+    name: 'Responsable Proyecto Demo VOSERDEM',
     title: 'Responsable de Proyecto',
+    roleName: 'Responsable de Proyecto',
+    uid: 'demo-usr-responsable-isolated-005',
   },
   {
     roleKey: 'FINANCIADOR',
-    roleName: 'Donante / Financiador',
-    name: 'Financiador Demo',
     email: 'financiador.demo@voserdem.test',
-    uid: 'demo-usr-financiador-isolated-006',
+    name: 'Financiador Demo',
     title: 'Oficial de Cooperación',
+    roleName: 'Financiador',
+    uid: 'demo-usr-financiador-isolated-006',
   },
 ];
 
-export async function getOrCreateDemoTenant(): Promise<{ orgId: number; users: (DemoUserDefinition & { dbId: number })[] }> {
-  // 1. Get or create Demo Org
-  let demoOrg = await db.select().from(organizations).where(eq(organizations.name, DEMO_ORG_NAME)).limit(1);
+export async function getOrCreateDemoTenant(): Promise<{ orgId: number; users: Array<DemoUserDef & { dbId: number }> }> {
+  // 1. Ensure Demo Organization exists
+  let org = await db.select().from(organizations).where(eq(organizations.name, DEMO_ORG_NAME)).limit(1);
   let orgId: number;
 
-  if (demoOrg.length === 0) {
+  if (org.length === 0) {
     const inserted = await db.insert(organizations).values({
       name: DEMO_ORG_NAME,
       subscriptionPlan: 'ENTERPRISE_DEMO',
-      isActive: true,
-      subscriptionStatus: 'active',
+      subscriptionStatus: 'ACTIVE',
     }).returning();
     orgId = inserted[0].id;
   } else {
-    orgId = demoOrg[0].id;
+    orgId = org[0].id;
   }
 
-  // 2. Fetch available roles
-  const dbRoles = await db.select().from(roles);
-  const findRoleId = (roleKey: string, roleName: string) => {
-    const matchedByKey = dbRoles.find(r => r.name.toUpperCase() === roleKey.toUpperCase());
-    if (matchedByKey) return matchedByKey.id;
-    const matchedByName = dbRoles.find(r => r.name.toLowerCase() === roleName.toLowerCase() || r.name.toLowerCase().includes(roleName.toLowerCase()));
-    return matchedByName ? matchedByName.id : dbRoles[0]?.id || 1;
-  };
+  // 2. Fetch system roles
+  const systemRoles = await db.select().from(roles);
+  const roleMap = new Map<string, number>();
+  for (const r of systemRoles) {
+    roleMap.set(r.name, r.id);
+  }
 
-  // 3. Upsert Demo Users (Idempotent: does not duplicate)
-  const resolvedUsers: (DemoUserDefinition & { dbId: number })[] = [];
+  // 3. Ensure the 6 demo users exist with exact canonical emails, UIDs and isolated scopes
+  const resolvedUsers: Array<DemoUserDef & { dbId: number }> = [];
 
   for (const def of DEMO_USERS_CATALOG) {
-    const roleId = findRoleId(def.roleKey, def.roleName);
-    const existing = await db.select().from(users).where(eq(users.uid, def.uid)).limit(1);
+    const roleId = roleMap.get(def.roleKey) || 1;
+    const existing = await db.select().from(users).where(
+      and(eq(users.tenantId, orgId), eq(users.email, def.email))
+    ).limit(1);
 
     if (existing.length > 0) {
       await db.update(users)
         .set({
-          tenantId: orgId,
+          uid: def.uid,
           email: def.email,
           name: def.name,
           roleId,
@@ -147,12 +148,14 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
 
   const directorUser = demoUsersList.find(u => u.roleKey === 'DIRECTOR') || demoUsersList[0];
   const managerUser = demoUsersList.find(u => u.roleKey === 'MANAGER') || demoUsersList[0];
+  const responsableUser = demoUsersList.find(u => u.roleKey === 'RESPONSABLE_PROYECTO') || demoUsersList[4];
 
   // 1. Clean existing demo data exclusively for this tenant
   const existingProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.tenantId, orgId));
   const projectIds = existingProjects.map(p => p.id);
 
   if (projectIds.length > 0) {
+    await db.delete(projectMembers).where(inArray(projectMembers.projectId, projectIds)).catch(() => {});
     await db.delete(taskDependencies).where(sql`task_id IN (SELECT id FROM tasks WHERE project_id IN (${sql.join(projectIds, sql`, `)}))`).catch(() => {});
     await db.delete(tasks).where(inArray(tasks.projectId, projectIds));
     await db.delete(disbursements).where(sql`agreement_id IN (SELECT id FROM agreements WHERE project_id IN (${sql.join(projectIds, sql`, `)}))`).catch(() => {});
@@ -168,21 +171,31 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   await db.delete(donors).where(eq(donors.tenantId, orgId));
   // audit_logs no se borra: es inmutable por diseño (AUD-01) y protegido por trigger PostgreSQL
 
-  // 2. Seed Fictional Donor
-  const insertedDonor = await db.insert(donors).values({
+  // 2. Seed Fictional Donors (2 donantes independientes)
+  const insertedDonorA = await db.insert(donors).values({
     tenantId: orgId,
     name: 'Agencia Internacional de Cooperación — Entidad ficticia',
     type: 'Internacional',
     contactEmail: 'cooperacion.demo@voserdem.test',
   }).returning();
-  const donorId = insertedDonor[0].id;
+  const donorIdA = insertedDonorA[0].id;
 
-  // 3. Seed Demo Project
-  const insertedProject = await db.insert(projects).values({
+  const insertedDonorB = await db.insert(donors).values({
+    tenantId: orgId,
+    name: 'Fondo de Desarrollo Sostenible — Entidad ficticia',
+    type: 'Internacional',
+    contactEmail: 'fondodesarrollo.demo@voserdem.test',
+  }).returning();
+  const donorIdB = insertedDonorB[0].id;
+
+  // =========================================================================
+  // 3. PROYECTO A: PRJ-DEMO-2026 (Flujo Principal VOSERDEM)
+  // =========================================================================
+  const insertedProjectA = await db.insert(projects).values({
     tenantId: orgId,
     code: 'PRJ-DEMO-2026',
     name: 'Proyecto Piloto de Fortalecimiento Comunitario, Agua y Sostenibilidad',
-    donorId,
+    donorId: donorIdA,
     status: 'EJECUCIÓN',
     riskLevel: 'Bajo',
     approvedBudget: 150000.0,
@@ -193,97 +206,124 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     description: 'Proyecto demostrativo con datos ficticios para evaluación técnica y operativa de Proyecty v1.0.',
     baseCurrency: 'USD',
   }).returning();
-  const projectId = insertedProject[0].id;
+  const projectIdA = insertedProjectA[0].id;
 
-  // 4. Seed Agreement & Initial Disbursement
-  const insertedAgreements = await db.insert(agreements).values({
-    projectId,
+  // 3.1 Project Members for Project A (Asignado expresamente al Responsable de Proyecto)
+  await db.insert(projectMembers).values([
+    {
+      projectId: projectIdA,
+      userId: responsableUser.dbId,
+      roleInProject: 'Manager',
+    },
+    {
+      projectId: projectIdA,
+      userId: managerUser.dbId,
+      roleInProject: 'Manager',
+    },
+    {
+      projectId: projectIdA,
+      userId: directorUser.dbId,
+      roleInProject: 'Manager',
+    },
+  ]);
+
+  // 3.2 Agreement & Initial Disbursement for Project A
+  const insertedAgreementsA = await db.insert(agreements).values({
+    projectId: projectIdA,
     counterparty: 'Agencia Internacional de Cooperación — Entidad ficticia',
     signedDate: new Date('2026-01-15T00:00:00Z'),
     amount: 150000.0,
-    currency: 'USD',
     durationMonths: 12,
     startDate: new Date('2026-01-15T00:00:00Z'),
-    endDate: new Date('2027-01-14T00:00:00Z'),
-    remainingDays: 143,
+    endDate: new Date('2027-01-14T23:59:59Z'),
+    remainingDays: 139,
     status: 'Activo',
   }).returning();
+  const agreementIdA = insertedAgreementsA[0].id;
 
   await db.insert(disbursements).values({
-    agreementId: insertedAgreements[0].id,
-    milestoneTitle: 'Desembolso Inicial (40%)',
+    agreementId: agreementIdA,
+    milestoneTitle: 'Firma de Convenio y Desembolso Inicial (40%)',
     estimatedDate: new Date('2026-01-20T00:00:00Z'),
     amount: 60000.0,
-    condition: 'Firma de convenio y aprobación de plan operativo (POA)',
-    status: 'PAGADO',
+    condition: 'Aprobación del Plan Operativo Anual y firma de convenio',
+    status: 'Desembolsado',
   });
 
-  // 5. Seed Budget Version & Lines
-  const insertedVersion = await db.insert(budgetVersions).values({
+  // 3.3 Budget Version & 4 Budget Lines for Project A ($150k total, $57k ejecutado inicial)
+  const insertedBudgetVersionA = await db.insert(budgetVersions).values({
     tenantId: orgId,
-    projectId,
-    versionName: 'V1 - Inicial Aprobado',
+    projectId: projectIdA,
+    versionName: 'Presupuesto Operativo Inicial Aprobado 2026',
     versionNumber: 1,
     status: 'APPROVED',
     isApproved: true,
     approvedBy: directorUser.dbId,
   }).returning();
-  const budgetVersionId = insertedVersion[0].id;
+  const budgetVersionIdA = insertedBudgetVersionA[0].id;
 
-  const insertedBudgetLines = await db.insert(budgetLines).values([
+  const insertedBudgetLinesA = await db.insert(budgetLines).values([
     {
-      projectId,
-      budgetVersionId,
+      projectId: projectIdA,
+      budgetVersionId: budgetVersionIdA,
       code: 'BL-01',
       category: 'Talento Humano',
-      subcategory: 'Personal Técnico de Terreno',
+      subcategory: 'Consultoría y Personal Técnico',
       approvedAmount: 60000.0,
+      reformulatedAmount: 60000.0,
       executedAmount: 24000.0,
       balance: 36000.0,
       progress: 40,
+      status: 'NORMAL',
     },
     {
-      projectId,
-      budgetVersionId,
+      projectId: projectIdA,
+      budgetVersionId: budgetVersionIdA,
       code: 'BL-02',
       category: 'Infraestructura y Equipamiento',
-      subcategory: 'Equipamiento e Insumos Comunitarios',
+      subcategory: 'Sistemas de Filtración y Obras',
       approvedAmount: 50000.0,
+      reformulatedAmount: 50000.0,
       executedAmount: 21500.0,
       balance: 28500.0,
       progress: 43,
+      status: 'NORMAL',
     },
     {
-      projectId,
-      budgetVersionId,
+      projectId: projectIdA,
+      budgetVersionId: budgetVersionIdA,
       code: 'BL-03',
       category: 'Capacitación y Talleres',
-      subcategory: 'Talleres y Fortalecimiento Local',
+      subcategory: 'Talleres Comunitarios y Materiales',
       approvedAmount: 25000.0,
+      reformulatedAmount: 25000.0,
       executedAmount: 8500.0,
       balance: 16500.0,
       progress: 34,
+      status: 'NORMAL',
     },
     {
-      projectId,
-      budgetVersionId,
+      projectId: projectIdA,
+      budgetVersionId: budgetVersionIdA,
       code: 'BL-04',
       category: 'Monitoreo y Auditoría',
-      subcategory: 'Auditoría Externa Independiente',
+      subcategory: 'Auditoría Externa e Informes',
       approvedAmount: 15000.0,
+      reformulatedAmount: 15000.0,
       executedAmount: 3000.0,
       balance: 12000.0,
       progress: 20,
+      status: 'NORMAL',
     },
   ]).returning();
 
-  // 5.1 Seed Approved Expenses for the initial 4 budget lines ($57,000 executed = 38%)
+  // 3.4 Seed Initial Approved Expenses + 1 Pending Expense ($6,000 for BL-02)
   await db.insert(expenses).values([
     {
       tenantId: orgId,
-      projectId,
-      budgetLineId: insertedBudgetLines[0].id,
-      title: 'Honorarios Especialista Técnico en Desarrollo Comunitario (Q1-Q2)',
+      projectId: projectIdA,
+      budgetLineId: insertedBudgetLinesA[0].id,
+      title: 'Honorarios Técnicos Especialista Social — Trimestre 1',
       amount: 24000.0,
       category: 'Talento Humano',
       currency: 'USD',
@@ -294,9 +334,9 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
     {
       tenantId: orgId,
-      projectId,
-      budgetLineId: insertedBudgetLines[1].id,
-      title: 'Adquisición de Lote 1 — Equipamiento Comunitario e Insumos',
+      projectId: projectIdA,
+      budgetLineId: insertedBudgetLinesA[1].id,
+      title: 'Adquisición de Lote 1 — Sistemas de Filtración Comunitarios',
       amount: 21500.0,
       category: 'Infraestructura y Equipamiento',
       currency: 'USD',
@@ -307,8 +347,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
     {
       tenantId: orgId,
-      projectId,
-      budgetLineId: insertedBudgetLines[2].id,
+      projectId: projectIdA,
+      budgetLineId: insertedBudgetLinesA[2].id,
       title: 'Desarrollo de Talleres Participativos y Material Didáctico',
       amount: 8500.0,
       category: 'Capacitación y Talleres',
@@ -320,8 +360,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
     {
       tenantId: orgId,
-      projectId,
-      budgetLineId: insertedBudgetLines[3].id,
+      projectId: projectIdA,
+      budgetLineId: insertedBudgetLinesA[3].id,
       title: 'Auditoría Financiera de Medio Término',
       amount: 3000.0,
       category: 'Monitoreo y Auditoría',
@@ -331,32 +371,32 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       registeredBy: managerUser.dbId,
       approvedBy: directorUser.dbId,
     },
-    // 5.2 Seed Pending Expense ($6,000 for BL-02) ready for live approval
+    // Gasto pendiente de USD 6.000 en BL-02 registrado por el Responsable de Proyecto
     {
       tenantId: orgId,
-      projectId,
-      budgetLineId: insertedBudgetLines[1].id,
+      projectId: projectIdA,
+      budgetLineId: insertedBudgetLinesA[1].id,
       title: 'Adquisición de Lote 2 — Sistemas de Filtración Comunitarios',
       amount: 6000.0,
       category: 'Infraestructura y Equipamiento',
       currency: 'USD',
       date: new Date('2026-06-15T00:00:00Z'),
       status: 'pending',
-      registeredBy: managerUser.dbId,
+      registeredBy: responsableUser.dbId,
       approvedBy: null,
     },
   ]);
 
-  // 6. Seed Tasks con pesos, progreso y dependencias explícitas (Avance físico = 75%)
-  const insertedTasks = await db.insert(tasks).values([
+  // 3.5 Tasks & Dependencies for Project A (75% avance físico)
+  const insertedTasksA = await db.insert(tasks).values([
     {
       tenantId: orgId,
-      projectId,
+      projectId: projectIdA,
       title: 'Diagnóstico participativo en comunidades beneficiarias',
       description: 'Levantamiento de necesidades prioritarias con líderes comunitarios.',
       status: 'DONE',
       priority: 'HIGH',
-      assigneeId: managerUser.dbId,
+      assigneeId: responsableUser.dbId,
       createdBy: directorUser.dbId,
       startDate: new Date('2026-02-01T00:00:00Z'),
       dueDate: new Date('2026-03-15T00:00:00Z'),
@@ -366,12 +406,12 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
     {
       tenantId: orgId,
-      projectId,
+      projectId: projectIdA,
       title: 'Instalación y ensamblaje de módulos técnicos',
       description: 'Proceso de licitación, adquisición y montaje de insumos técnicos.',
       status: 'IN_PROGRESS',
       priority: 'MEDIUM',
-      assigneeId: managerUser.dbId,
+      assigneeId: responsableUser.dbId,
       createdBy: directorUser.dbId,
       startDate: new Date('2026-04-01T00:00:00Z'),
       dueDate: new Date('2026-09-30T00:00:00Z'),
@@ -381,19 +421,19 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
   ]).returning();
 
-  if (insertedTasks.length >= 2) {
+  if (insertedTasksA.length >= 2) {
     await db.insert(taskDependencies).values({
-      taskId: insertedTasks[1].id,
-      dependsOnId: insertedTasks[0].id,
+      taskId: insertedTasksA[1].id,
+      dependsOnId: insertedTasksA[0].id,
     });
   }
 
-  // 7. Seed Fictional Documents
+  // 3.6 Documents for Project A (2 PDFs ficticios)
   await db.insert(documents).values([
     {
       tenantId: orgId,
-      projectId,
-      uploadedBy: managerUser.dbId,
+      projectId: projectIdA,
+      uploadedBy: responsableUser.dbId,
       name: 'Comprobante Adquisición Lote 2 - Filtración',
       originalName: 'comprobante_filtracion_demo.pdf',
       mimeType: 'application/pdf',
@@ -409,8 +449,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
     {
       tenantId: orgId,
-      projectId,
-      uploadedBy: managerUser.dbId,
+      projectId: projectIdA,
+      uploadedBy: responsableUser.dbId,
       name: 'Informe Técnico Avance Instalación Módulos',
       originalName: 'informe_tecnico_instalacion_demo.pdf',
       mimeType: 'application/pdf',
@@ -426,10 +466,118 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
   ]);
 
-  // Actualizar métricas del proyecto: (50*100 + 50*50)/100 = 75% físico, 57000/150000 = 38% financiero
-  await db.update(projects).set({ physicalProgress: 75, financialProgress: 38 }).where(eq(projects.id, projectId));
+  await db.update(projects).set({ physicalProgress: 75, financialProgress: 38 }).where(eq(projects.id, projectIdA));
 
-  // 8. Log audit event
+  // =========================================================================
+  // 4. PROYECTO B: PRJ-DEMO-2026-B (Control de Aislamiento e Independencia)
+  // =========================================================================
+  const insertedProjectB = await db.insert(projects).values({
+    tenantId: orgId,
+    code: 'PRJ-DEMO-2026-B',
+    name: 'Capacitación y fortalecimiento productivo comunitario',
+    donorId: donorIdB,
+    status: 'PLANIFICACIÓN',
+    riskLevel: 'Bajo',
+    approvedBudget: 45000.0,
+    physicalProgress: 0,
+    financialProgress: 0,
+    nextMilestoneDate: '2026-11-30',
+    nextMilestoneTitle: 'Aprobación del Plan Operativo Anual de Capacitación',
+    description: 'Segundo proyecto demostrativo para validación de aislamiento operativo, presupuestario y de visibilidad.',
+    baseCurrency: 'USD',
+  }).returning();
+  const projectIdB = insertedProjectB[0].id;
+
+  // 4.1 Project Members for Project B (NO asignado a Responsable de Proyecto)
+  await db.insert(projectMembers).values([
+    {
+      projectId: projectIdB,
+      userId: managerUser.dbId,
+      roleInProject: 'Manager',
+    },
+    {
+      projectId: projectIdB,
+      userId: directorUser.dbId,
+      roleInProject: 'Manager',
+    },
+  ]);
+
+  // 4.2 Agreement for Project B ($45,000 USD, 0 desembolsos iniciales)
+  const insertedAgreementsB = await db.insert(agreements).values({
+    projectId: projectIdB,
+    counterparty: 'Fondo de Desarrollo Sostenible — Entidad ficticia',
+    signedDate: new Date('2026-05-01T00:00:00Z'),
+    amount: 45000.0,
+    durationMonths: 12,
+    startDate: new Date('2026-05-01T00:00:00Z'),
+    endDate: new Date('2027-04-30T23:59:59Z'),
+    remainingDays: 245,
+    status: 'Planificación',
+  }).returning();
+
+  // 4.3 Budget Version & 2 Budget Lines for Project B ($45k total, $0 ejecutado)
+  const insertedBudgetVersionB = await db.insert(budgetVersions).values({
+    tenantId: orgId,
+    projectId: projectIdB,
+    versionName: 'Presupuesto Inicial en Formulación 2026',
+    versionNumber: 1,
+    status: 'DRAFT',
+    isApproved: false,
+    approvedBy: null,
+  }).returning();
+  const budgetVersionIdB = insertedBudgetVersionB[0].id;
+
+  await db.insert(budgetLines).values([
+    {
+      projectId: projectIdB,
+      budgetVersionId: budgetVersionIdB,
+      code: 'BL-B01',
+      category: 'Capacitación y Talleres',
+      subcategory: 'Módulos Formativos',
+      approvedAmount: 30000.0,
+      reformulatedAmount: 30000.0,
+      executedAmount: 0.0,
+      balance: 30000.0,
+      progress: 0,
+      status: 'NORMAL',
+    },
+    {
+      projectId: projectIdB,
+      budgetVersionId: budgetVersionIdB,
+      code: 'BL-B02',
+      category: 'Material Didáctico y Logística',
+      subcategory: 'Guías y Materiales',
+      approvedAmount: 15000.0,
+      reformulatedAmount: 15000.0,
+      executedAmount: 0.0,
+      balance: 15000.0,
+      progress: 0,
+      status: 'NORMAL',
+    },
+  ]);
+
+  // 4.4 Tasks for Project B (0% avance)
+  await db.insert(tasks).values([
+    {
+      tenantId: orgId,
+      projectId: projectIdB,
+      title: 'Diseño Curricular y Selección de Facilitadores Comunitarios',
+      description: 'Estructuración del programa formativo y cronograma de talleres.',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      assigneeId: managerUser.dbId,
+      createdBy: directorUser.dbId,
+      startDate: new Date('2026-09-01T00:00:00Z'),
+      dueDate: new Date('2026-10-31T00:00:00Z'),
+      weight: 100,
+      progress: 0,
+      position: 0,
+    },
+  ]);
+
+  // =========================================================================
+  // 5. BITÁCORA DE AUDITORÍA (AUD-01)
+  // =========================================================================
   await db.insert(auditLogs).values({
     tenantId: orgId,
     userId: directorUser.dbId,
@@ -438,8 +586,8 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     entity: 'organization',
     entityId: String(orgId),
     metadata: {
-      details: 'Reinicio programado/manual de datos del tenant demo VOSERDEM a estado base determinista.',
-      scenario: 'PRJ-DEMO-2026 VOSERDEM',
+      details: 'Reinicio programado/manual de datos del tenant demo VOSERDEM a estado base determinista con Proyecto A y Proyecto B aislados.',
+      scenarios: ['PRJ-DEMO-2026 (Principal)', 'PRJ-DEMO-2026-B (Aislamiento)'],
       resetAtUtc: new Date().toISOString(),
     },
   });
