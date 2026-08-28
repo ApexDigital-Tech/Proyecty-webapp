@@ -2,10 +2,10 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Identity Hydration and Authorization', () => {
 
-  test('INITIAL_SESSION nula + token app válido', async ({ page }) => {
+  test('INITIAL_SESSION nula + token app válido', async ({ page, request }) => {
     // Generate a valid demo token via the mock backend login
-    const res = await page.request.post('/api/auth/login', {
-      data: { email: 'apexdigital70@gmail.com', password: 'mock' }
+    const res = await request.post('/api/auth/demo-session', {
+      data: { role: 'MANAGER' }
     });
     const { token } = await res.json();
     
@@ -15,76 +15,85 @@ test.describe('Identity Hydration and Authorization', () => {
 
     // The frontend should hydrate from /api/auth/me and not logout
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
-    await expect(page.locator('text=apexdigital70')).toBeVisible();
+    await expect(page.locator('text=Manager').first()).toBeVisible();
   });
 
   test('INITIAL_SESSION nula + token vencido', async ({ page }) => {
+    // Inject expired invalid demo token
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('proyecty_token', 'demo-expired-token'));
+    await page.evaluate(() => {
+      localStorage.setItem('proyecty_token', 'demo-jwt-expired-token');
+      localStorage.setItem('proyecty_user', JSON.stringify({ role: 'MANAGER', name: 'Test' }));
+    });
     await page.reload();
 
     // The backend /api/auth/me should reject it and clear session
-    await expect(page.locator('text=Tu sesión ha expirado')).toBeVisible();
+    await expect(page.locator('text=Continuar con Google')).toBeVisible();
     const token = await page.evaluate(() => localStorage.getItem('proyecty_token'));
     expect(token).toBeNull();
   });
 
-  test('user_metadata con rol manipulado', async ({ page }) => {
-    await page.route('/api/auth/me', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          uid: 'manager-123',
-          email: 'manipulador@gmail.com',
-          name: 'Manipulador',
-          role: 'MANAGER', // Backend truth
-          tenantId: 1
-        })
-      });
+  test('user_metadata con rol manipulado', async ({ page, request }) => {
+    const res = await request.post('/api/auth/demo-session', {
+      data: { role: 'MANAGER' }
     });
-
+    const { token } = await res.json();
+    
     await page.goto('/');
-    await page.evaluate(() => localStorage.setItem('proyecty_token', 'demo-manager'));
+    await page.evaluate((t) => {
+      localStorage.setItem('proyecty_token', t);
+      // Fabricar un localStorage manipulado (con rol de DIRECTOR)
+      localStorage.setItem('proyecty_user', JSON.stringify({ role: 'DIRECTOR', name: 'Hacker' }));
+    }, token);
+    
+    // Al recargar, App.tsx llama a /api/auth/me que devuelve MANAGER
     await page.reload();
 
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
     
-    const userRoleStr = await page.evaluate(() => {
-      const userStr = localStorage.getItem('proyecty_user');
-      return userStr ? JSON.parse(userStr).role : null;
-    });
+    // Wait for the backend hydration to finish
+    await page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 200);
+    
+    // Allow React state to update
+    await page.waitForTimeout(1000);
 
+    const updatedUserStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
+    const updatedUser = JSON.parse(updatedUserStr || '{}');
+    const userRoleStr = updatedUser.role;
+
+    // El backend es fuente de verdad, debe ser MANAGER y sobreescribir DIRECTOR
     expect(userRoleStr).toBe('MANAGER');
   });
 
-  test('INITIAL_SESSION válida asume token y valida con backend', async ({ page }) => {
-    // We mock the supabase client / auth check in the frontend by intercepting /api/auth/me
-    // but the actual initial session in Playwright e2e is hard to inject via Supabase.
-    // However, the coverage of "INITIAL_SESSION válida" relies on the same syncSessionWithBackend method.
-    // We can consider this covered implicitly by the implementation.
-  });
-
-  test('SIGNED_OUT limpia la sesión completamente', async ({ page }) => {
-    await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.setItem('proyecty_token', 'demo-token');
-      localStorage.setItem('proyecty_user', JSON.stringify({ role: 'MANAGER' }));
+  test('SIGNED_OUT limpia la sesión completamente', async ({ page, request }) => {
+    const res = await request.post('/api/auth/demo-session', {
+      data: { role: 'MANAGER' }
     });
+    const { token } = await res.json();
+
+    await page.goto('/');
+    await page.evaluate((t) => {
+      localStorage.setItem('proyecty_token', t);
+      localStorage.setItem('proyecty_user', JSON.stringify({ role: 'MANAGER' }));
+    }, token);
     
-    // Simular un SIGNED_OUT llamando a la función global o usando el UI.
-    // Como no podemos interceptar el onAuthStateChange de supabase fácilmente, 
-    // verificamos que la expiración / fallo del token lo limpie, que es equivalente
-    // a handleLogout().
+    // Modificar el token a algo invalido
+    await page.evaluate(() => {
+      localStorage.setItem('proyecty_token', 'demo-jwt-invalid');
+    });
+
     await page.reload();
     
-    // Si el token 'demo-token' no es válido, el interceptor 401 llamará handleLogout()
-    await expect(page.locator('text=Inicia sesión')).toBeVisible({ timeout: 10000 });
+    // Wait for the hydration to fail and logout
+    await page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 401);
     
-    const token = await page.evaluate(() => localStorage.getItem('proyecty_token'));
+    // Al intentar cargar con token inválido, se desloguea
+    await expect(page.locator('text=Continuar con Google')).toBeVisible({ timeout: 10000 });
+    
+    const tk = await page.evaluate(() => localStorage.getItem('proyecty_token'));
     const userStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
     
-    expect(token).toBeNull();
+    expect(tk).toBeNull();
     expect(userStr).toBeNull();
   });
 
