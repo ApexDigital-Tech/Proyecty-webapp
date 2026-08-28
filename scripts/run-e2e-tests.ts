@@ -30,6 +30,11 @@ const testEnv = {
   SUPABASE_SERVICE_ROLE_KEY: 'sb_publishable_dummy_key_for_testing'
 };
 
+process.env.NODE_ENV = testEnv.NODE_ENV;
+process.env.DATABASE_URL = testEnv.DATABASE_URL;
+process.env.SUPABASE_URL = testEnv.SUPABASE_URL;
+process.env.SUPABASE_SERVICE_ROLE_KEY = testEnv.SUPABASE_SERVICE_ROLE_KEY;
+
 // Validaciones estrictas requeridas
 if (testEnv.NODE_ENV !== 'test') {
   console.error('FATAL: NODE_ENV debe ser "test"');
