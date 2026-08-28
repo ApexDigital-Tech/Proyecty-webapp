@@ -1,35 +1,53 @@
-﻿# CIERRE DE SESIÓN — R1C
+# CIERRE TÉCNICO R1C
 
-Estado general:
+Estado:
 - R0: CERRADO.
 - R1A: CERRADO.
 - R1B: CERRADO.
 - R1C-A: CERRADO.
-- R1C: ABIERTO — CERTIFICACIÓN FINAL FALLIDA.
+- R1C: CERTIFICADO Y CERRADO.
 
-Controles aprobados:
+Commit certificado:
+- 8aeff46 fix(security): restore fail-closed supabase client configuration.
+
+Entorno certificado:
+- Node v20.18.0 portable.
+- npm 10.8.2 portable.
+- PostgreSQL 17.2 local aislado.
+- package-lock SHA-256:
+  11CA2F4CFC8BE8C72AE88E486BAF58F24E2FC226F0156D08B65D544EC1925756
+
+Resultados:
 - npm ci: PASS.
 - Typecheck: PASS.
 - Build: PASS.
-- Rollback financiero transaccional: PASS.
-- Aislamiento de base productiva: PASS.
+- Integración: 10/10 PASS.
+- PERF-01: 5/5 ciclos inferiores a 200 ms.
+- Rollback financiero: PASS, Exit 0.
+- Identidad canónica repeat-each=3: 12/12 PASS.
+- Playwright funcional: 12/12 PASS.
+- HTTP estático: 4/4 funcional.
+- Sentry: sin crashes.
+- Fail-closed Supabase: verificado.
+- Host productivo durante tests: rechazado.
 - Producción modificada: NO.
+- Working tree: limpio.
+- Puertos y procesos temporales: limpios.
 
-Pendientes reproducidos:
-1. PERF-01 falla porque la medición canónica incluye el arranque en frío del pool.
-2. Playwright aprueba los casos UI, pero el corredor termina con Exit 1 durante el teardown porque el proceso padre no recibe DATABASE_URL local.
-3. HTTP 4/4 debe repetirse mediante solicitudes HTTP reales y comprobación de Content-Type.
-4. Sentry debe acreditarse dentro de una corrida integral completa con Node 20 portable.
-5. Deben confirmarse los hashes y el contenido exacto de los commits d79f358 y dd49971.
+Inventario E2E:
+- create-project.spec.ts: 1.
+- e2e-audit.spec.ts: 7.
+- e2e-auth-identity.spec.ts: 4.
+- screenshot.spec.ts: utilidad visual manual, excluida de CI.
+
+Observación P2:
+- La respuesta 404 de Express para assets inexistentes utiliza Content-Type text/html, pero mantiene status 404 y no activa el fallback SPA.
 
 Restricciones:
-- Push: NO AUTORIZADO.
-- Merge: NO AUTORIZADO.
-- Despliegue: NO AUTORIZADO.
-- Producción: NO MODIFICAR.
-- Nuevas funcionalidades: CONGELADAS.
-- No usar git add .
-- No detener procesos globalmente por nombre.
+- Push: pendiente de autorización.
+- Merge: pendiente de autorización.
+- Despliegue: pendiente de autorización.
+- Producción: no modificar.
 
-Objetivo de la próxima sesión:
-Corregir exclusivamente PERF-01 y la propagación de DATABASE_URL al teardown E2E; después ejecutar una única certificación integral desde clon limpio. Solo con todos los códigos de salida en 0 podrá cerrarse R1C y comenzar la preparación del demo VOSERDEM.
+Siguiente fase:
+- Preparación controlada del demo VOSERDEM.
