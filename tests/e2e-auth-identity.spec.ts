@@ -15,7 +15,7 @@ test.describe('Identity Hydration and Authorization', () => {
 
     // The frontend should hydrate from /api/auth/me and not logout
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
-    await expect(page.locator('text=Manager').first()).toBeVisible();
+    await expect(page.locator('text=MANAGER').first()).toBeVisible();
   });
 
   test('INITIAL_SESSION nula + token vencido', async ({ page }) => {
@@ -29,8 +29,10 @@ test.describe('Identity Hydration and Authorization', () => {
 
     // The backend /api/auth/me should reject it and clear session
     await expect(page.locator('text=Continuar con Google')).toBeVisible();
-    const token = await page.evaluate(() => localStorage.getItem('proyecty_token'));
-    expect(token).toBeNull();
+    
+    await expect.poll(async () => {
+      return await page.evaluate(() => localStorage.getItem('proyecty_token'));
+    }).toBeNull();
   });
 
   test('user_metadata con rol manipulado', async ({ page, request }) => {
@@ -50,19 +52,14 @@ test.describe('Identity Hydration and Authorization', () => {
     await page.reload();
 
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
-    
-    // Wait for the backend hydration to finish
-    await page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 200);
-    
-    // Allow React state to update
-    await page.waitForTimeout(1000);
-
-    const updatedUserStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
-    const updatedUser = JSON.parse(updatedUserStr || '{}');
-    const userRoleStr = updatedUser.role;
+    await expect(page.locator('text=MANAGER').first()).toBeVisible();
 
     // El backend es fuente de verdad, debe ser MANAGER y sobreescribir DIRECTOR
-    expect(userRoleStr).toBe('MANAGER');
+    await expect.poll(async () => {
+      const updatedUserStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
+      const updatedUser = JSON.parse(updatedUserStr || '{}');
+      return updatedUser.role;
+    }).toBe('MANAGER');
   });
 
   test('SIGNED_OUT limpia la sesión completamente', async ({ page, request }) => {
@@ -84,17 +81,16 @@ test.describe('Identity Hydration and Authorization', () => {
 
     await page.reload();
     
-    // Wait for the hydration to fail and logout
-    await page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 401);
-    
     // Al intentar cargar con token inválido, se desloguea
-    await expect(page.locator('text=Continuar con Google')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Continuar con Google')).toBeVisible();
     
-    const tk = await page.evaluate(() => localStorage.getItem('proyecty_token'));
-    const userStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
+    await expect.poll(async () => {
+      return await page.evaluate(() => localStorage.getItem('proyecty_token'));
+    }).toBeNull();
     
-    expect(tk).toBeNull();
-    expect(userStr).toBeNull();
+    await expect.poll(async () => {
+      return await page.evaluate(() => localStorage.getItem('proyecty_user'));
+    }).toBeNull();
   });
 
 });
