@@ -1,50 +1,35 @@
-# ESTADO DE SPRINT — PROYECTY
+﻿# CIERRE DE SESIÓN — R1C
 
-Fecha de corte: 2026-08-28
-Rama: refactor/proyecty-clean-architecture
+Estado general:
+- R0: CERRADO.
+- R1A: CERRADO.
+- R1B: CERRADO.
+- R1C-A: CERRADO.
+- R1C: ABIERTO — CERTIFICACIÓN FINAL FALLIDA.
 
-## Estado de fases
+Controles aprobados:
+- npm ci: PASS.
+- Typecheck: PASS.
+- Build: PASS.
+- Rollback financiero transaccional: PASS.
+- Aislamiento de base productiva: PASS.
+- Producción modificada: NO.
 
-- R0 — Respaldo y recuperación: CERRADO
-- R1A — Limpieza reconstruible: CERRADO
-- R1B — Saneamiento del repositorio: CERRADO
-- R1C-A — Arnés y descubrimiento: CERRADO
-- R1C-B/R1C-C — Correcciones y pruebas: EJECUCIÓN COMPLETADA, AUDITORÍA FINAL PENDIENTE
-- Push: NO
-- Merge: NO
-- Despliegue: NO
-- Producción modificada: NO
+Pendientes reproducidos:
+1. PERF-01 falla porque la medición canónica incluye el arranque en frío del pool.
+2. Playwright aprueba los casos UI, pero el corredor termina con Exit 1 durante el teardown porque el proceso padre no recibe DATABASE_URL local.
+3. HTTP 4/4 debe repetirse mediante solicitudes HTTP reales y comprobación de Content-Type.
+4. Sentry debe acreditarse dentro de una corrida integral completa con Node 20 portable.
+5. Deben confirmarse los hashes y el contenido exacto de los commits d79f358 y dd49971.
 
-## Resultados reportados
+Restricciones:
+- Push: NO AUTORIZADO.
+- Merge: NO AUTORIZADO.
+- Despliegue: NO AUTORIZADO.
+- Producción: NO MODIFICAR.
+- Nuevas funcionalidades: CONGELADAS.
+- No usar git add .
+- No detener procesos globalmente por nombre.
 
-- Node objetivo: 20.18.0
-- PostgreSQL de pruebas: 17 local aislado
-- Typecheck: resultado anterior satisfactorio; requiere repetición final
-- Build: resultado anterior satisfactorio; requiere repetición final
-- Integración backend: requiere certificación completa desde clon limpio
-- Playwright: 13 casos aprobados reportados; requiere certificación reproducible
-- Rollback financiero: implementación presente; prueba final pendiente
-- Sentry: corrección presente; ausencia de segfault pendiente de certificación
-- Sesión frontend: identidad canónica implementada; fixture de hidratación pendiente de auditoría
-- Package-lock: modificado justificadamente por ws y @types/ws
-
-## Estado del repositorio
-
-- Historial: forward-only
-- Working tree: contiene modificación pendiente en tests/test-audit-rollback.test.ts
-- Evidencia pendiente preservada fuera del repositorio
-- Puertos temporales: libres
-- Procesos PROYECTY: no identificados
-- Credenciales productivas en pruebas: prohibidas
-
-## Bloqueo vigente
-
-No realizar push, merge, despliegue ni demostración desde esta rama hasta completar una corrida reproducible en clon limpio.
-
-## Próxima acción
-
-1. Crear clon limpio del HEAD documentado.
-2. Auditar los cinco commits posteriores a a297c92.
-3. Ejecutar pipeline completo con Node 20 y PostgreSQL local.
-4. Comparar la prueba de rollback comprometida con el parche pendiente.
-5. Emitir dictamen definitivo de R1C.
+Objetivo de la próxima sesión:
+Corregir exclusivamente PERF-01 y la propagación de DATABASE_URL al teardown E2E; después ejecutar una única certificación integral desde clon limpio. Solo con todos los códigos de salida en 0 podrá cerrarse R1C y comenzar la preparación del demo VOSERDEM.
