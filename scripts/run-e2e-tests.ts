@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { spawnSync, spawn, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -21,6 +20,29 @@ console.log('🎭 INICIANDO ARNES AISLADO DE PRUEBAS E2E (PLAYWRIGHT)');
 console.log('============================================================\n');
 
 const testDbUrl = 'postgresql://postgres@127.0.0.1:55432/proyecty_test';
+const testSupabaseUrl = 'http://127.0.0.1:54321';
+
+const testEnv = {
+  ...process.env,
+  NODE_ENV: 'test',
+  DATABASE_URL: testDbUrl,
+  SUPABASE_URL: testSupabaseUrl,
+  SUPABASE_SERVICE_ROLE_KEY: 'sb_publishable_dummy_key_for_testing'
+};
+
+// Validaciones estrictas requeridas
+if (testEnv.NODE_ENV !== 'test') {
+  console.error('FATAL: NODE_ENV debe ser "test"');
+  process.exit(1);
+}
+if (testEnv.SUPABASE_URL.includes('supabase.co') || testEnv.SUPABASE_URL.includes('pooler.supabase.com')) {
+  console.error('FATAL: SUPABASE_URL no puede apuntar a producción');
+  process.exit(1);
+}
+if (!testEnv.DATABASE_URL.includes('127.0.0.1') && !testEnv.DATABASE_URL.includes('localhost')) {
+  console.error('FATAL: DATABASE_URL no es local');
+  process.exit(1);
+}
 
 // 1. Aprovisionamiento de PostgreSQL 17 Local Aislado
 console.log('--- 1. Aprovisionando PostgreSQL 17 Local Aislado (Puerto 55432) ---');
@@ -47,15 +69,14 @@ try {
   console.log('Creando base de datos temporal proyecty_test desde template0...');
   execFileSync(path.join(pgBin, 'createdb.exe'), ['-h', '127.0.0.1', '-p', '55432', '-U', 'postgres', '-T', 'template0', 'proyecty_test'], { encoding: 'utf8' });
 
-  process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL = testDbUrl;
+
 
   console.log('Empujando esquema Drizzle a la base de datos aislada...');
   spawnSync('npx.cmd', ['drizzle-kit', 'push'], {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
+    env: testEnv,
   });
 
   console.log('Sembrando catálogo de roles y permisos canónicos...');
@@ -63,7 +84,7 @@ try {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
+    env: testEnv,
   });
 
   console.log('Concediendo permisos a roles de simulación en public...');
@@ -85,7 +106,7 @@ try {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
-    env: { ...process.env, DATABASE_URL: testDbUrl, NODE_ENV: 'test' },
+    env: testEnv,
   });
 
   // 2. Verificación SQL en Runtime
@@ -99,9 +120,7 @@ try {
     stdio: 'inherit',
     shell: true,
     env: {
-      ...process.env,
-      DATABASE_URL: testDbUrl,
-      NODE_ENV: 'test',
+      ...testEnv,
       CI: 'true',
     },
   });
