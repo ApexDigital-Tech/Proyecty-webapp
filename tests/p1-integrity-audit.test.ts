@@ -229,12 +229,19 @@ async function runComprehensivePhase2Audit() {
   // --- SECCIÓN 7: PERF-01 (Métricas de Rendimiento y Latencia de BD) ---
   console.log('\n[7. PERF-01: Métricas de Rendimiento y Healthcheck]');
   try {
-    const startTime = Date.now();
     const { sql } = await import('drizzle-orm');
+    
+    // Precalentamiento
     await db.execute(sql`SELECT 1`);
-    const dbLatencyMs = Date.now() - startTime;
 
-    assert(dbLatencyMs < 200, `Latencia de BD saludable (${dbLatencyMs} ms < 200 ms)`);
+    // 5 ciclos individuales
+    for (let i = 1; i <= 5; i++) {
+      const startTime = Date.now();
+      await db.execute(sql`SELECT 1`);
+      const dbLatencyMs = Date.now() - startTime;
+      assert(dbLatencyMs < 200, `Latencia de BD saludable - Ciclo ${i} (${dbLatencyMs} ms < 200 ms)`);
+    }
+
     assert(process.uptime() >= 0, 'Uptime del proceso medido');
     assert(process.memoryUsage().rss > 0, 'Uso de memoria RSS disponible');
   } catch (err: any) {
