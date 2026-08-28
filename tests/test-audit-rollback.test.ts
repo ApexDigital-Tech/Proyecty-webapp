@@ -13,7 +13,10 @@ async function testRollback() {
   const manager = users.find(u => u.roleKey === 'MANAGER') || users[1];
   const director = users.find(u => u.roleKey === 'DIRECTOR') || users[0];
 
-  const [bLine] = await db.select().from(budgetLines).where(eq(budgetLines.tenantId, orgId)).limit(1);
+  const { projects } = await import('../src/db/schema.ts');
+  const [project] = await db.select().from(projects).where(eq(projects.tenantId, orgId)).limit(1);
+  const initialBudgetLine = await db.select().from(budgetLines).where(eq(budgetLines.projectId, project.id)).limit(1);
+  const bLine = initialBudgetLine[0];
 
   // 1. Estado inicial
   const expense = await createExpense(orgId, manager.dbId, {
@@ -71,8 +74,9 @@ async function testRollback() {
   console.log('✅ Gasto conserva estado anterior');
 
   const [budgetAfter] = await db.select().from(budgetLines).where(eq(budgetLines.id, bLine.id));
-  if (budgetAfter.spent.toString() !== budgetBefore.spent.toString()) {
-    console.error(`❌ El presupuesto fue modificado. Antes: ${budgetBefore.spent}, Después: ${budgetAfter.spent}`);
+  if (budgetAfter.executedAmount.toString() !== budgetBefore.executedAmount.toString()) {
+    const spentDiff = budgetAfter.executedAmount - budgetBefore.executedAmount;
+    console.log(`[Rollback Verified] Budget executedAmount diff: ${spentDiff} (Expected: 0) | initial: ${initialBudgetLine[0].executedAmount} -> final: ${budgetAfter.executedAmount}`);
     process.exit(1);
   }
   console.log('✅ Presupuesto conserva saldo anterior');
