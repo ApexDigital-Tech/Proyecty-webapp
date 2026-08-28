@@ -25,7 +25,7 @@ interface PreflightCheckResult {
 
 export async function runDemoPreflight(): Promise<{ success: boolean; checks: PreflightCheckResult[] }> {
   console.log('========================================================================');
-  console.log('🔍 PROYECTY — PREFLIGHT DE CERTIFICACIÓN LOCAL VOSERDEM (DEMO-D1)');
+  console.log('🔍 PROYECTY — PREFLIGHT DE CERTIFICACIÓN LOCAL VOSERDEM (DEMO-D1A)');
   console.log('========================================================================\n');
 
   const checks: PreflightCheckResult[] = [];
@@ -80,36 +80,48 @@ export async function runDemoPreflight(): Promise<{ success: boolean; checks: Pr
     recordCheck(`Usuario ${expectedUser.roleKey}`, !!found, `${expectedUser.name} (${expectedUser.email})`);
   }
 
-  // 6. Project PRJ-DEMO-2026 Verification
-  const [demoProject] = await db.select().from(projects).where(and(eq(projects.tenantId, orgId), eq(projects.code, 'PRJ-DEMO-2026')));
-  recordCheck('Proyecto PRJ-DEMO-2026', !!demoProject, demoProject ? `"${demoProject.name}" (Avance Físico: ${demoProject.physicalProgress}%, Financiero: ${demoProject.financialProgress}%)` : 'Proyecto no encontrado');
+  // 6. Project PRJ-DEMO-2026 (Proyecto A) Verification
+  const [demoProjectA] = await db.select().from(projects).where(and(eq(projects.tenantId, orgId), eq(projects.code, 'PRJ-DEMO-2026')));
+  recordCheck('Proyecto A (PRJ-DEMO-2026)', !!demoProjectA, demoProjectA ? `"${demoProjectA.name}" (Avance Físico: ${demoProjectA.physicalProgress}%, Financiero: ${demoProjectA.financialProgress}%)` : 'Proyecto A no encontrado');
 
-  if (demoProject) {
-    recordCheck('Presupuesto Aprobado USD 150.000', demoProject.approvedBudget === 150000, `Monto: $${demoProject.approvedBudget}`);
-    recordCheck('Avance Físico 75%', demoProject.physicalProgress === 75, `Avance Físico: ${demoProject.physicalProgress}%`);
-    recordCheck('Avance Financiero 38%', demoProject.financialProgress === 38, `Avance Financiero: ${demoProject.financialProgress}%`);
+  if (demoProjectA) {
+    recordCheck('Proyecto A Presupuesto USD 150.000', demoProjectA.approvedBudget === 150000, `Monto: $${demoProjectA.approvedBudget}`);
+    recordCheck('Proyecto A Avance Físico 75%', demoProjectA.physicalProgress === 75, `Avance Físico: ${demoProjectA.physicalProgress}%`);
+    recordCheck('Proyecto A Avance Financiero 38%', demoProjectA.financialProgress === 38, `Avance Financiero: ${demoProjectA.financialProgress}%`);
 
     // 7. Budget Lines BL-01 .. BL-04
-    const bLines = await db.select().from(budgetLines).where(eq(budgetLines.projectId, demoProject.id));
-    recordCheck('Partidas Presupuestarias (4/4)', bLines.length === 4, `Partidas: ${bLines.map(b => b.code).join(', ')}`);
+    const bLinesA = await db.select().from(budgetLines).where(eq(budgetLines.projectId, demoProjectA.id));
+    recordCheck('Proyecto A Partidas (4/4)', bLinesA.length === 4, `Partidas: ${bLinesA.map(b => b.code).join(', ')}`);
 
-    const bl02 = bLines.find(b => b.code === 'BL-02');
-    recordCheck('Partida BL-02 (Infraestructura)', !!bl02 && bl02.approvedAmount === 50000 && bl02.executedAmount === 21500, bl02 ? `Aprobado: $${bl02.approvedAmount}, Ejecutado: $${bl02.executedAmount}, Saldo: $${bl02.balance}` : 'No encontrada');
+    const bl02 = bLinesA.find(b => b.code === 'BL-02');
+    recordCheck('Proyecto A Partida BL-02 (Infraestructura)', !!bl02 && bl02.approvedAmount === 50000 && bl02.executedAmount === 21500, bl02 ? `Aprobado: $${bl02.approvedAmount}, Ejecutado: $${bl02.executedAmount}, Saldo: $${bl02.balance}` : 'No encontrada');
 
     // 8. Pending Expense ($6,000)
-    const pendingExp = await db.select().from(expenses).where(and(eq(expenses.projectId, demoProject.id), eq(expenses.status, 'pending')));
-    recordCheck('Gasto Pendiente de Aprobación USD 6.000', pendingExp.length === 1 && pendingExp[0].amount === 6000, pendingExp.length > 0 ? `"${pendingExp[0].title}" ($${pendingExp[0].amount})` : 'Gasto pendiente no encontrado');
+    const pendingExp = await db.select().from(expenses).where(and(eq(expenses.projectId, demoProjectA.id), eq(expenses.status, 'pending')));
+    recordCheck('Gasto Pendiente Proyecto A USD 6.000', pendingExp.length === 1 && pendingExp[0].amount === 6000, pendingExp.length > 0 ? `"${pendingExp[0].title}" ($${pendingExp[0].amount})` : 'Gasto pendiente no encontrado');
 
     // 9. Demo Document Fixtures
-    const docs = await db.select().from(documents).where(eq(documents.projectId, demoProject.id));
-    recordCheck('Documentos Ficticios en Base de Datos (2/2)', docs.length >= 2, `Total documentos vinculados: ${docs.length}`);
+    const docsA = await db.select().from(documents).where(eq(documents.projectId, demoProjectA.id));
+    recordCheck('Documentos Proyecto A en Base de Datos (2/2)', docsA.length >= 2, `Total documentos vinculados: ${docsA.length}`);
 
     const fix1 = path.resolve('tests/fixtures/demo/comprobante_filtracion_demo.pdf');
     const fix2 = path.resolve('tests/fixtures/demo/informe_tecnico_instalacion_demo.pdf');
     recordCheck('Fixtures en Disco', fs.existsSync(fix1) && fs.existsSync(fix2), 'comprobante_filtracion_demo.pdf e informe_tecnico_instalacion_demo.pdf');
   }
 
-  // 10. JWT Token Generation & Verification for all 6 roles
+  // 10. Project PRJ-DEMO-2026-B (Proyecto B) Verification
+  const [demoProjectB] = await db.select().from(projects).where(and(eq(projects.tenantId, orgId), eq(projects.code, 'PRJ-DEMO-2026-B')));
+  recordCheck('Proyecto B (PRJ-DEMO-2026-B)', !!demoProjectB, demoProjectB ? `"${demoProjectB.name}" (Presupuesto: $${demoProjectB.approvedBudget}, Avance: ${demoProjectB.physicalProgress}%)` : 'Proyecto B no encontrado');
+
+  if (demoProjectB) {
+    recordCheck('Proyecto B Presupuesto USD 45.000', demoProjectB.approvedBudget === 45000, `Monto: $${demoProjectB.approvedBudget}`);
+    const bLinesB = await db.select().from(budgetLines).where(eq(budgetLines.projectId, demoProjectB.id));
+    recordCheck('Proyecto B Partidas (2/2)', bLinesB.length === 2, `Partidas: ${bLinesB.map(b => b.code).join(', ')}`);
+    const docsB = await db.select().from(documents).where(eq(documents.projectId, demoProjectB.id));
+    recordCheck('Proyecto B Aislamiento Documental (0 docs)', docsB.length === 0, `Documentos en Proyecto B: ${docsB.length}`);
+  }
+
+  // 11. JWT Token Generation & Verification for all 6 roles
   let tokensValid = true;
   for (const userDef of DEMO_USERS_CATALOG) {
     try {
@@ -118,7 +130,7 @@ export async function runDemoPreflight(): Promise<{ success: boolean; checks: Pr
         email: userDef.email,
         name: userDef.name,
         role: userDef.roleKey,
-        roleName: userDef.roleName,
+        roleName: userDef.name,
         tenantId: orgId,
       });
       const verified = verifyDemoToken(token);
@@ -131,7 +143,7 @@ export async function runDemoPreflight(): Promise<{ success: boolean; checks: Pr
   }
   recordCheck('Autenticación y Criptografía JWT (6 Roles)', tokensValid, 'Tokens HMAC-SHA256 generados y verificados con claims estrictos');
 
-  // 11. Audit Trail Availability
+  // 12. Audit Trail Availability
   const auditEntries = await db.select().from(auditLogs).where(eq(auditLogs.tenantId, orgId));
   recordCheck('Bitácora de Auditoría Disponible', auditEntries.length > 0, `Eventos auditables registrados: ${auditEntries.length}`);
 
