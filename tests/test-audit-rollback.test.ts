@@ -2,13 +2,14 @@ import 'dotenv/config';
 import { db } from '../src/db/index.ts';
 import { sql } from 'drizzle-orm';
 import { createExpense, approveExpense } from '../src/services/expenses.service.ts';
-import { getOrCreateDemoTenant } from '../src/services/demoTenant.service.ts';
+import { getOrCreateDemoTenant, resetDemoTenantData } from '../src/services/demoTenant.service.ts';
 import { budgetLines, expenses, auditLogs } from '../src/db/schema.ts';
 import { eq } from 'drizzle-orm';
 
 async function testRollback() {
   console.log('🧪 Iniciando prueba de Rollback Financiero (P1)');
   
+  await resetDemoTenantData();
   const { orgId, users } = await getOrCreateDemoTenant();
   const manager = users.find(u => u.roleKey === 'MANAGER') || users[1];
   const director = users.find(u => u.roleKey === 'DIRECTOR') || users[0];
@@ -64,6 +65,8 @@ async function testRollback() {
   if (!errorThrown) {
     console.error('❌ La operación no devolvió error.');
     process.exit(1);
+  } else {
+    console.log('✅ Fallo de audit_logs provocado');
   }
 
   const [expenseAfter] = await db.select().from(expenses).where(eq(expenses.id, expense.id));
@@ -71,15 +74,15 @@ async function testRollback() {
     console.error('❌ El gasto no conservó su estado anterior (pending). Estado actual:', expenseAfter.status);
     process.exit(1);
   }
-  console.log('✅ Gasto conserva estado anterior');
+  console.log(`Estado del gasto antes/después: pending / ${expenseAfter.status}`);
 
   const [budgetAfter] = await db.select().from(budgetLines).where(eq(budgetLines.id, bLine.id));
   if (budgetAfter.executedAmount.toString() !== budgetBefore.executedAmount.toString()) {
     const spentDiff = budgetAfter.executedAmount - budgetBefore.executedAmount;
-    console.log(`[Rollback Verified] Budget executedAmount diff: ${spentDiff} (Expected: 0) | initial: ${initialBudgetLine[0].executedAmount} -> final: ${budgetAfter.executedAmount}`);
+    console.log(`❌ Rollback Failed - executedAmount antes/después: ${budgetBefore.executedAmount} / ${budgetAfter.executedAmount}`);
     process.exit(1);
   }
-  console.log('✅ Presupuesto conserva saldo anterior');
+  console.log(`executedAmount antes/después: ${budgetBefore.executedAmount} / ${budgetAfter.executedAmount}`);
 
   const logs = await db.select().from(auditLogs).where(eq(auditLogs.entityId, expense.id.toString()));
   const hasApproveLog = logs.some(l => l.action === 'EXPENSE_APPROVED');
@@ -87,10 +90,9 @@ async function testRollback() {
     console.error('❌ Existe log parcial de EXPENSE_APPROVED a pesar del rollback.');
     process.exit(1);
   }
-  console.log('✅ No existe log parcial');
-  console.log('✅ Transacción completa revertida');
-
-  console.log('🎉 Prueba Rollback Financiero PASS');
+  
+  console.log('✅ Rollback confirmado: la transacción se revirtió atómicamente al fallar el log de auditoría.');
+  console.log('Código de salida: 0');
 }
 
 testRollback().then(() => process.exit(0)).catch((err) => {
