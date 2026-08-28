@@ -150,7 +150,7 @@ export default function Sidebar({
               {currentUser.role}
             </span>
             <span className="text-[10px] text-slate-300 font-sans truncate max-w-[110px]">
-              {currentUser.name}
+              {currentUser.name || currentUser.email || 'Usuario'}
             </span>
           </div>
         </div>
@@ -160,10 +160,10 @@ export default function Sidebar({
           <div className="flex items-center space-x-2 overflow-hidden">
             <img
               src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-                currentUser.name
+                currentUser.name || currentUser.email || 'Usuario'
               )}`}
               alt="Avatar"
-              className="w-7 h-7 rounded-full border border-blue-500 bg-white flex-shrink-0"
+              className="w-8 h-8 rounded-full border border-slate-700 bg-slate-800 shrink-0"
             />
             <div className="overflow-hidden">
               <h4 className="text-xs font-semibold text-white truncate leading-none">

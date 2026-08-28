@@ -79,29 +79,28 @@ export default function App() {
   };
 
   React.useEffect(() => {
-    // INITIAL_SESSION handling
+    // INITIAL_SESSION handling: validate existing token immediately against canonical backend
     const initialToken = localStorage.getItem('proyecty_token');
-    
-    import('./lib/supabase.ts').then(({ supabase }) => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          syncSessionWithBackend(session.access_token);
-        } else if (initialToken) {
-          // Validate existing token even if Supabase has no session (e.g. demo tokens)
-          syncSessionWithBackend(initialToken);
-        } else {
-          handleLogout();
-        }
-      });
+    if (initialToken) {
+      syncSessionWithBackend(initialToken);
+    } else {
+      handleLogout();
+    }
 
-      supabase.auth.onAuthStateChange((event, session) => {
-        if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
-          syncSessionWithBackend(session.access_token);
-        } else if (event === 'SIGNED_OUT') {
-          handleLogout();
-        }
+    // Supabase auth listener for OAuth events (SIGNED_IN, TOKEN_REFRESHED, SIGNED_OUT)
+    import('./lib/supabase.ts')
+      .then(({ supabase }) => {
+        supabase.auth.onAuthStateChange((event, session) => {
+          if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
+            syncSessionWithBackend(session.access_token);
+          } else if (event === 'SIGNED_OUT') {
+            handleLogout();
+          }
+        });
+      })
+      .catch((err) => {
+        console.warn('Supabase client initialization skipped or failed:', err);
       });
-    });
   }, []);
 
   // Navigation states
@@ -153,6 +152,11 @@ export default function App() {
     clearClientSession();
     setToken(null);
     setCurrentUser(null);
+    import('./lib/supabase.ts')
+      .then(({ supabase }) => {
+        supabase.auth.signOut().catch(() => {});
+      })
+      .catch(() => {});
   };
 
   const handleRoleSwitch = (newRole: UserRole) => {

@@ -68,13 +68,13 @@ export default function Topbar({ currentTab, selectedProjectName, onClearSelecte
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-xs"
             >
-              {currentUser.name.charAt(0).toUpperCase()}
+              {(currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase()}
             </button>
 
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 p-2 z-50">
                 <div className="px-2 py-1.5 border-b border-slate-100 mb-1">
-                  <p className="text-xs font-bold text-slate-800 truncate">{currentUser.name}</p>
+                  <p className="text-xs font-bold text-slate-800 truncate">{currentUser.name || currentUser.email || 'Usuario'}</p>
                   <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
                 </div>
                 
