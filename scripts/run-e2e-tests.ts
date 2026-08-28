@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { spawnSync, spawn, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
