@@ -21,31 +21,50 @@ console.log('============================================================\n');
 
 const testDbUrl = 'postgresql://postgres@127.0.0.1:55432/proyecty_test';
 const testSupabaseUrl = 'http://127.0.0.1:54321';
+const testSupabaseAnonKey = 'dummy-local-anon-test-only';
 
 const testEnv = {
   ...process.env,
   NODE_ENV: 'test',
   DATABASE_URL: testDbUrl,
   SUPABASE_URL: testSupabaseUrl,
-  SUPABASE_SERVICE_ROLE_KEY: 'sb_publishable_dummy_key_for_testing'
+  SUPABASE_SERVICE_ROLE_KEY: 'sb_publishable_dummy_key_for_testing',
+  VITE_SUPABASE_URL: testSupabaseUrl,
+  VITE_SUPABASE_ANON_KEY: testSupabaseAnonKey,
+  ENABLE_INTERNAL_DEMO: 'true',
+  PORT: '3000',
 };
 
 process.env.NODE_ENV = testEnv.NODE_ENV;
 process.env.DATABASE_URL = testEnv.DATABASE_URL;
 process.env.SUPABASE_URL = testEnv.SUPABASE_URL;
 process.env.SUPABASE_SERVICE_ROLE_KEY = testEnv.SUPABASE_SERVICE_ROLE_KEY;
+process.env.VITE_SUPABASE_URL = testEnv.VITE_SUPABASE_URL;
+process.env.VITE_SUPABASE_ANON_KEY = testEnv.VITE_SUPABASE_ANON_KEY;
 
-// Validaciones estrictas requeridas
+// Validaciones estrictas de seguridad
 if (testEnv.NODE_ENV !== 'test') {
   console.error('FATAL: NODE_ENV debe ser "test"');
   process.exit(1);
 }
-if (testEnv.SUPABASE_URL.includes('supabase.co') || testEnv.SUPABASE_URL.includes('pooler.supabase.com')) {
+if (!testEnv.VITE_SUPABASE_URL || !testEnv.VITE_SUPABASE_ANON_KEY) {
+  console.error('FATAL: VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY son obligatorias para el arnés E2E');
+  process.exit(1);
+}
+if (testEnv.SUPABASE_URL.includes('supabase.co') || testEnv.SUPABASE_URL.includes('pooler.supabase.com') || testEnv.SUPABASE_URL.includes('kwmvuuwinufksjjfsuls')) {
   console.error('FATAL: SUPABASE_URL no puede apuntar a producción');
+  process.exit(1);
+}
+if (testEnv.VITE_SUPABASE_URL.includes('supabase.co') || testEnv.VITE_SUPABASE_URL.includes('pooler.supabase.com') || testEnv.VITE_SUPABASE_URL.includes('kwmvuuwinufksjjfsuls')) {
+  console.error('FATAL: VITE_SUPABASE_URL no puede apuntar a producción');
   process.exit(1);
 }
 if (!testEnv.DATABASE_URL.includes('127.0.0.1') && !testEnv.DATABASE_URL.includes('localhost')) {
   console.error('FATAL: DATABASE_URL no es local');
+  process.exit(1);
+}
+if (!testEnv.VITE_SUPABASE_URL.includes('127.0.0.1') && !testEnv.VITE_SUPABASE_URL.includes('localhost')) {
+  console.error('FATAL: VITE_SUPABASE_URL no es local');
   process.exit(1);
 }
 
@@ -118,9 +137,22 @@ try {
   console.log('\n--- 2. Verificación SQL en Runtime ---');
   await validateTestDatabaseRuntime(testDbUrl);
 
-  // 3. Ejecución de Playwright Test
-  console.log('\n--- 3. Ejecutando Playwright E2E Tests ---');
-  const pwResult = spawnSync('npx.cmd', ['playwright', 'test'], {
+  // 3. Construcción Aislada del Bundle E2E con variables explícitas
+  console.log('\n--- 3. Construcción Aislada del Bundle E2E ---');
+  const buildResult = spawnSync('npm.cmd', ['run', 'build'], {
+    cwd: rootDir,
+    stdio: 'inherit',
+    shell: true,
+    env: testEnv,
+  });
+  if (buildResult.status !== 0) {
+    throw new Error('Fallo en la construcción del bundle de pruebas E2E');
+  }
+
+  // 4. Ejecución de Playwright Test
+  console.log('\n--- 4. Ejecutando Playwright E2E Tests ---');
+  const pwArgs = ['playwright', 'test', ...process.argv.slice(2)];
+  const pwResult = spawnSync('npx.cmd', pwArgs, {
     cwd: rootDir,
     stdio: 'inherit',
     shell: true,
@@ -148,9 +180,15 @@ try {
     console.warn('Advertencia al detener pg_ctl:', e);
   }
 
+  sleep(1500);
+
   if (fs.existsSync(pgDataTest)) {
-    fs.rmSync(pgDataTest, { recursive: true, force: true });
-    console.log('Directorio temporal pgdata-test eliminado.');
+    try {
+      fs.rmSync(pgDataTest, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+      console.log('Directorio temporal pgdata-test eliminado.');
+    } catch (rmErr) {
+      console.warn('Advertencia al eliminar pgdata-test:', rmErr);
+    }
   }
 }
 
