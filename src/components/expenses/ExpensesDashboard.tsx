@@ -20,7 +20,7 @@ export default function ExpensesDashboard({ token, userRole, currentUser }: Expe
   const [newAmount, setNewAmount] = useState('');
   const [newCategory, setNewCategory] = useState('');
 
-  const canApprove = userRole === 'DIRECTOR' || userRole === 'MANAGER' || userRole === 'FINANCE';
+  const canApprove = userRole === 'DIRECTOR';
 
   const fetchExpenses = async () => {
     setIsLoading(true);

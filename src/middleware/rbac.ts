@@ -33,7 +33,7 @@ export const requirePermission = (module: Module, action: Action) => {
       // Fallback para roles estándar si no están en la tabla permissions
       const roleUpper = (user.role || '').toUpperCase();
       const isAuthorizedRole = (
-        (module === 'expenses' && (roleUpper === 'MANAGER' || roleUpper === 'FINANCE')) ||
+        (module === 'expenses' && action !== 'approve' && (roleUpper === 'MANAGER' || roleUpper === 'FINANCE')) ||
         (module === 'budgets' && (roleUpper === 'MANAGER' || roleUpper === 'FINANCE' || roleUpper === 'AUDITOR')) ||
         (module === 'projects' && (roleUpper === 'MANAGER' || roleUpper === 'RESPONSABLE_PROYECTO' || roleUpper === 'AUDITOR'))
       );
