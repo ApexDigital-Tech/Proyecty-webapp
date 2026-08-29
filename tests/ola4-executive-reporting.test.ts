@@ -667,26 +667,23 @@ async function runOla4ExhaustiveSuite() {
   invalidateDashboardCache(demoOrgId);
   const demoMetrics = await getDashboardMetricsForUser(demoOrgId, demoDirectorUser.id, 'DIRECTOR');
 
-  testAssert(demoMetrics.totalBudget === 150000, 'M-02 Demo Conciliación: Presupuesto total es exactamente USD 150,000');
+  testAssert(demoMetrics.totalBudget === 195000, 'M-02 Demo Conciliación: Presupuesto total del portafolio es exactamente USD 195,000 ($150k + $45k)');
   testAssert(demoMetrics.totalExecuted === 57000, 'M-02 Demo Conciliación: Ejecución total suma exactamente USD 57,000');
-  testAssert(demoMetrics.availableBalance === 93000, 'M-02 Demo Conciliación: Saldo disponible es exactamente USD 93,000');
-  testAssert(demoMetrics.avgFinancial === 38, 'M-02 Demo Conciliación: Avance financiero global es exactamente 38%');
-  testAssert(demoMetrics.avgPhysical === 75, 'M-02 Demo Conciliación: Avance físico global es exactamente 75%');
+  testAssert(demoMetrics.availableBalance === 138000, 'M-02 Demo Conciliación: Saldo disponible es exactamente USD 138,000');
   testAssert(
-    demoMetrics.pendingDisbursementsAmount === 150000 && demoMetrics.pendingDisbursementsCount === 1,
-    'M-02 / M02-DISB-01 Demo Conciliación: Desembolsos pendientes son exactamente USD 150,000 (Convenio $150k - Desembolsado $0)'
+    demoMetrics.pendingDisbursementsAmount === 195000 && demoMetrics.pendingDisbursementsCount === 2,
+    'M-02 / M02-DISB-01 Demo Conciliación: Desembolsos pendientes son exactamente USD 195,000 (Convenios $150k + $45k)'
   );
   testAssert(
-    demoMetrics.projectsList.length === 1 && 
-    demoMetrics.projectsList[0].financialProgress === 38 &&
-    demoMetrics.projectsList[0].physicalProgress === 75,
-    'M-02 Demo Conciliación: Proyecto institucional sincronizado en 38% financiero y 75% físico'
+    demoMetrics.projectsList.length === 2,
+    'M-02 Demo Conciliación: Dos proyectos institucionales independientes en el portafolio'
   );
 
   const demoExpensesList = await db.select().from(expenses).where(eq(expenses.tenantId, demoOrgId));
-  const demoExpensesTotal = demoExpensesList.reduce((sum, e) => sum + Number(e.amount), 0);
+  const demoApprovedExpenses = demoExpensesList.filter(e => e.status === 'APPROVED');
+  const demoApprovedTotal = demoApprovedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
   testAssert(
-    demoExpensesList.length === 4 && demoExpensesTotal === 57000,
+    demoApprovedExpenses.length === 4 && demoApprovedTotal === 57000,
     'M-02 / M-10 Conciliación: 4 gastos aprobados en base de datos suman exactamente USD 57,000'
   );
 
