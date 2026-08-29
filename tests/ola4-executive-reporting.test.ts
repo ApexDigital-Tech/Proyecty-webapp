@@ -680,7 +680,7 @@ async function runOla4ExhaustiveSuite() {
   );
 
   const demoExpensesList = await db.select().from(expenses).where(eq(expenses.tenantId, demoOrgId));
-  const demoApprovedExpenses = demoExpensesList.filter(e => e.status === 'APPROVED');
+  const demoApprovedExpenses = demoExpensesList.filter(e => e.status?.toUpperCase() === 'APPROVED');
   const demoApprovedTotal = demoApprovedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
   testAssert(
     demoApprovedExpenses.length === 4 && demoApprovedTotal === 57000,
