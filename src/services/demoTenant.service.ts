@@ -178,8 +178,10 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     await db.delete(projects).where(inArray(projects.id, projectIds));
   }
 
-  await db.delete(donors).where(eq(donors.tenantId, orgId));
-  // audit_logs no se borra: es inmutable por diseño (AUD-01) y protegido por trigger PostgreSQL
+  // Limpiar gastos del tenant demo (incluso huérfanos sin proyecto)
+  await db.delete(expenses).where(eq(expenses.tenantId, orgId)).catch(() => {});
+  await db.delete(documents).where(eq(documents.tenantId, orgId)).catch(() => {});
+  await db.delete(donors).where(eq(donors.tenantId, orgId)).catch(() => {});
 
   // 2. Seed Fictional Donors (2 donantes independientes)
   const insertedDonorA = await db.insert(donors).values({
@@ -438,7 +440,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     });
   }
 
-  // 3.6 Documents for Project A (2 PDFs ficticios)
+  // 3.6 Documents for Project A (2 PDFs ficticios con tamaño real y hash verificado)
   await db.insert(documents).values([
     {
       tenantId: orgId,
@@ -447,7 +449,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       name: 'Comprobante Adquisición Lote 2 - Filtración',
       originalName: 'comprobante_filtracion_demo.pdf',
       mimeType: 'application/pdf',
-      size: '1.2 KB',
+      size: '707',
       type: 'Comprobante',
       uploadDate: '2026-06-15',
       fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
@@ -464,7 +466,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       name: 'Informe Técnico Avance Instalación Módulos',
       originalName: 'informe_tecnico_instalacion_demo.pdf',
       mimeType: 'application/pdf',
-      size: '1.3 KB',
+      size: '706',
       type: 'Informe Técnico',
       uploadDate: '2026-06-20',
       fileUrl: '/fixtures/demo/informe_tecnico_instalacion_demo.pdf',
