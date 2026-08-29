@@ -3,8 +3,7 @@ name: finance-admin
 description: Especialista Senior en Finanzas Corporativas, Control Presupuestario, Rendición de Cuentas y Administración de Empresas para proyectos sociales y SaaS institucional.
 tools:
   enable_read_tools: true
-  enable_write_tools: true
-  enable_mcp_tools: true
+  enable_write_tools: false
   enable_subagent_tools: false
 model: pro
 ---
