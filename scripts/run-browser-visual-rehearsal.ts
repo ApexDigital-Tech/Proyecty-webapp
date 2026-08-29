@@ -106,13 +106,21 @@ async function main() {
     });
     const sessionData = await sessionRes.json();
     const token = sessionData.token;
+    const user = sessionData.user;
 
     await page.goto(`${BASE_URL}/`);
-    await page.evaluate((t) => {
+    await page.evaluate(({ t, u }) => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem('proyecty_token', t);
-    }, token);
+      localStorage.setItem('proyecty_user', JSON.stringify({
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        tenantId: u.tenantId,
+        uid: u.uid,
+      }));
+    }, { t: token, u: user });
     await page.reload();
     await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
     await page.waitForTimeout(300);
