@@ -99,18 +99,23 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
-    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
-    await page.evaluate(() => {
+    const sessionRes = await fetch(`${BASE_URL}/api/auth/demo-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: roleKey }),
+    });
+    const sessionData = await sessionRes.json();
+    const token = sessionData.token;
+
+    await page.goto(`${BASE_URL}/`);
+    await page.evaluate((t) => {
       localStorage.clear();
       sessionStorage.clear();
-    });
-    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(800);
-    const btn = page.locator(`#demo-login-${roleKey.toLowerCase()}`).first();
-    await btn.waitFor({ state: 'visible', timeout: 10000 });
-    await btn.click();
+      localStorage.setItem('proyecty_token', t);
+    }, token);
+    await page.reload();
     await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(300);
   }
 
   const stepReports: StepReport[] = [];
