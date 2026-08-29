@@ -147,9 +147,9 @@ async function main() {
 
     const screenshotPath = path.join(EVIDENCE_DIR, screenshotName);
     try {
-      await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled', timeout: 8000 });
-    } catch {
-      await page.screenshot({ path: screenshotPath, animations: 'disabled', timeout: 5000 });
+      await page.screenshot({ path: screenshotPath, timeout: 5000 });
+    } catch (e: any) {
+      console.warn(`[Screenshot Warning] ${screenshotName}: ${e?.message || e}`);
     }
 
     const rep: StepReport = {
