@@ -100,7 +100,9 @@ async function main() {
 
   async function loginAsRole(roleKey: string) {
     await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
-    await page.locator(`button:has-text("${roleKey}")`).first().click();
+    const btn = page.locator(`#demo-login-${roleKey.toLowerCase()}, button:has-text("${roleKey}")`).first();
+    await btn.waitFor({ state: 'visible', timeout: 10000 });
+    await btn.click();
     await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
     await page.waitForTimeout(400);
   }

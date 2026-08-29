@@ -294,6 +294,8 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
                 {demoUsers.map(u => (
                   <button
                     key={u.role}
+                    id={`demo-login-${u.role.toLowerCase()}`}
+                    data-testid={`demo-login-${u.role}`}
                     onClick={() => handleDemoLogin(u)}
                     disabled={loading}
                     className="w-full flex items-center justify-between p-2 bg-white hover:bg-amber-100/50 border border-amber-200 rounded-lg text-left transition-all cursor-pointer text-xs group disabled:opacity-60"
