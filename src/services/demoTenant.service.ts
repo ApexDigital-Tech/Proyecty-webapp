@@ -155,8 +155,13 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   const managerUser = demoUsersList.find(u => u.roleKey === 'MANAGER') || demoUsersList[0];
   const responsableUser = demoUsersList.find(u => u.roleKey === 'RESPONSABLE_PROYECTO') || demoUsersList[4];
 
-  // 1. Clean existing demo data exclusively for this tenant
-  const existingProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.tenantId, orgId));
+  // 1. Clean existing demo data exclusively for this tenant or demo codes
+  const existingProjects = await db.select({ id: projects.id }).from(projects).where(
+    or(
+      eq(projects.tenantId, orgId),
+      inArray(projects.code, ['PRJ-DEMO-2026', 'PRJ-DEMO-2026-B'])
+    )
+  );
   const projectIds = existingProjects.map(p => p.id);
 
   if (projectIds.length > 0) {
@@ -170,7 +175,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     await db.delete(documents).where(inArray(documents.projectId, projectIds));
     await db.delete(budgetLines).where(inArray(budgetLines.projectId, projectIds));
     await db.delete(budgetVersions).where(inArray(budgetVersions.projectId, projectIds));
-    await db.delete(projects).where(eq(projects.tenantId, orgId));
+    await db.delete(projects).where(inArray(projects.id, projectIds));
   }
 
   await db.delete(donors).where(eq(donors.tenantId, orgId));
