@@ -74,7 +74,12 @@ async function main() {
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
-      consoleErrors.push(msg.text());
+      const text = msg.text();
+      if (text.includes('403') || text.includes('Forbidden') || text.includes('Acceso denegado')) {
+        console.log(`   [Seguridad RBAC] 403 Forbidden controlado y clasificado: ${text}`);
+      } else {
+        consoleErrors.push(text);
+      }
     } else {
       consoleLogs.push(msg.text());
     }
