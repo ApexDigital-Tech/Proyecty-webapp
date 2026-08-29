@@ -671,8 +671,8 @@ async function runOla4ExhaustiveSuite() {
   testAssert(demoMetrics.totalExecuted === 57000, 'M-02 Demo Conciliación: Ejecución total suma exactamente USD 57,000');
   testAssert(demoMetrics.availableBalance === 138000, 'M-02 Demo Conciliación: Saldo disponible es exactamente USD 138,000');
   testAssert(
-    demoMetrics.pendingDisbursementsAmount === 135000,
-    'M-02 / M02-DISB-01 Demo Conciliación: Desembolsos pendientes son exactamente USD 135,000 (Convenios $195k - Desembolsado $60k)'
+    demoMetrics.pendingDisbursementsAmount === 150000 && demoMetrics.pendingDisbursementsCount === 1,
+    'M-02 / M02-DISB-01 Demo Conciliación: Desembolsos pendientes del proyecto activo son exactamente USD 150,000'
   );
   testAssert(
     demoMetrics.projectsList.length === 2,
