@@ -99,21 +99,10 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
-    const res = await page.request.post(`${BASE_URL}/api/auth/demo-session`, {
-      data: { role: roleKey },
-    });
-    const authData = await res.json();
-    await page.goto(`${BASE_URL}/`);
-    await page.evaluate((data) => {
-      localStorage.clear();
-      sessionStorage.clear();
-      localStorage.setItem('proyecty_token', data.token);
-      localStorage.setItem('proyecty_user', JSON.stringify(data.user));
-    }, authData);
-    await page.goto(`${BASE_URL}/`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
+    await page.locator(`button:has-text("${roleKey}")`).first().click();
     await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(400);
   }
 
   const stepReports: StepReport[] = [];
