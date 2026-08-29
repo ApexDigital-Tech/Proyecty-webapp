@@ -146,7 +146,11 @@ async function main() {
     const stepErrors = consoleErrors.slice(initialErrCount);
 
     const screenshotPath = path.join(EVIDENCE_DIR, screenshotName);
-    await page.screenshot({ path: screenshotPath, fullPage: true });
+    try {
+      await page.screenshot({ path: screenshotPath, fullPage: true, animations: 'disabled', timeout: 8000 });
+    } catch {
+      await page.screenshot({ path: screenshotPath, animations: 'disabled', timeout: 5000 });
+    }
 
     const rep: StepReport = {
       step,
