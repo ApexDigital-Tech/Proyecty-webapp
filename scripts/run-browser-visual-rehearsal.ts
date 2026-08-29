@@ -99,21 +99,19 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
-    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
     const res = await page.request.post(`${BASE_URL}/api/auth/demo-session`, {
       data: { role: roleKey },
     });
     const authData = await res.json();
+    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
     await page.evaluate((data) => {
+      localStorage.clear();
+      sessionStorage.clear();
       localStorage.setItem('proyecty_token', data.token);
       localStorage.setItem('proyecty_user', JSON.stringify(data.user));
     }, authData);
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('#proyecty-app-shell', { timeout: 35000 });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'load' });
+    await page.locator('#proyecty-app-shell').waitFor({ state: 'visible', timeout: 25000 });
     await page.waitForTimeout(500);
   }
 
@@ -189,11 +187,11 @@ async function main() {
     'Anónimo',
     '01-portal-demo.png',
     async () => {
-      await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
+      await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
       await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
-      await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('text=Entorno de Simulación Interna RBAC', { timeout: 10000 });
-      await page.waitForSelector('text=Director Demo VOSERDEM', { timeout: 10000 });
+      await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
+      await page.locator('text=Entorno de Simulación Interna RBAC').first().waitFor({ state: 'visible', timeout: 20000 });
+      await page.locator('text=Director Demo VOSERDEM').first().waitFor({ state: 'visible', timeout: 20000 });
       return {
         visibleResult: 'Portal demo renderizado con 6 perfiles canónicos disponibles y aviso de confidencialidad.',
         apiResponse: 'GET /api/auth/demo-users -> HTTP 200 (6 usuarios)',
