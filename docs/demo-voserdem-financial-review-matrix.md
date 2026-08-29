@@ -1,5 +1,5 @@
 # MATRIZ DE REVISIÓN Y CONTROL FINANCIERO-ADMINISTRATIVO — VOSERDEM
-**Documento de Trabajo:** Evaluación Preliminar de Controles Internos y Flujos Financieros  
+**Documento de Trabajo:** Evaluación Preliminar de Controles Internos, Flujos Financieros y Decisiones Funcionales  
 **Plataforma Evaluada:** PROYECTY v1.5.1  
 **Entidad / Organización:** VOSERDEM (Entorno Demostrativo)  
 **Destinatarios:** Administradora General de VOSERDEM, Dirección Ejecutiva, Contador y Asesor Legal  
@@ -25,47 +25,63 @@ Para cada uno de los 30 controles financieros y administrativos, la Administrado
 
 ## 2. Matriz de 30 Puntos de Control Financiero y Administrativo
 
-| # | Control / Etapa Financiera | Descripción Técnica y Operativa | Estado en PROYECTY v1.5.1 | Evidencia en Plataforma / Código | Calificación Sugerida | Observación / Decisión de la Administradora |
-| :-: | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1** | **Convenio Marco y Donante** | Registro del monto total acordado ($150k), plazo (12 meses) y contraparte donante. | **Disponible** | `agreements` table, endpoint `GET /api/agreements/:id` | `[C]` | Registrar donantes ficticios para la simulación. |
-| **2** | **Desembolsos por Hitos** | Registro de transferencias de fondos por tramos (ej. $60k = 40% inicial). | **Disponible** | `disbursements` table | `[C]` | Permite vincular desembolsos a hitos del convenio. |
-| **3** | **Presupuesto Maestro** | Techo presupuestario global por proyecto con validación estricta de saldo. | **Disponible** | `projects.approvedBudget`, `budgetLines` | `[C]` | Evita sobregiros a nivel de proyecto. |
-| **4** | **Versiones Presupuestarias** | Control de versiones de presupuesto (`ORIGINAL`, `REFORMULADO_V1`). | **Disponible** | `budget_versions` table | `[C]` | Historial de techos presupuestarios. |
-| **5** | **Estructura de Partidas (BL)** | Desglose por partidas maestras (BL-01 Talento, BL-02 Infraestructura, etc.). | **Disponible** | `budget_lines` (BL-01 a BL-04) | `[C]` | Monto aprobado, ejecutado y saldo en tiempo real. |
-| **6** | **Disponibilidad Presupuestaria** | Verificación en tiempo real de saldo antes de comprometer o aprobar gastos. | **Disponible** | `expenses.service.ts` (`balance >= amount`) | `[C]` | Bloqueo estricto `FOR UPDATE` en PostgreSQL. |
-| **7** | **Registro de Gasto en Terreno** | Captura del gasto por el Responsable de Proyecto con imputación a partida. | **Disponible** | `POST /api/expenses` (`status: 'pending'`) | `[C]` | Registra `registeredBy: userId`. |
-| **8** | **Documento de Respaldo** | Carga de archivos digitales adjuntos (PDF, imagen) con hash SHA-256. | **Disponible** | `documents` table, `fileUrl` | `[C]` | Descarga y visualización directa. |
-| **9** | **Datos del Proveedor** | Registro de Razón Social / Nombre y NIT / Cédula del beneficiario del pago. | **Parcial** | Almacenado en `title` y metadatos del gasto | `[CP]` | Se recomienda formalizar tabla `suppliers` en R2. |
-| **10** | **Fecha y Periodo de Elegibilidad**| Validación de que la fecha del gasto esté dentro del periodo del convenio. | **Disponible** | `expenses.date`, `agreements.startDate/endDate` | `[C]` | Verificación de temporalidad de actividades. |
-| **11** | **Multimoneda (USD / BOB / EUR)**| Registro del gasto en moneda pactada (USD) y moneda local (BOB). | **Disponible** | `projects.baseCurrency`, `currency.service.ts` | `[C]` | Validación ISO 4217 implementada. |
-| **12** | **Tipo de Cambio Oficial** | Tipo de cambio fijo o flotante respaldado según el Banco Central de Bolivia. | **Parcial** | Campo numérico de tasa en metadata | `[CP]` | Requiere tabla histórica de tasas de cambio. |
-| **13** | **Factura Fiscal / Recibo Legal** | Clasificación del tipo de comprobante (Factura con Código QR, Recibo con Retención). | **Parcial** | `receipts_vouchers` / metadatos | `[CP]` | Se recomienda formulario de captura detallado. |
-| **14** | **Retenciones Tributarias (IUE/IT)**| Cálculo automático de retenciones (Bienes 8%, Servicios 15.5%, Alquileres 16%). | **Brecha** | No implementado en el backend | `[NC]` | **Brecha Funcional P2:** Gestionado externamente. |
-| **15** | **Revisión Financiera Previa** | Etapa de revisión documental y técnica por Finanzas antes de someter a Dirección. | **Brecha** | Estado `UNDER_REVIEW` no nativo | `[NC]` | **Brecha Funcional P2:** Finanzas revisa en UI. |
-| **16** | **Observación de Comprobante** | Acción explícita para marcar un gasto como "Observado" con comentario técnico. | **Brecha** | Transición `OBSERVED` no disponible | `[NC]` | **Brecha Funcional P2:** Requiere estado en DB. |
-| **17** | **Devolución al Responsable** | Retorno del comprobante a terreno para subsanación de facturas o respaldos. | **Brecha** | Transición `RETURNED` no disponible | `[NC]` | **Brecha Funcional P2:** Requiere estado en DB. |
-| **18** | **Aprobación Transaccional** | Autorización definitiva del gasto que debita el saldo y eleva el monto ejecutado. | **Disponible** | `PATCH /api/expenses/:id/approve` | `[C]` | Ejecución y débito atómico garantizado. |
-| **19** | **Segregación de Funciones (FIN-01)**| Prohibición absoluta de auto-aprobación del creador del gasto. | **Disponible** | `expenses.service.ts` (Regla FIN-01) | `[C]` | Bloqueado a nivel de backend y base de datos. |
-| **20** | **Actualización de Ejecución** | Cálculo automático del % ejecutado a nivel de partida y a nivel de proyecto. | **Disponible** | `budgetLines.executedAmount`, `projects.financialProgress` | `[C]` | 100% determinista y en tiempo real. |
-| **21** | **Control de Saldo Disponible** | Resta inmediata en la partida impidiendo que gastos concurrentes sobregiren. | **Disponible** | `budgetLines.balance` con `SELECT FOR UPDATE` | `[C]` | Consistencia transaccional ACID en PostgreSQL. |
-| **22** | **Rendición de Cuentas al Donante**| Agrupación de comprobantes aprobados para generar informe de liquidación. | **Disponible** | Módulo de Reportes (`GET /api/reports`) | `[C]` | Reporte por partida y periodo. |
-| **23** | **Conciliación Bancaria** | Cotejo entre gastos liquidados en la plataforma y extractos de cuenta bancaria. | **Brecha** | No existe módulo de conciliación | `[NC]` | **Brecha Funcional P2:** Realizado en software contable. |
-| **24** | **Archivo y Custodia Digital** | Resguardo digital de documentos con política de retención de 5 años para auditoría. | **Disponible** | `documents.metadata` (`5_YEARS_AUDIT`) | `[C]` | Descarga y verificación por hash SHA-256. |
-| **25** | **Bitácora Inmutable (AUD-01)** | Registro forense protegido contra modificación o borrado (`prevent_audit_logs_mutation`). | **Disponible** | `audit_logs` con Trigger PostgreSQL | `[C]` | Nadie puede borrar logs de auditoría. |
-| **26** | **Cierre Periódico de Cuentas** | Bloqueo de adición o edición de gastos tras el cierre mensual o semestral. | **Parcial** | Cambio de estado de proyecto / versión | `[CP]` | Se recomienda botón de "Cierre de Mes" en R2. |
-| **27** | **Reportes Ejecutivos y Gráficos**| Semáforos de avance físico vs financiero y desvíos presupuestarios. | **Disponible** | Dashboard y Ficha de Proyecto | `[C]` | Gráficos SVG/HTML interactivos. |
-| **28** | **Exportación a Formatos Estándar**| Descarga de datos consolidados a PDF, CSV o Excel para cruce contable. | **Disponible** | Endpoints de exportación | `[C]` | Descarga de tablas presupuestarias y gastos. |
-| **29** | **Controles de Acceso (RBAC)** | Restricción por perfiles: Responsable, Finanzas, Dirección, Auditor, Donante. | **Disponible** | `src/lib/rbac.ts`, `src/middleware/rbac.ts` | `[C]` | Matriz de permisos auditada. |
-| **30** | **Alineación Normativa** | Cumplimiento con directrices de elegibilidad de fondos de cooperación internacional. | **Parcial** | Soporte de reglas SoD y trazabilidad | `[CP]` | Sujeto a validación final de VOSERDEM. |
+| # | Control / Etapa Financiera | Estado en PROYECTY v1.5.1 | Evidencia en Plataforma | Calificación | Decisión VOSERDEM | Prioridad | Comentario de la Administradora |
+| :-: | :--- | :--- | :--- | :---: | :--- | :---: | :--- |
+| **1** | **Convenio Marco y Donante** | **Disponible** | `agreements` table, endpoint `GET /api/agreements/:id` | `[C]` | Mantener control por convenio | `ALTA` | Validar si se requieren campos adicionales de contraparte local. |
+| **2** | **Desembolsos por Hitos** | **Disponible** | `disbursements` table, tramos por fecha y condición | `[C]` | Controlar tramos por hitos | `ALTA` | Vincular tramos a informes técnicos aprobados. |
+| **3** | **Presupuesto Maestro** | **Disponible** | `projects.approvedBudget`, validación de techo global | `[C]` | Techo presupuestario estricto | `CRÍTICA` | Bloqueo absoluto de sobregiro a nivel de proyecto. |
+| **4** | **Versiones Presupuestarias** | **Disponible** | `budget_versions` table (`DRAFT`, `APPROVED`) | `[C]` | Historial de versiones activo | `MEDIA` | Registrar fecha y resolución de reformulación. |
+| **5** | **Estructura de Partidas (BL)** | **Disponible** | `budget_lines` (BL-01 a BL-04) con saldos en vivo | `[C]` | Árbol de partidas aprobado | `CRÍTICA` | Desglose por subcategorías operativas y de consultoría. |
+| **6** | **Disponibilidad Presupuestaria**| **Disponible** | `expenses.service.ts` (`balance >= amount` FOR UPDATE) | `[C]` | Validación en tiempo real | `CRÍTICA` | Impide crear o aprobar compromisos sin saldo. |
+| **7** | **Registro de Gasto en Terreno**| **Disponible** | `POST /api/expenses` (`status: 'pending'`, `registeredBy`) | `[C]` | Responsable captura en campo | `ALTA` | Registro descentralizado con imputación a partida. |
+| **8** | **Documento de Respaldo** | **Disponible** | `documents` table, `fileUrl`, hash SHA-256 | `[C]` | Respaldo digital obligatorio | `CRÍTICA` | Carga de facturas, recibos y planillas en PDF. |
+| **9** | **Datos del Proveedor** | **Parcial** | Almacenado en `title` y metadatos del gasto | `[CP]` | Requiere tabla de proveedores | `MEDIA` | Definir si se requiere catálogo maestro de proveedores/NIT. |
+| **10** | **Fecha y Periodo de Elegibilidad**| **Disponible**| `expenses.date`, `agreements.startDate/endDate` | `[C]` | Validación de vigencia | `ALTA` | Gastos fuera de fecha son marcados como no elegibles. |
+| **11** | **Multimoneda (USD / BOB / EUR)**| **Disponible** | `projects.baseCurrency`, `currency.service.ts` | `[C]` | Registro bimoneda (USD/BOB) | `ALTA` | Manejo de moneda de convenio y moneda de pago. |
+| **12** | **Tipo de Cambio Oficial** | **Parcial** | Campo de tasa de cambio en metadatos | `[CP]` | Tipo de cambio BCB | `MEDIA` | Definir si se fija tasa oficial de desembolso o flotante. |
+| **13** | **Factura Fiscal / Recibo Legal** | **Parcial** | Metadatos de comprobante y clasificación | `[CP]` | Clasificación fiscal | `ALTA` | Identificar Factura con QR vs Recibo con Retención. |
+| **14** | **Retenciones Tributarias (IUE/IT)**| **Brecha** | No implementado cálculo automático en backend | `[NC]` | Liquidar en contabilidad | `MEDIA` | **Brecha P2:** Retenciones se aplican en libros oficiales. |
+| **15** | **Revisión Financiera Previa** | **Brecha** | Finanzas revisa visualmente en UI (sin estado DB) | `[NC]` | Incorporar visto bueno | `ALTA` | **Brecha P2:** Finanzas revisa antes de pasar a Dirección. |
+| **16** | **Observación de Comprobante** | **Brecha** | Transición `OBSERVED` no disponible en backend | `[NC]` | Habilitar estado Observado | `ALTA` | **Brecha P2:** Permitir retroalimentación técnica al campo. |
+| **17** | **Devolución al Responsable** | **Brecha** | Transición `RETURNED` no disponible en backend | `[NC]` | Habilitar estado Devuelto | `MEDIA` | **Brecha P2:** Devolver gastos para corrección de factura. |
+| **18** | **Aprobación Transaccional** | **Disponible** | `PATCH /api/expenses/:id/approve` (`status: approved`)| `[C]` | Aprobación por Dirección | `CRÍTICA` | Débito atómico del saldo y actualización de ejecución. |
+| **19** | **Segregación de Funciones (FIN-01)**| **Disponible**| `expenses.service.ts` (Auto-aprobación bloqueada) | `[C]` | SoD estricta e inviolable | `CRÍTICA` | El creador del gasto jamás puede auto-aprobarse. |
+| **20** | **Actualización de Ejecución** | **Disponible** | `budgetLines.executedAmount`, `projects.financialProgress`| `[C]` | Cálculo automático 100% | `ALTA` | Actualización inmediata en dashboards e informes. |
+| **21** | **Control de Saldo Disponible** | **Disponible** | `budgetLines.balance` con `SELECT FOR UPDATE` | `[C]` | Consistencia ACID en PG | `CRÍTICA` | Evita condiciones de carrera y sobregiros. |
+| **22** | **Rendición de Cuentas al Donante**| **Disponible**| Módulo de Reportes (`GET /api/reports`) | `[C]` | Reporte por partida y mes | `ALTA` | Generación de cuadros de rendición por donante. |
+| **23** | **Conciliación Bancaria** | **Brecha** | No existe módulo de conciliación en plataforma | `[NC]` | Conciliación en bancos | `MEDIA` | **Brecha P2:** Cotejo con extractos en sistema contable. |
+| **24** | **Archivo y Custodia Digital** | **Disponible** | `documents.metadata` (`5_YEARS_AUDIT`, SHA-256) | `[C]` | Custodia digital auditada | `ALTA` | Descarga de expedientes con hash verificado. |
+| **25** | **Bitácora Inmutable (AUD-01)** | **Disponible** | `audit_logs` con Trigger PostgreSQL | `[C]` | Auditoría inalterable | `CRÍTICA` | Prohibición de UPDATE/DELETE a nivel de motor DB. |
+| **26** | **Cierre Periódico de Cuentas** | **Parcial** | Bloqueo por cambio de estado de proyecto/versión | `[CP]` | Cierre mensual de gastos | `ALTA` | Definir si se requiere botón de "Cerrar Mes Contable". |
+| **27** | **Reportes Ejecutivos y Gráficos**| **Disponible** | Dashboard y Ficha de Proyecto en tiempo real | `[C]` | Semáforo físico-financiero| `ALTA` | Detección visual de desvíos en presupuesto. |
+| **28** | **Exportación a Formatos Estándar**| **Disponible**| Descarga en CSV / PDF estructurado | `[C]` | Exportación a Excel/CSV | `ALTA` | Facilita migración a libros contables oficiales. |
+| **29** | **Controles de Acceso (RBAC)** | **Disponible** | `src/lib/rbac.ts`, `src/middleware/rbac.ts` | `[C]` | Perfiles diferenciados | `CRÍTICA` | Aislamiento entre Responsable, Finanzas y Dirección. |
+| **30** | **Alineación Normativa Donantes** | **Parcial** | Soporte de trazabilidad y elegibilidad de gastos | `[CP]` | Cumplimiento donantes | `ALTA` | Adecuación a guías financieras de USAID/AECID/UE. |
 
 ---
 
-## 3. Resumen Ejecutivo de Brechas Funcionales Identificadas (P2)
+## 3. Diez Preguntas Estratégicas para la Sesión con la Administradora
 
-Las siguientes funciones constituyen **brechas actuales** respecto al flujo operativo ideal de la Administradora y **no deben presentarse como operativas** hasta que se apruebe su desarrollo formal:
-1. **Flujo de Observación y Devolución Intermedia:** El software actual pasa de `pending` a `approved` o `rejected`. Las acciones intermedias de *Observar*, *Devolver para subsanación* y *Marcar conformidad previa* deben registrarse como hoja de ruta para la Fase R2.
-2. **Cálculo de Retenciones Fiscales (IUE / IT):** No existe un calculador automático de retenciones impositivas bolivianas. El monto ingresado en el sistema es el valor nominal líquido aprobado.
-3. **Módulo de Conciliación Bancaria Automática:** PROYECTY registra los gastos y compromisos presupuestarios; la conciliación con las cuentas corrientes bancarias se ejecuta en los libros contables oficiales de la institución.
+1. **¿Finanzas revisa o aprueba definitivamente?**  
+   *Opciones:* (A) Finanzas emite visto bueno previo y Dirección aprueba; (B) Finanzas aprueba gastos operativos y Dirección aprueba inversiones mayores a $X USD.
+2. **¿El Coordinador / Manager puede aprobar gastos menores?**  
+   *Opciones:* (A) No, toda aprobación es de Finanzas/Dirección; (B) Sí, gastos de caja chica o viáticos hasta $500 USD.
+3. **¿El Responsable de Proyecto puede modificar partidas o presupuesto?**  
+   *Opciones:* (A) No, solo solicita reformulación; (B) Sí, puede reasignar entre subpartidas del mismo rubro.
+4. **¿Quién tiene la facultad de autorizar reformulaciones presupuestarias?**  
+   *Opciones:* (A) Exclusivamente la Dirección Ejecutiva con carta de no objeción del donante; (B) Finanzas y Dirección conjuntamente.
+5. **¿Es indispensable incorporar formalmente en el sistema los estados `OBSERVADO`, `DEVUELTO` y `CONFORME`?**  
+   *Opciones:* (A) Sí, es crítico para la trazabilidad antes de aprobar; (B) No, la coordinación interna se realiza por comentarios/mensajería.
+6. **¿Cuáles respaldos digitales son obligatorios por cada tipo de gasto?**  
+   *Opciones:* Factura fiscal con QR, orden de compra, cuadro comparativo (compras > $1,000 USD), informe técnico de recepción y recibo de pago.
+7. **¿Qué esquema de retenciones tributarias bolivianas debe considerarse para los reportes de rendición?**  
+   *Opciones:* (A) Servicios 15.5% (IUE 12.5% + IT 3%), Bienes 8% (IUE 5% + IT 3%), Alquileres 16% (RC-IVA 13% + IT 3%); (B) No aplicar retenciones en plataforma (solo montos netos pagados).
+8. **¿Cómo se realiza el proceso de conciliación bancaria y liquidación de anticipos?**  
+   *Opciones:* (A) Conciliación manual mensual con extractos bancarios oficiales; (B) Importación de extractos bancarios en formato CSV/Excel.
+9. **¿Qué formato de exportación requiere el área contable para su integración con el software de contabilidad?**  
+   *Opciones:* (A) CSV con plan de cuentas y centros de costo; (B) Excel con detalle de comprobantes, NIT, proveedor y partida.
+10. **¿Cuáles son los formatos y periodicidades de reporte exigidos por cada donante activo?**  
+    *Opciones:* Informes trimestrales de ejecución por partida (USAID), semestrales de justificación de gastos (AECID) y anuales consolidados.
 
 ---
 
