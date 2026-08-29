@@ -4,6 +4,7 @@ import { loginWithDemoSession } from './fixtures/auth.ts';
 test('create a new project', async ({ page, request }) => {
   // Iniciar sesión dinámica mediante JWT demo oficial
   await loginWithDemoSession(page, request, 'DIRECTOR');
+  await expect(page.locator('#proyecty-app-shell')).toBeVisible({ timeout: 15000 });
 
   // Navegar a Portafolio
   const portfolioBtn = page.locator('#sidebar-tab-portfolio');
