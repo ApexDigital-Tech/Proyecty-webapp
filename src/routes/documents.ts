@@ -1,6 +1,8 @@
 import express from 'express';
 import multer from 'multer';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { db } from '../db/index.ts';
 import { documents, auditLogs } from '../db/schema.ts';
 import { requireAuth, AuthRequest } from '../middleware/auth.ts';
@@ -235,11 +237,70 @@ router.get('/documents/:id/download', requireAuth, async (req: AuthRequest, res:
       ipAddress: req.ip,
     });
 
+    // Si el cliente pide archivo directo mediante query ?direct=true
+    if (req.query.direct === 'true' && doc.fileUrl && doc.fileUrl.startsWith('/fixtures/demo/')) {
+      const filename = path.basename(doc.fileUrl);
+      const filePath = path.resolve(process.cwd(), 'tests/fixtures/demo', filename);
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${doc.originalName || filename}"`);
+        return fs.createReadStream(filePath).pipe(res);
+      }
+    }
+
     res.json({ url: doc.fileUrl, sha256: (doc.metadata as any)?.sha256 });
   } catch (error) {
     console.error('Error handling download:', error);
     res.status(500).json({ error: 'Error al obtener URL de descarga' });
   }
+});
+
+// Endpoint seguro para servir fixtures demo verificadas bajo autenticación, tenant scope y allowlist
+router.get('/fixtures/demo/:filename', requireAuth, async (req: AuthRequest, res: any) => {
+  // 1. Validar modo demo habilitado
+  if (process.env.ENABLE_INTERNAL_DEMO !== 'true') {
+    return res.status(404).send('Modo demo no habilitado.');
+  }
+
+  // 2. Validar que el usuario pertenece al tenant demo y cuenta con permiso documental
+  const user = req.user;
+  if (!user || !user.tenantId) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+
+  const filename = path.basename(req.params.filename);
+
+  // 3. Allowlist estricto de archivos demo autorizados
+  const ALLOWED_DEMO_FILES = [
+    'comprobante_filtracion_demo.pdf',
+    'informe_tecnico_instalacion_demo.pdf',
+  ];
+
+  if (!ALLOWED_DEMO_FILES.includes(filename) || !/^[a-zA-Z0-9_-]+\.pdf$/.test(filename)) {
+    return res.status(404).send('Archivo no encontrado o no autorizado.');
+  }
+
+  // 4. Validar existencia del documento en la base de datos para el tenant del usuario
+  const [doc] = await db.select().from(documents).where(
+    and(
+      eq(documents.tenantId, user.tenantId),
+      eq(documents.fileUrl, `/fixtures/demo/${filename}`)
+    )
+  );
+
+  if (!doc) {
+    return res.status(403).json({ error: 'Acceso denegado: El archivo no pertenece al tenant del usuario' });
+  }
+
+  const filePath = path.resolve(process.cwd(), 'tests/fixtures/demo', filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('Archivo físico no encontrado.');
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+  return fs.createReadStream(filePath).pipe(res);
 });
 
 // Historial de Versiones del Documento (DOC-01)

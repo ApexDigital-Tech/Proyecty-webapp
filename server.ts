@@ -97,6 +97,16 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Bloqueo estricto anti path traversal
+app.use((req, res, next) => {
+  const urlToCheck = req.originalUrl || req.url || '';
+  const decoded = decodeURIComponent(urlToCheck);
+  if (urlToCheck.includes('..') || decoded.includes('..') || urlToCheck.includes('%2e%2e') || urlToCheck.includes('%2E%2E')) {
+    return res.status(400).send('Path traversal no permitido');
+  }
+  next();
+});
+
 // Capture raw body for webhook HMAC signature verification.
 // Must be registered BEFORE express.json() to access the unparsed body.
 app.use(express.json({
@@ -168,6 +178,7 @@ import { supabaseBackend as supabase } from './src/lib/supabase-backend.ts';
 // ==========================================
 
 app.use('/api', documentsRouter);
+app.use('/', documentsRouter);
 
 app.use('/api', authRouter);
 app.use('/api', usersRouter);
@@ -256,10 +267,6 @@ app.post('/api/admin/run-seed', async (req, res) => {
   }
 });
 
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ success: false, message: 'Ruta API no encontrada' });
-});
-
 app.use(errorHandler);
 
   async function initializeViteAndListen() {
@@ -287,6 +294,7 @@ app.use(errorHandler);
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api')) return next();
       if (req.path.startsWith('/assets')) return next();
+      if (req.path.startsWith('/fixtures')) return next();
 
       // AUTH-DEMO-02: Block /internal-demo in production unless explicitly enabled
       if (req.path === '/internal-demo' && process.env.ENABLE_INTERNAL_DEMO !== 'true') {
@@ -294,7 +302,7 @@ app.use(errorHandler);
       }
 
       // Exclude asset paths from fallback so they 404 properly instead of returning index.html
-      if (req.path.startsWith('/assets/')) {
+      if (req.path.startsWith('/assets/') || req.path.startsWith('/fixtures/')) {
         return res.status(404).send('Not found');
       }
       res.sendFile(path.join(clientDist, 'index.html'));
