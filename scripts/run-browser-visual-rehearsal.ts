@@ -99,28 +99,16 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
-    const sessionRes = await fetch(`${BASE_URL}/api/auth/demo-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: roleKey }),
-    });
-    const sessionData = await sessionRes.json();
-    const token = sessionData.token;
-    const userData = sessionData.user;
-
-    await page.goto(BASE_URL);
-    await page.evaluate(({ token, user }) => {
+    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
-      localStorage.setItem('proyecty_token', token);
-      localStorage.setItem('proyecty_user', JSON.stringify({
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        tenantId: user.tenantId,
-      }));
-    }, { token, user: userData });
-    await page.goto(BASE_URL);
+    });
+    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'domcontentloaded' });
+    const btn = page.locator(`#demo-login-${roleKey.toLowerCase()}`).first();
+    await btn.waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(200);
+    await btn.click();
     await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
     await page.waitForTimeout(300);
   }
