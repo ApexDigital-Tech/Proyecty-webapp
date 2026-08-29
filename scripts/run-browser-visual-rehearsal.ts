@@ -99,11 +99,12 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
+    await page.goto(`${BASE_URL}/internal-demo`);
     await page.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'load' });
+    await page.goto(`${BASE_URL}/internal-demo`);
     const btn = page.locator(`#demo-login-${roleKey.toLowerCase()}, button:has-text("${roleKey}")`).first();
     await btn.waitFor({ state: 'visible', timeout: 10000 });
     await btn.click();
