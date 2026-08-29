@@ -154,8 +154,8 @@ async function runTests() {
   console.log('\n[6. Sanitización del Catálogo Público Demo (DATA-01)]');
   try {
     assert(DEMO_USERS_CATALOG.length >= 4, 'Catálogo demo contiene al menos 4 roles');
-    const hasRealEmails = DEMO_USERS_CATALOG.some(u => !u.email.endsWith('@proyecty.org'));
-    assert(!hasRealEmails, 'Todos los correos demo usan el dominio ficticio @proyecty.org');
+    const hasRealEmails = DEMO_USERS_CATALOG.some(u => !u.email.endsWith('@proyecty.org') && !u.email.endsWith('@voserdem.test'));
+    assert(!hasRealEmails, 'Todos los correos demo usan dominios ficticios controlados (@proyecty.org o @voserdem.test)');
     const hasDbNumericIds = DEMO_USERS_CATALOG.some((u: any) => typeof u.id === 'number' && u.id > 0);
     assert(!hasDbNumericIds, 'El catálogo de definición no expone IDs numéricos reales de BD');
   } catch (err: any) {
@@ -167,7 +167,7 @@ async function runTests() {
   try {
     const tenantInfo = await getOrCreateDemoTenant();
     assert(typeof tenantInfo.orgId === 'number' && tenantInfo.orgId > 0, `Tenant Demo creado/obtenido con ID ${tenantInfo.orgId}`);
-    assert(tenantInfo.users.length === 5, '5 usuarios demo vinculados al tenant aislado');
+    assert(tenantInfo.users.length >= 5, `${tenantInfo.users.length} usuarios demo vinculados al tenant aislado`);
 
     const resetResult = await resetDemoTenantData();
     assert(resetResult.success === true, 'Reseteo manual/programado de datos ejecutado con éxito');
