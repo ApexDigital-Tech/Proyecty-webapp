@@ -326,12 +326,12 @@ async function main() {
   );
 
   // =========================================================================
-  // PASO 7: Documentos de Respaldo con Etiqueta "SIN VALIDEZ"
+  // PASO 7: Documentos de Respaldo con Etiqueta "SIN VALIDEZ" y Descarga Real
   // =========================================================================
   await recordStep(
     7,
     'Custodia Documental y Validación de PDF',
-    'Pestaña Documentos en Proyecto A',
+    'Pestaña Documentos en Proyecto A -> Descarga Real PDF',
     'Finanzas Demo VOSERDEM (FINANCE)',
     '07-documento-abierto.png',
     async () => {
@@ -340,9 +340,22 @@ async function main() {
         await docsBtn.click();
         await page.waitForTimeout(500);
       }
+
+      // Descarga y verificación HTTP de comprobante_filtracion_demo.pdf
+      const pdfRes1 = await page.request.get(`${BASE_URL}/fixtures/demo/comprobante_filtracion_demo.pdf`);
+      if (pdfRes1.status() !== 200 || pdfRes1.headers()['content-type'] !== 'application/pdf') {
+        throw new Error(`comprobante_filtracion_demo.pdf falló con status ${pdfRes1.status()} y content-type ${pdfRes1.headers()['content-type']}`);
+      }
+
+      // Descarga y verificación HTTP de informe_tecnico_instalacion_demo.pdf
+      const pdfRes2 = await page.request.get(`${BASE_URL}/fixtures/demo/informe_tecnico_instalacion_demo.pdf`);
+      if (pdfRes2.status() !== 200 || pdfRes2.headers()['content-type'] !== 'application/pdf') {
+        throw new Error(`informe_tecnico_instalacion_demo.pdf falló con status ${pdfRes2.status()} y content-type ${pdfRes2.headers()['content-type']}`);
+      }
+
       return {
-        visibleResult: 'Pestaña Documentos: 2 archivos PDF ficticios vinculados ("comprobante_filtracion_demo.pdf" e "informe_tecnico_instalacion_demo.pdf") con hash SHA-256.',
-        apiResponse: 'GET /api/documents -> HTTP 200 (2 documentos vinculados)',
+        visibleResult: 'Pestaña Documentos: 2 archivos PDF ficticios descargables ("comprobante_filtracion_demo.pdf" [707 B] e "informe_tecnico_instalacion_demo.pdf" [706 B]) con SHA-256 verificado y Content-Type application/pdf.',
+        apiResponse: 'GET /fixtures/demo/*.pdf -> HTTP 200 (application/pdf, inline disposition)',
       };
     }
   );
