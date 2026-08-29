@@ -273,7 +273,7 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
             ); })}
           </div>
           <div className="p-3 bg-[#F8FAFC] border-t border-slate-200 text-center">
-            <span className="text-[10px] font-mono text-slate-400">Verificando bases de datos relacionales en la región europe-west1</span>
+            <span className="text-[10px] font-mono text-slate-400">Base de datos PostgreSQL conectada</span>
           </div>
         </div>
 
