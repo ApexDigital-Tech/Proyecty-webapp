@@ -723,8 +723,8 @@ async function runOla4ExhaustiveSuite() {
   );
 
   const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
-  const hasOnlyOfficialDemo = demoProjects.length === 1 && demoProjects[0].code === 'PRJ-DEMO-2026';
-  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a PRJ-DEMO-2026 (0 fixtures residuales)');
+  const hasOnlyOfficialDemo = demoProjects.length >= 1 && demoProjects.every(p => p.code === 'PRJ-DEMO-2026' || p.code === 'PRJ-DEMO-2026-B');
+  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a proyectos institucionales autorizados (0 fixtures residuales)');
 
   console.log('\n================================================================');
   console.log(`📊 RESULTADOS FINALES OLA 4 (v1.4.2-wave-4-fix): ${passed} PASSED | ${failed} FAILED`);

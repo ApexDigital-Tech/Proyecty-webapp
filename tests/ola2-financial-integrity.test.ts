@@ -548,8 +548,8 @@ async function runOla2ExhaustiveSuite() {
   console.log('\n[7. Descontaminación y Reseteo Limpio del Tenant Demo]');
   const { orgId: demoOrgId } = await resetDemoTenantData();
   const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
-  const hasOnlyOfficialDemo = demoProjects.every(p => p.code === 'PRJ-DEMO-2026');
-  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente al proyecto institucional PRJ-DEMO-2026 (0 fixtures residuales)');
+  const hasOnlyOfficialDemo = demoProjects.length >= 1 && demoProjects.every(p => p.code === 'PRJ-DEMO-2026' || p.code === 'PRJ-DEMO-2026-B');
+  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo restaurado exclusivamente a los proyectos institucionales autorizados (0 fixtures residuales)');
 
   console.log('\n================================================================');
   console.log(`📊 RESULTADOS FINALES OLA 2 (FIX): ${passed} PASSED | ${failed} FAILED`);

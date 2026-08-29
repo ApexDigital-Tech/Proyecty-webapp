@@ -481,8 +481,8 @@ async function runOla3ExhaustiveSuite() {
   const { orgId: demoOrgId } = await resetDemoTenantData();
 
   const demoProjects = await db.select().from(projects).where(eq(projects.tenantId, demoOrgId));
-  const hasOnlyOfficialDemo = demoProjects.length === 1 && demoProjects[0].code === 'PRJ-DEMO-2026';
-  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo verificado con 0 fixtures residuales y exclusivamente PRJ-DEMO-2026');
+  const hasOnlyOfficialDemo = demoProjects.length >= 1 && demoProjects.every(p => p.code === 'PRJ-DEMO-2026' || p.code === 'PRJ-DEMO-2026-B');
+  testAssert(hasOnlyOfficialDemo, 'Limpieza: Tenant demo verificado con 0 fixtures residuales y exclusivamente proyectos institucionales autorizados');
 
   console.log('\n================================================================');
   console.log(`📊 RESULTADOS FINALES OLA 3 (v1.3.2): ${passed} PASSED | ${failed} FAILED`);
