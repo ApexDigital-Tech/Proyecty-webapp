@@ -65,6 +65,7 @@ app.set('trust proxy', 1);
 await initSentry(); // Initialize Sentry before routes
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'test' ? '127.0.0.1' : '0.0.0.0');
 
 if (process.env.NODE_ENV !== 'production') {
   app.use(
@@ -300,8 +301,8 @@ app.use(errorHandler);
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`PROYECTY Server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`PROYECTY Server running on ${HOST}:${PORT}`);
   });
 }
 
