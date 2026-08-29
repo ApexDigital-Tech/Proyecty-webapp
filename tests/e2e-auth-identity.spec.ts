@@ -1,9 +1,40 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Identity Hydration and Authorization', () => {
+test.describe('Identity Hydration and Authorization — Canonical Session Flow', () => {
 
-  test('INITIAL_SESSION nula + token app válido', async ({ page, request }) => {
-    // Generate a valid demo token via the mock backend login
+  test('Acceso humano real desde /internal-demo a través de clic de botón', async ({ page }) => {
+    await page.goto('/internal-demo');
+    await expect(page.locator('#demo-login-director')).toBeVisible();
+
+    // Click real en el botón del Director
+    const [sessionResponse, meResponse] = await Promise.all([
+      page.waitForResponse(res => res.url().includes('/api/auth/demo-session') && res.status() === 200),
+      page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 200),
+      page.click('#demo-login-director')
+    ]);
+
+    expect(sessionResponse.ok()).toBeTruthy();
+    expect(meResponse.ok()).toBeTruthy();
+
+    // El login debe desaparecer y el App Shell debe renderizarse
+    await expect(page.locator('#proyecty-app-shell')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#login-card')).not.toBeVisible();
+    await expect(page.locator('text=Director Demo VOSERDEM').first()).toBeVisible();
+  });
+
+  test('INITIAL_SESSION nula + sin token -> Muestra Login', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await page.reload();
+
+    await expect(page.locator('#login-card')).toBeVisible();
+    await expect(page.locator('#proyecty-app-shell')).not.toBeVisible();
+  });
+
+  test('INITIAL_SESSION nula + token demo válido -> Hidratación backend 200', async ({ page, request }) => {
     const res = await request.post('/api/auth/demo-session', {
       data: { role: 'MANAGER' }
     });
@@ -13,31 +44,27 @@ test.describe('Identity Hydration and Authorization', () => {
     await page.evaluate((t) => localStorage.setItem('proyecty_token', t), token);
     await page.reload();
 
-    // The frontend should hydrate from /api/auth/me and not logout
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
-    await expect(page.locator('text=MANAGER').first()).toBeVisible();
+    await expect(page.locator('text=Coordinador Demo VOSERDEM').first()).toBeVisible();
   });
 
-  test('INITIAL_SESSION nula + token vencido', async ({ page }) => {
-    // Inject expired invalid demo token
+  test('INITIAL_SESSION nula + token vencido -> Expulsión y limpieza de sesión', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => {
-      localStorage.setItem('proyecty_token', 'demo-jwt-expired-token');
+      localStorage.setItem('proyecty_token', 'demo.invalid.expired.token');
       localStorage.setItem('proyecty_user', JSON.stringify({ role: 'MANAGER', name: 'Test' }));
     });
     await page.reload();
 
-    // The backend /api/auth/me should reject it and clear session
-    await expect(page.locator('text=Continuar con Google')).toBeVisible();
-    
+    await expect(page.locator('#login-card')).toBeVisible();
     await expect.poll(async () => {
       return await page.evaluate(() => localStorage.getItem('proyecty_token'));
     }).toBeNull();
   });
 
-  test('user_metadata con rol manipulado', async ({ page, request }) => {
+  test('user_metadata / localStorage manipulado -> Backend /api/auth/me sobreescribe con verdad', async ({ page, request }) => {
     const res = await request.post('/api/auth/demo-session', {
-      data: { role: 'MANAGER' }
+      data: { role: 'FINANCE' }
     });
     const { token } = await res.json();
     
@@ -48,48 +75,36 @@ test.describe('Identity Hydration and Authorization', () => {
       localStorage.setItem('proyecty_user', JSON.stringify({ role: 'DIRECTOR', name: 'Hacker' }));
     }, token);
     
-    // Al recargar, App.tsx llama a /api/auth/me que devuelve MANAGER
     await page.reload();
 
     await expect(page.locator('#proyecty-app-shell')).toBeVisible();
-    await expect(page.locator('text=MANAGER').first()).toBeVisible();
-
-    // El backend es fuente de verdad, debe ser MANAGER y sobreescribir DIRECTOR
+    // El backend es fuente de verdad, debe ser FINANCE y sobreescribir DIRECTOR
     await expect.poll(async () => {
       const updatedUserStr = await page.evaluate(() => localStorage.getItem('proyecty_user'));
       const updatedUser = JSON.parse(updatedUserStr || '{}');
       return updatedUser.role;
-    }).toBe('MANAGER');
+    }).toBe('FINANCE');
   });
 
-  test('SIGNED_OUT limpia la sesión completamente', async ({ page, request }) => {
+  test('Cierre de sesión manual -> Limpieza sin ciclo recursivo', async ({ page, request }) => {
     const res = await request.post('/api/auth/demo-session', {
-      data: { role: 'MANAGER' }
+      data: { role: 'DIRECTOR' }
     });
     const { token } = await res.json();
 
     await page.goto('/');
     await page.evaluate((t) => {
       localStorage.setItem('proyecty_token', t);
-      localStorage.setItem('proyecty_user', JSON.stringify({ role: 'MANAGER' }));
     }, token);
-    
-    // Modificar el token a algo invalido
-    await page.evaluate(() => {
-      localStorage.setItem('proyecty_token', 'demo-jwt-invalid');
-    });
-
     await page.reload();
-    
-    // Al intentar cargar con token inválido, se desloguea
-    await expect(page.locator('text=Continuar con Google')).toBeVisible();
-    
+    await expect(page.locator('#proyecty-app-shell')).toBeVisible();
+
+    // Clic en botón de salir en Topbar/Sidebar
+    await page.click('button:has-text("Cerrar sesión"), button[title="Cerrar sesión"], button:has-text("Salir")');
+
+    await expect(page.locator('#login-card')).toBeVisible();
     await expect.poll(async () => {
       return await page.evaluate(() => localStorage.getItem('proyecty_token'));
-    }).toBeNull();
-    
-    await expect.poll(async () => {
-      return await page.evaluate(() => localStorage.getItem('proyecty_user'));
     }).toBeNull();
   });
 

@@ -99,31 +99,37 @@ async function main() {
   await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'networkidle' });
 
   async function loginAsRole(roleKey: string) {
-    const sessionRes = await fetch(`${BASE_URL}/api/auth/demo-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: roleKey }),
-    });
-    const sessionData = await sessionRes.json();
-    const token = sessionData.token;
-    const user = sessionData.user;
+    await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'domcontentloaded' });
+    
+    // Si la sesión anterior seguía activa (mostrando app-shell), hacer logout limpio para volver a ver los botones
+    const hasAppShell = await page.$('#proyecty-app-shell');
+    if (hasAppShell) {
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+      await page.goto(`${BASE_URL}/internal-demo`, { waitUntil: 'domcontentloaded' });
+    }
 
-    await page.goto(`${BASE_URL}/`);
-    await page.evaluate(({ t, u }) => {
-      localStorage.clear();
-      sessionStorage.clear();
-      localStorage.setItem('proyecty_token', t);
-      localStorage.setItem('proyecty_user', JSON.stringify({
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        tenantId: u.tenantId,
-        uid: u.uid,
-      }));
-    }, { t: token, u: user });
-    await page.reload();
-    await page.waitForSelector('#proyecty-app-shell', { timeout: 20000 });
-    await page.waitForTimeout(300);
+    const selector = `#demo-login-${roleKey.toLowerCase()}`;
+    await page.waitForSelector(selector, { timeout: 10000 });
+
+    const [sessionRes, meRes] = await Promise.all([
+      page.waitForResponse(res => res.url().includes('/api/auth/demo-session') && res.status() === 200, { timeout: 10000 }),
+      page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 200, { timeout: 10000 }),
+      page.click(selector)
+    ]);
+
+    if (!sessionRes.ok() || !meRes.ok()) {
+      throw new Error(`Fallo en autenticación canónica para rol ${roleKey}`);
+    }
+
+    // Aserción negativa y positiva estricta de UI
+    await page.waitForSelector('#proyecty-app-shell', { timeout: 15000 });
+    const isLoginStillVisible = await page.$('#login-card');
+    if (isLoginStillVisible) {
+      throw new Error(`Fallo de seguridad: #login-card sigue visible tras clic en ${roleKey}`);
+    }
   }
 
   const stepReports: StepReport[] = [];

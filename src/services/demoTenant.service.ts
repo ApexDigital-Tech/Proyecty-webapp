@@ -17,8 +17,9 @@ import {
   auditLogs,
   donors,
 } from '../db/schema.ts';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, or, sql, inArray } from 'drizzle-orm';
 import { UserRole } from '../types.ts';
+import { invalidateDashboardCache } from './dashboard.service.ts';
 
 export const DEMO_ORG_NAME = 'VOSERDEM — Entorno demostrativo';
 
@@ -111,12 +112,16 @@ export async function getOrCreateDemoTenant(): Promise<{ orgId: number; users: A
   for (const def of DEMO_USERS_CATALOG) {
     const roleId = roleMap.get(def.roleKey) || 1;
     const existing = await db.select().from(users).where(
-      and(eq(users.tenantId, orgId), eq(users.email, def.email))
+      or(
+        eq(users.uid, def.uid),
+        and(eq(users.tenantId, orgId), eq(users.email, def.email))
+      )
     ).limit(1);
 
     if (existing.length > 0) {
       await db.update(users)
         .set({
+          tenantId: orgId,
           uid: def.uid,
           email: def.email,
           name: def.name,
@@ -592,6 +597,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     },
   });
 
+  invalidateDashboardCache(orgId);
   console.log('[Demo Service] Reseteo del tenant demo VOSERDEM completado exitosamente.');
   return { success: true, message: 'Datos del tenant demo VOSERDEM reiniciados correctamente.', orgId };
 }

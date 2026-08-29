@@ -57,7 +57,8 @@ export default function App() {
   const syncSessionWithBackend = async (accessToken: string) => {
     try {
       const res = await apiFetch('/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        skipAuth: false,
       });
       if (res.ok) {
         const data = await res.json();
@@ -71,36 +72,53 @@ export default function App() {
           uid: data.uid 
         });
       } else {
-        handleLogout();
+        handleLogout(false);
       }
     } catch (err) {
-      handleLogout();
+      handleLogout(false);
     }
   };
 
   React.useEffect(() => {
-    // INITIAL_SESSION handling: validate existing token immediately against canonical backend
+    // 1. INITIAL_SESSION: If token exists locally, validate it against /api/auth/me
     const initialToken = localStorage.getItem('proyecty_token');
     if (initialToken) {
       syncSessionWithBackend(initialToken);
-    } else {
-      handleLogout();
     }
 
-    // Supabase auth listener for OAuth events (SIGNED_IN, TOKEN_REFRESHED, SIGNED_OUT)
+    // 2. Supabase auth listener for OAuth events (SIGNED_IN, TOKEN_REFRESHED, SIGNED_OUT)
+    let isMounted = true;
     import('./lib/supabase.ts')
       .then(({ supabase }) => {
-        supabase.auth.onAuthStateChange((event, session) => {
+        if (!isMounted) return;
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!isMounted) return;
+
           if (session && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
-            syncSessionWithBackend(session.access_token);
+            await syncSessionWithBackend(session.access_token);
           } else if (event === 'SIGNED_OUT') {
-            handleLogout();
+            // SIGNED_OUT from Supabase should NOT destroy a valid backend/demo token.
+            // Check if existing local token is still valid via /api/auth/me
+            const currentToken = localStorage.getItem('proyecty_token');
+            if (currentToken) {
+              await syncSessionWithBackend(currentToken);
+            } else {
+              handleLogout(false);
+            }
           }
         });
+
+        return () => {
+          authListener?.subscription?.unsubscribe();
+        };
       })
       .catch((err) => {
         console.warn('Supabase client initialization skipped or failed:', err);
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Navigation states
@@ -136,27 +154,69 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (userToken: string, userInfo: { name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string }) => {
+  const handleLoginSuccess = async (userToken: string, userInfo?: { name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string }) => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('auth_user');
     localStorage.setItem('proyecty_token', userToken);
-    localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
-    setToken(userToken);
-    setCurrentUser(userInfo);
-    setSessionNotice(null);
-    setTab('dashboard');
-    setSelectedProjectId(null);
+
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${userToken}` },
+        skipAuth: false,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const email = data.email || userInfo?.email || '';
+        const name = data.name || userInfo?.name || email.split('@')[0] || 'Usuario';
+        const authoritativeUser = {
+          name,
+          email,
+          role: data.role as UserRole,
+          tenantId: data.tenantId,
+          uid: data.uid || userInfo?.uid,
+        };
+        localStorage.setItem('proyecty_user', JSON.stringify(authoritativeUser));
+        setToken(userToken);
+        setCurrentUser(authoritativeUser);
+        setSessionNotice(null);
+        setTab('dashboard');
+        setSelectedProjectId(null);
+      } else if (userInfo) {
+        localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
+        setToken(userToken);
+        setCurrentUser(userInfo);
+        setSessionNotice(null);
+        setTab('dashboard');
+        setSelectedProjectId(null);
+      } else {
+        handleLogout(false);
+      }
+    } catch {
+      if (userInfo) {
+        localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
+        setToken(userToken);
+        setCurrentUser(userInfo);
+        setSessionNotice(null);
+        setTab('dashboard');
+        setSelectedProjectId(null);
+      } else {
+        handleLogout(false);
+      }
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = (shouldSignOutSupabase: boolean = true) => {
     clearClientSession();
     setToken(null);
     setCurrentUser(null);
-    import('./lib/supabase.ts')
-      .then(({ supabase }) => {
-        supabase.auth.signOut().catch(() => {});
-      })
-      .catch(() => {});
+    if (shouldSignOutSupabase) {
+      import('./lib/supabase.ts')
+        .then(({ supabase }) => {
+          supabase.auth.signOut().catch(() => {});
+        })
+        .catch(() => {});
+    }
   };
 
   const handleRoleSwitch = (newRole: UserRole) => {
