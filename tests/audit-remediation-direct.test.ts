@@ -448,5 +448,65 @@ describe('📑 Remediación de Auditoría Directa: Documentos, RBAC y Aislamient
       assert.ok(prjA);
       assert.equal(Number(prjA.approvedBudget), 150000);
     });
+
+    it('FINANCE intentando eliminar un documento (DELETE /api/documents/:id) -> 403 Forbidden', async () => {
+      const token = generateDemoToken({
+        uid: financeUser.uid,
+        userId: financeUser.dbId,
+        email: financeUser.email,
+        name: financeUser.name,
+        role: 'FINANCE',
+        roleName: 'Responsable de Finanzas',
+        tenantId: orgId,
+      });
+
+      const res = await fetch('http://127.0.0.1:3000/api/documents/1', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.status, 403);
+      const data = await res.json();
+      assert.equal(data.code, 'DOCUMENT_DELETE_FORBIDDEN');
+    });
+
+    it('Doble reset determinista produce idéntica bitácora canónica con cero eventos de reset visibles', async () => {
+      // 1. Reset 1
+      await resetDemoTenantData();
+      const token = generateDemoToken({
+        uid: auditorUser.uid,
+        userId: auditorUser.dbId,
+        email: auditorUser.email,
+        name: auditorUser.name,
+        role: 'AUDITOR',
+        roleName: 'Auditor Externo',
+        tenantId: orgId,
+      });
+
+      const res1 = await fetch('http://127.0.0.1:3000/api/audit-logs', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res1.status, 200);
+      const logs1 = await res1.json();
+
+      // 2. Reset 2
+      await resetDemoTenantData();
+      const res2 = await fetch('http://127.0.0.1:3000/api/audit-logs', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res2.status, 200);
+      const logs2 = await res2.json();
+
+      // Comprobar que ambas vistas tienen idéntica longitud y tipos de acción
+      assert.equal(logs1.length, logs2.length);
+      assert.equal(logs1.length, 5); // 5 eventos canónicos deterministas
+      assert.deepEqual(logs1.map((l: any) => l.action), logs2.map((l: any) => l.action));
+
+      // Comprobar que no hay DEMO_DATA_RESET, ni ROLLBACK_TEST ni duplicados
+      for (const log of logs2) {
+        assert.notEqual(log.action, 'DEMO_DATA_RESET');
+        assert.notEqual(log.action, 'ROLLBACK_TEST');
+        assert.notEqual(log.entity, 'test_suite');
+      }
+    });
   });
 });

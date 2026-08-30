@@ -153,6 +153,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
 
   const directorUser = demoUsersList.find(u => u.roleKey === 'DIRECTOR') || demoUsersList[0];
   const managerUser = demoUsersList.find(u => u.roleKey === 'MANAGER') || demoUsersList[0];
+  const financeUser = demoUsersList.find(u => u.roleKey === 'FINANCE') || demoUsersList[2];
   const responsableUser = demoUsersList.find(u => u.roleKey === 'RESPONSABLE_PROYECTO') || demoUsersList[4];
 
   // 1. Clean existing demo data exclusively for this tenant or demo codes
@@ -602,6 +603,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   // =========================================================================
   // 5. BITÁCORA DE AUDITORÍA (AUD-01)
   // =========================================================================
+  // Registra el hito del reset en la base inmutable
   await db.insert(auditLogs).values({
     tenantId: orgId,
     userId: directorUser.dbId,
@@ -615,6 +617,81 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       resetAtUtc: new Date().toISOString(),
     },
   });
+
+  // Secuencia canónica determinista de auditoría vinculada a los objetos actuales del escenario demo
+  await db.insert(auditLogs).values([
+    {
+      tenantId: orgId,
+      userId: directorUser.dbId,
+      userName: directorUser.name,
+      action: 'PROJECT_CREATED',
+      entity: 'project',
+      entityId: String(projectIdA),
+      metadata: {
+        scenario: 'Escenario demostrativo VOSERDEM',
+        code: 'PRJ-DEMO-2026',
+        name: 'Proyecto Piloto de Fortalecimiento Comunitario',
+        approvedBudget: 150000,
+        currency: 'USD',
+      },
+    },
+    {
+      tenantId: orgId,
+      userId: financeUser.dbId,
+      userName: financeUser.name,
+      action: 'BUDGET_APPROVED',
+      entity: 'budget',
+      entityId: String(projectIdA),
+      metadata: {
+        scenario: 'Escenario demostrativo VOSERDEM',
+        projectCode: 'PRJ-DEMO-2026',
+        totalBudget: 150000,
+        budgetLinesCount: 4,
+      },
+    },
+    {
+      tenantId: orgId,
+      userId: responsableUser.dbId,
+      userName: responsableUser.name,
+      action: 'EXPENSE_RECORDED',
+      entity: 'expense',
+      entityId: String(projectIdA),
+      metadata: {
+        scenario: 'Escenario demostrativo VOSERDEM',
+        voucherNumber: 'FAC-LOTE2-2026-009',
+        amount: 6000,
+        status: 'PENDING_APPROVAL',
+        supplier: 'AquaPur Sistemas Integrales S.A.',
+      },
+    },
+    {
+      tenantId: orgId,
+      userId: financeUser.dbId,
+      userName: financeUser.name,
+      action: 'DOCUMENT_UPLOADED',
+      entity: 'document',
+      entityId: String(projectIdA),
+      metadata: {
+        scenario: 'Escenario demostrativo VOSERDEM',
+        name: 'Comprobante Adquisición Lote 2 - Filtración',
+        sha256: 'f9680d1e45289e4f1262acab8a4207aa0913846037e08b126581f220acc84f8e',
+        mimeType: 'application/pdf',
+      },
+    },
+    {
+      tenantId: orgId,
+      userId: directorUser.dbId,
+      userName: directorUser.name,
+      action: 'PROJECT_MEMBER_ASSIGNED',
+      entity: 'project_member',
+      entityId: String(projectIdA),
+      metadata: {
+        scenario: 'Escenario demostrativo VOSERDEM',
+        projectCode: 'PRJ-DEMO-2026',
+        assignedRoles: ['RESPONSABLE_PROYECTO', 'FINANCIADOR'],
+      },
+    },
+  ]);
 
   invalidateDashboardCache(orgId);
   console.log('[Demo Service] Reseteo del tenant demo VOSERDEM completado exitosamente.');
