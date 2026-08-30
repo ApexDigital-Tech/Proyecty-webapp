@@ -391,5 +391,62 @@ describe('📑 Remediación de Auditoría Directa: Documentos, RBAC y Aislamient
       assert.equal(Array.isArray(data), true);
       assert.ok(data.length >= 6);
     });
+
+    it('AUDITOR intentando acceder a checkout de facturación -> 403 Forbidden', async () => {
+      const token = generateDemoToken({
+        uid: auditorUser.uid,
+        userId: auditorUser.dbId,
+        email: auditorUser.email,
+        name: auditorUser.name,
+        role: 'AUDITOR',
+        roleName: 'Auditor Externo',
+        tenantId: orgId,
+      });
+
+      const res = await fetch('http://127.0.0.1:3000/api/billing/checkout-session', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.status, 403);
+    });
+
+    it('AUDITOR intentando acceder a portal de clientes -> 403 Forbidden', async () => {
+      const token = generateDemoToken({
+        uid: auditorUser.uid,
+        userId: auditorUser.dbId,
+        email: auditorUser.email,
+        name: auditorUser.name,
+        role: 'AUDITOR',
+        roleName: 'Auditor Externo',
+        tenantId: orgId,
+      });
+
+      const res = await fetch('http://127.0.0.1:3000/api/billing/portal', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.status, 403);
+    });
+
+    it('FINANCIADOR visualiza proyectos y presupuesto sin cartera en $0 -> 200 OK', async () => {
+      const token = generateDemoToken({
+        uid: financiadorsUser.uid,
+        userId: financiadorsUser.dbId,
+        email: financiadorsUser.email,
+        name: financiadorsUser.name,
+        role: 'FINANCIADOR',
+        roleName: 'Oficial de Seguimiento del Donante',
+        tenantId: orgId,
+      });
+
+      const res = await fetch('http://127.0.0.1:3000/api/projects', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.status, 200);
+      const resJson = await res.json();
+      const items = Array.isArray(resJson) ? resJson : (Array.isArray(resJson?.data) ? resJson.data : []);
+      assert.ok(items.length >= 1);
+      const prjA = items.find((p: any) => p.code === 'PRJ-DEMO-2026');
+      assert.ok(prjA);
+      assert.equal(Number(prjA.approvedBudget), 150000);
+    });
   });
 });

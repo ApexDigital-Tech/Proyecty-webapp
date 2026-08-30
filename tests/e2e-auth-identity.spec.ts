@@ -108,4 +108,57 @@ test.describe('Identity Hydration and Authorization — Canonical Session Flow',
     }).toBeNull();
   });
 
+  test('Descarga humana real de documentos PDF desde UI por rol FINANCE', async ({ page }) => {
+    // 1. Iniciar sesión mediante el botón real de Finanzas
+    await page.goto('/internal-demo');
+    await expect(page.locator('button:has-text("Finanzas Demo VOSERDEM"), #demo-login-finance').first()).toBeVisible();
+
+    await Promise.all([
+      page.waitForResponse(res => res.url().includes('/api/auth/demo-session') && res.status() === 200),
+      page.waitForResponse(res => res.url().includes('/api/auth/me') && res.status() === 200),
+      page.click('button:has-text("Finanzas Demo VOSERDEM"), #demo-login-finance')
+    ]);
+
+    await expect(page.locator('#proyecty-app-shell')).toBeVisible({ timeout: 10000 });
+
+    // 2. Abrir Proyecto A desde el Dashboard
+    await page.click('text=PRJ-DEMO-2026');
+    await expect(page.locator('text=Presupuesto total aprobado:').first()).toBeVisible({ timeout: 10000 });
+
+    // 3. Entrar en pestaña Expediente Digital
+    await page.click('button:has-text("Expediente Digital")');
+    await expect(page.locator('text=Expediente Digital').first()).toBeVisible({ timeout: 10000 });
+
+    // 4. Capturar evento de descarga para el primer documento
+    const downloadPromise1 = page.waitForEvent('download');
+    const downloadButtons = page.locator('button[title="Descargar"]');
+    await expect(downloadButtons.first()).toBeVisible();
+    await downloadButtons.first().click();
+
+    const download1 = await downloadPromise1;
+    const downloadPath1 = await download1.path();
+    expect(downloadPath1).toBeTruthy();
+
+    const fs = await import('fs');
+    if (downloadPath1) {
+      const buffer1 = fs.readFileSync(downloadPath1);
+      expect(buffer1.subarray(0, 4).toString('utf-8')).toBe('%PDF');
+      expect(buffer1.length).toBe(707);
+    }
+
+    // 5. Capturar evento de descarga para el segundo documento
+    if (await downloadButtons.count() >= 2) {
+      const downloadPromise2 = page.waitForEvent('download');
+      await downloadButtons.nth(1).click();
+      const download2 = await downloadPromise2;
+      const downloadPath2 = await download2.path();
+      expect(downloadPath2).toBeTruthy();
+      if (downloadPath2) {
+        const buffer2 = fs.readFileSync(downloadPath2);
+        expect(buffer2.subarray(0, 4).toString('utf-8')).toBe('%PDF');
+        expect(buffer2.length).toBe(706);
+      }
+    }
+  });
+
 });
