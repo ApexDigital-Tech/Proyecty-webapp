@@ -7,13 +7,16 @@ Estado de fases:
 - R1C-A: CERRADO.
 - R1C: CERTIFICADO Y CERRADO.
 - DEMO-D0/D1/D1A: CERRADOS.
-- DEMO-D2V técnico: CERRADO.
+- DEMO-D2V técnico: CERTIFICADO Y CERRADO.
+- AUDITORÍA DIRECTA VOSERDEM: CERTIFICADA Y CERRADA.
 
 Resultados de Verificación:
 - Pipeline automatizado: PASS.
-- Integración: 256/256 PASS.
-- E2E: 12/12 PASS.
-- Ensayo visual automatizado: 12/12 PASS.
+- Integración: 10/10 suites (256/256 tests) PASS.
+- E2E Playwright: 15/15 PASS.
+- Suite de Remediación y Bitácora Canónica: 25/25 PASS.
+- Segregación RBAC y Alcance Financiador: CERTIFICADO.
+- Gobierno e Inmutabilidad Documental (DOC_IMMUTABLE): CERTIFICADO.
 - Lockfile: INALTERADO.
 - Working tree: LIMPIO.
 - Producción modificada: NO.
@@ -22,6 +25,7 @@ Resultados de Verificación:
 - Despliegue: NO.
 
 Estado de Validación y Aprobación:
-- Ensayo humano de Dirección: PENDIENTE.
-- Pruebas de campo con VOSERDEM: PENDIENTES.
+- Auditoría Directa y Comprobación Visual de Dirección: CERTIFICADA.
+- Entorno Temporal Cloudflare: CERRADO (PID 14104 terminado).
+- Handoff a Pruebas de Campo con VOSERDEM: LISTO.
 - Autorización comercial definitiva: PENDIENTE DE DIRECCIÓN.
