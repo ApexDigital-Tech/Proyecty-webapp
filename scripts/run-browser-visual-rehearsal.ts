@@ -341,14 +341,22 @@ async function main() {
         await page.waitForTimeout(500);
       }
 
+      // Obtener token JWT de la sesión activa para la solicitud autenticada
+      const token = await page.evaluate(() => localStorage.getItem('proyecty_token'));
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
       // Descarga y verificación HTTP de comprobante_filtracion_demo.pdf
-      const pdfRes1 = await page.request.get(`${BASE_URL}/fixtures/demo/comprobante_filtracion_demo.pdf`);
+      const pdfRes1 = await page.request.get(`${BASE_URL}/fixtures/demo/comprobante_filtracion_demo.pdf`, {
+        headers: authHeaders,
+      });
       if (pdfRes1.status() !== 200 || pdfRes1.headers()['content-type'] !== 'application/pdf') {
         throw new Error(`comprobante_filtracion_demo.pdf falló con status ${pdfRes1.status()} y content-type ${pdfRes1.headers()['content-type']}`);
       }
 
       // Descarga y verificación HTTP de informe_tecnico_instalacion_demo.pdf
-      const pdfRes2 = await page.request.get(`${BASE_URL}/fixtures/demo/informe_tecnico_instalacion_demo.pdf`);
+      const pdfRes2 = await page.request.get(`${BASE_URL}/fixtures/demo/informe_tecnico_instalacion_demo.pdf`, {
+        headers: authHeaders,
+      });
       if (pdfRes2.status() !== 200 || pdfRes2.headers()['content-type'] !== 'application/pdf') {
         throw new Error(`informe_tecnico_instalacion_demo.pdf falló con status ${pdfRes2.status()} y content-type ${pdfRes2.headers()['content-type']}`);
       }
