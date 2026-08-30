@@ -16,6 +16,10 @@ export const getCheckoutSession = async (req: AuthRequest, res: Response, next: 
       return res.status(401).json({ error: 'No autorizado: Falta información del tenant' });
     }
 
+    if (req.user?.role !== 'DIRECTOR') {
+      return res.status(403).json({ error: 'Acceso denegado: Solo el rol DIRECTOR puede gestionar facturación y planes' });
+    }
+
     const checkoutUrl = await createCheckoutUrl(tenantId);
     return res.json({ checkoutUrl });
   } catch (err) {
@@ -35,6 +39,10 @@ export const getCustomerPortal = async (req: AuthRequest, res: Response, next: N
     const tenantId = req.user?.tenantId;
     if (!tenantId) {
       return res.status(401).json({ error: 'No autorizado: Falta información del tenant' });
+    }
+
+    if (req.user?.role !== 'DIRECTOR') {
+      return res.status(403).json({ error: 'Acceso denegado: Solo el rol DIRECTOR puede gestionar facturación y planes' });
     }
 
     const portalUrl = await getCustomerPortalUrl(tenantId);

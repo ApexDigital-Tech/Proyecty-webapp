@@ -13,6 +13,7 @@ export const RolePermissions = {
     canEditBudget: true,
     canUploadDocuments: true,
     canViewReports: true,
+    canManageBilling: true,
   },
   MANAGER: {
     canViewDashboard: true,
@@ -26,6 +27,7 @@ export const RolePermissions = {
     canEditBudget: true,
     canUploadDocuments: true,
     canViewReports: true,
+    canManageBilling: false,
   },
   FINANCE: {
     canViewDashboard: true,
@@ -39,6 +41,7 @@ export const RolePermissions = {
     canEditBudget: true,
     canUploadDocuments: true,
     canViewReports: true,
+    canManageBilling: false,
   },
   AUDITOR: {
     canViewDashboard: true,
@@ -52,6 +55,7 @@ export const RolePermissions = {
     canEditBudget: false,
     canUploadDocuments: false,
     canViewReports: true,
+    canManageBilling: false,
   },
   FINANCIADOR: {
     canViewDashboard: true,
@@ -65,6 +69,7 @@ export const RolePermissions = {
     canEditBudget: false,
     canUploadDocuments: false,
     canViewReports: true,
+    canManageBilling: false,
   },
   RESPONSABLE_PROYECTO: {
     canViewDashboard: true,
@@ -78,6 +83,7 @@ export const RolePermissions = {
     canEditBudget: true,
     canUploadDocuments: true,
     canViewReports: true,
+    canManageBilling: false,
   }
 } as const;
 

@@ -373,7 +373,7 @@ export default function App() {
                 />
               )}
 
-              {currentTab === 'settings' && hasPermission(currentUser.role, 'canViewUsers') && (
+              {currentTab === 'settings' && hasPermission(currentUser.role, 'canManageBilling') && (
                 <Settings token={token} />
               )}
             </div>

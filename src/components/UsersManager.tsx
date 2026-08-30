@@ -236,10 +236,12 @@ export default function UsersManager({ token, currentUser, onLogActivity }: User
         <div>
           <h2 className="text-xl font-sans font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <UserCog className="w-5 h-5 text-blue-600" />
-            Panel de Control de SuperAdmin y Monitoreo
+            {currentUser.role === 'AUDITOR' ? 'Inspección y Fiscalización de Cuentas de Usuario' : 'Panel de Control de SuperAdmin y Monitoreo'}
           </h2>
           <p className="text-xs font-sans text-slate-500">
-            Administra roles, audita el uso de la plataforma y monitorea las actividades operativas de todo tu equipo de cooperación.
+            {currentUser.role === 'AUDITOR'
+              ? 'Inspección en solo lectura de roles asignados, cuentas institucionales y actividades registradas para propósitos de fiscalización y auditoría externa.'
+              : 'Administra roles, audita el uso de la plataforma y monitorea las actividades operativas de todo tu equipo de cooperación.'}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start md:self-auto">

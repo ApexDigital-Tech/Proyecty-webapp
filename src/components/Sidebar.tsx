@@ -53,7 +53,13 @@ export default function Sidebar({
     menuItems.push({ id: 'audit', label: 'Bitácora y Auditoría', icon: History });
   }
   if (hasPermission(currentUser.role, 'canViewUsers')) {
-    menuItems.push({ id: 'users', label: 'Usuarios y Monitoreo', icon: Users });
+    menuItems.push({
+      id: 'users',
+      label: currentUser.role === 'AUDITOR' ? 'Inspección de Usuarios' : 'Usuarios y Monitoreo',
+      icon: Users
+    });
+  }
+  if (hasPermission(currentUser.role, 'canManageBilling')) {
     menuItems.push({ id: 'settings', label: 'Configuración', icon: SettingsIcon });
   }
 
