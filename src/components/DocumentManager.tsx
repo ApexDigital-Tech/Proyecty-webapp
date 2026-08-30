@@ -121,15 +121,46 @@ export function DocumentManager({ projectId, token }: DocumentManagerProps) {
   const handleDownload = async (doc: Document) => {
     try {
       const token = localStorage.getItem('proyecty_token');
+      // 1. Obtener URL o stream de descarga autorizado
       const res = await fetch(`/api/documents/${doc.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Error al descargar');
-      const data = await res.json();
-      const items = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al obtener autorización de descarga');
+      }
       
-      // Open URL in new tab to trigger download
-      window.open(items.url || data.url, '_blank');
+      const data = await res.json();
+      const targetUrl = data.url || (Array.isArray(data) ? data[0]?.url : null);
+      if (!targetUrl) throw new Error('URL de documento no disponible');
+
+      // 2. Fetch autenticado del contenido binario (evita GET anónimo en nueva pestaña)
+      const fileRes = await fetch(targetUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!fileRes.ok) {
+        throw new Error(`Error en descarga binaria (Status: ${fileRes.status})`);
+      }
+
+      const contentType = fileRes.headers.get('content-type') || '';
+      if (doc.mimeType === 'application/pdf' && !contentType.includes('application/pdf')) {
+        throw new Error('El tipo de contenido recibido no corresponde a un documento PDF válido');
+      }
+
+      // 3. Conversión a Blob y disparo seguro de descarga
+      const blob = await fileRes.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.originalName || doc.name || 'documento.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 4. Revocar URL temporal para evitar fugas de memoria
+      setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 1000);
     } catch (err: any) {
       alert(err.message);
     }
