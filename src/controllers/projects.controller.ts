@@ -34,6 +34,23 @@ export const getProjects = async (req: AuthRequest, res, next: NextFunction) => 
         // Si no tiene proyectos asignados, forzamos una condición imposible para que retorne 0
         conditions.push(eq(projects.id, -1));
       }
+    } else if (req.user!.role === 'FINANCIADOR') {
+      const userProjects = await db.select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(eq(projectMembers.userId, req.user!.id!));
+      const assignedIds = userProjects.map(p => p.projectId);
+
+      const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, req.user!.id!));
+      
+      if (assignedIds.length > 0 && userRecord?.donorId) {
+        conditions.push(or(inArray(projects.id, assignedIds), eq(projects.donorId, userRecord.donorId)));
+      } else if (assignedIds.length > 0) {
+        conditions.push(inArray(projects.id, assignedIds));
+      } else if (userRecord?.donorId) {
+        conditions.push(eq(projects.donorId, userRecord.donorId));
+      } else {
+        conditions.push(eq(projects.id, -1));
+      }
     }
     
     if (status) conditions.push(eq(projects.status, status as string));
@@ -338,6 +355,17 @@ export const getProjectById = async (req: AuthRequest, res, next: NextFunction) 
         .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.user!.id!)))
         .limit(1);
       if (isMember.length === 0) {
+        return res.status(403).json({ success: false, message: 'No tienes acceso a este proyecto' });
+      }
+    } else if (req.user!.role === 'FINANCIADOR') {
+      const isMember = await db.select({ id: projectMembers.id }).from(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.user!.id!)))
+        .limit(1);
+      
+      const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, req.user!.id!));
+      const hasDonorAccess = userRecord?.donorId && projectResult[0].project.donorId === userRecord.donorId;
+
+      if (isMember.length === 0 && !hasDonorAccess) {
         return res.status(403).json({ success: false, message: 'No tienes acceso a este proyecto' });
       }
     }

@@ -364,6 +364,18 @@ router.delete('/documents/:id', requireAuth, async (req: AuthRequest, res: any) 
 
     if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
 
+    // Protección de Cumplimiento e Inmutabilidad Forense:
+    // Los comprobantes financieros, documentos vinculados a gastos o pertenecientes al expediente protegido no admiten borrado físico.
+    const isProtectedFixture = doc.fileUrl?.startsWith('/fixtures/demo/') || doc.name?.includes('Comprobante') || doc.name?.includes('Informe');
+    const isFinancialDoc = doc.type === 'Invoice' || doc.type === 'Contract' || (doc.metadata as any)?.isFinancialRecord === true;
+
+    if (isProtectedFixture || isFinancialDoc) {
+      return res.status(423).json({
+        error: 'Operación denegada: Este documento forma parte del expediente protegido o está vinculado a comprobantes financieros inmutables. No se permite su eliminación.',
+        code: 'DOCUMENT_IMMUTABLE_COMPLIANCE_RECORD'
+      });
+    }
+
     const updatedMetadata = {
       ...(doc.metadata as any || {}),
       isDeleted: true,

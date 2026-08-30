@@ -3,6 +3,9 @@ import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { getOrCreateDemoTenant, resetDemoTenantData } from '../src/services/demoTenant.service.ts';
 import { generateDemoToken } from '../src/services/demoAuth.service.ts';
+import { db } from '../src/db/index.ts';
+import { projects, documents } from '../src/db/schema.ts';
+import { eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -506,6 +509,83 @@ describe('📑 Remediación de Auditoría Directa: Documentos, RBAC y Aislamient
         assert.notEqual(log.action, 'DEMO_DATA_RESET');
         assert.notEqual(log.action, 'ROLLBACK_TEST');
         assert.notEqual(log.entity, 'test_suite');
+      }
+    });
+
+    it('FINANCIADOR Dashboard Metrics: USD 150.000, 75% físico, 38% financiero, 100/100 score', async () => {
+      const token = generateDemoToken({
+        uid: financiadorsUser.uid,
+        userId: financiadorsUser.dbId,
+        email: financiadorsUser.email,
+        name: financiadorsUser.name,
+        role: 'FINANCIADOR',
+        roleName: 'Oficial de Seguimiento del Donante',
+        tenantId: orgId,
+      });
+
+      const res = await fetch('http://127.0.0.1:3000/api/dashboard/metrics', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(res.status, 200);
+      const metrics = await res.json();
+      assert.equal(Number(metrics.totalBudget), 150000);
+      assert.equal(Number(metrics.avgPhysical), 75);
+      assert.equal(Number(metrics.avgFinancial), 38);
+      assert.equal(Number(metrics.avgScore), 100);
+      assert.equal(metrics.projectsList.length, 1);
+      assert.equal(metrics.projectsList[0].code, 'PRJ-DEMO-2026');
+    });
+
+    it('FINANCIADOR API: Proyecto A retorna 200 OK y Proyecto B retorna 403/404', async () => {
+      const token = generateDemoToken({
+        uid: financiadorsUser.uid,
+        userId: financiadorsUser.dbId,
+        email: financiadorsUser.email,
+        name: financiadorsUser.name,
+        role: 'FINANCIADOR',
+        roleName: 'Oficial de Seguimiento del Donante',
+        tenantId: orgId,
+      });
+
+      // 1. Obtener ID de Proyecto A y Proyecto B
+      const [prjA] = await db.select().from(projects).where(eq(projects.code, 'PRJ-DEMO-2026'));
+      const [prjB] = await db.select().from(projects).where(eq(projects.code, 'PRJ-DEMO-2026-B'));
+
+      // Proyecto A (Asignado al Financiador) -> 200 OK
+      const resA = await fetch(`http://127.0.0.1:3000/api/projects/${prjA.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(resA.status, 200);
+
+      // Proyecto B (No asignado al Financiador) -> 403 Forbidden
+      const resB = await fetch(`http://127.0.0.1:3000/api/projects/${prjB.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.ok(resB.status === 403 || resB.status === 404);
+    });
+
+    it('DIRECTOR intentando eliminar documentos protegidos del demo -> 423 Locked / DOCUMENT_IMMUTABLE_COMPLIANCE_RECORD', async () => {
+      const token = generateDemoToken({
+        uid: directorUser.uid,
+        userId: directorUser.dbId,
+        email: directorUser.email,
+        name: directorUser.name,
+        role: 'DIRECTOR',
+        roleName: 'Director General',
+        tenantId: orgId,
+      });
+
+      const demoDocs = await db.select().from(documents).where(eq(documents.tenantId, orgId));
+      assert.ok(demoDocs.length >= 2);
+
+      for (const doc of demoDocs) {
+        const res = await fetch(`http://127.0.0.1:3000/api/documents/${doc.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        assert.equal(res.status, 423);
+        const data = await res.json();
+        assert.equal(data.code, 'DOCUMENT_IMMUTABLE_COMPLIANCE_RECORD');
       }
     });
   });

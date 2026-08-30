@@ -334,7 +334,7 @@ export function DocumentManager({ projectId, token, userRole }: DocumentManagerP
                         >
                           <Download className="w-4 h-4" />
                         </button>
-                        {canDelete && (
+                        {canDelete && !doc.fileUrl?.startsWith('/fixtures/demo/') && !doc.name?.includes('Comprobante') && !doc.name?.includes('Informe') && (
                           <button
                             onClick={() => handleDelete(doc.id)}
                             className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"

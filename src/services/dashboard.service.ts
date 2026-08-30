@@ -78,7 +78,7 @@ export async function getDashboardMetricsForUser(
   // 1. Determinar condiciones de alcance de proyectos según rol
   let conditions = [eq(projects.tenantId, tenantId)];
 
-  if (userRole === 'RESPONSABLE_PROYECTO') {
+  if (userRole === 'RESPONSABLE_PROYECTO' || userRole === 'TECNICO_PROYECTO') {
     const assigned = await db.select({ projectId: projectMembers.projectId })
       .from(projectMembers)
       .where(eq(projectMembers.userId, userId));
@@ -90,9 +90,18 @@ export async function getDashboardMetricsForUser(
       conditions.push(eq(projects.id, -1)); // Sin proyectos asignados
     }
   } else if (userRole === 'FINANCIADOR') {
-    // Financiador: obtener donor_id vinculado al usuario
+    const assigned = await db.select({ projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(eq(projectMembers.userId, userId));
+    const assignedIds = assigned.map(a => a.projectId);
+
     const [userRecord] = await db.select({ donorId: users.donorId }).from(users).where(eq(users.id, userId));
-    if (userRecord && userRecord.donorId) {
+    
+    if (assignedIds.length > 0 && userRecord?.donorId) {
+      conditions.push(or(inArray(projects.id, assignedIds), eq(projects.donorId, userRecord.donorId)));
+    } else if (assignedIds.length > 0) {
+      conditions.push(inArray(projects.id, assignedIds));
+    } else if (userRecord?.donorId) {
       conditions.push(eq(projects.donorId, userRecord.donorId));
     } else {
       conditions.push(eq(projects.id, -1));
