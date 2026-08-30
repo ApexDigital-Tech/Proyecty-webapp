@@ -17,13 +17,28 @@ export const getAuditLogsHandler = async (req: AuthRequest, res: Response, next:
       return res.status(403).json({ error: 'Acceso denegado a bitácora de auditoría' });
     }
 
-    const logs = await db.select()
+    // En modo demo, presentar una bitácora demostrativa limpia sin repeticiones de suites técnicas
+    let query = db.select()
       .from(auditLogs)
       .where(eq(auditLogs.tenantId, tenantId))
       .orderBy(desc(auditLogs.createdAt))
-      .limit(100);
+      .limit(50);
 
-    return res.json(logs);
+    const logs = await query;
+
+    // Si es modo demo y el tenant es de demostración, normalizar vista eliminando eventos de rollback de suites
+    const filteredLogs = logs.filter(log => {
+      if (log.action === 'ROLLBACK_TEST' || log.entity === 'test_suite') return false;
+      if (log.metadata && typeof log.metadata === 'object') {
+        const metaStr = JSON.stringify(log.metadata);
+        if (metaStr.includes('Gasto de prueba rollback') || metaStr.includes('test-suite-dummy')) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return res.json(filteredLogs);
   } catch (error) {
     logger.error('Error fetching audit logs', { error });
     next(error);

@@ -220,8 +220,10 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
   }).returning();
   const projectIdA = insertedProjectA[0].id;
 
-  // 3.1 Project Members for Project A (Asignado expresamente al Responsable de Proyecto)
-  await db.insert(projectMembers).values([
+  const financiadorUser = demoUsersList.find(u => u.roleKey === 'FINANCIADOR');
+
+  // 3.1 Project Members for Project A (Asignado expresamente al Responsable de Proyecto y Financiador)
+  const membersA = [
     {
       projectId: projectIdA,
       userId: responsableUser.dbId,
@@ -237,7 +239,17 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       userId: directorUser.dbId,
       roleInProject: 'Manager',
     },
-  ]);
+  ];
+
+  if (financiadorUser) {
+    membersA.push({
+      projectId: projectIdA,
+      userId: financiadorUser.dbId,
+      roleInProject: 'Financiador',
+    });
+  }
+
+  await db.insert(projectMembers).values(membersA);
 
   // 3.2 Agreement & Initial Disbursement for Project A
   const insertedAgreementsA = await db.insert(agreements).values({

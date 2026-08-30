@@ -214,7 +214,11 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
             {projectsList?.map((p: any) => {
               if (!p) return null;
               return (
-              <div key={p.id} className="p-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+              <div
+                key={p.id}
+                onClick={() => p?.id && onSelectProject(p.id)}
+                className="p-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors cursor-pointer"
+              >
                 <div className="space-y-1 flex-1 pr-4">
                   <div className="flex items-center space-x-2">
                     <span className="text-[9px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.2 rounded">
@@ -263,7 +267,10 @@ export default function Dashboard({ token, onSelectProject }: DashboardProps) {
                     </span>
                   </div>
                   <button
-                    onClick={() => p?.id && onSelectProject(p.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (p?.id) onSelectProject(p.id);
+                    }}
                     className="p-1 hover:bg-slate-100 hover:text-[#2563EB] rounded transition-colors text-slate-400 cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
