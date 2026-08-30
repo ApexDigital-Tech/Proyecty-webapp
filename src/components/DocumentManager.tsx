@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Paperclip, Upload, Trash2, Download, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import dayjs from 'dayjs';
 import { AiAnalysisModal } from './AiAnalysisModal';
+import { UserRole } from '../types.ts';
+import { hasPermission } from '../lib/rbac.ts';
 
 interface Document {
   id: number;
@@ -18,9 +20,10 @@ interface Document {
 interface DocumentManagerProps {
   projectId: number;
   token: string;
+  userRole?: UserRole;
 }
 
-export function DocumentManager({ projectId, token }: DocumentManagerProps) {
+export function DocumentManager({ projectId, token, userRole }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -191,6 +194,9 @@ export function DocumentManager({ projectId, token }: DocumentManagerProps) {
     else return (bytes / 1048576).toFixed(1) + ' MB';
   };
 
+  const canUpload = userRole ? hasPermission(userRole, 'canUploadDocuments') : true;
+  const canDelete = userRole ? hasPermission(userRole, 'canDeleteDocuments') : false;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-6 border-b border-slate-200">
@@ -204,50 +210,52 @@ export function DocumentManager({ projectId, token }: DocumentManagerProps) {
       </div>
 
       <div className="p-6">
-        {/* Upload Form */}
-        <div className="flex flex-wrap gap-4 items-end mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Título del Documento</label>
-            <input
-              type="text"
-              value={uploadTitle}
-              onChange={(e) => setUploadTitle(e.target.value)}
-              placeholder="Ej. Contrato Principal..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+        {/* Upload Form (Condicionado a canUpload) */}
+        {canUpload && (
+          <div className="flex flex-wrap gap-4 items-end mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Título del Documento</label>
+              <input
+                type="text"
+                value={uploadTitle}
+                onChange={(e) => setUploadTitle(e.target.value)}
+                placeholder="Ej. Contrato Principal..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div className="w-48">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
+              <select
+                value={uploadType}
+                onChange={(e) => setUploadType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="Contract">Contrato</option>
+                <option value="Invoice">Factura / Recibo</option>
+                <option value="Report">Reporte</option>
+                <option value="Design">Diseño / Plano</option>
+                <option value="Other">Otro</option>
+              </select>
+            </div>
+            <div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleUpload}
+                accept=".pdf,.docx,.jpg,.jpeg,.png"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Subir Archivo
+              </button>
+            </div>
           </div>
-          <div className="w-48">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
-            <select
-              value={uploadType}
-              onChange={(e) => setUploadType(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="Contract">Contrato</option>
-              <option value="Invoice">Factura / Recibo</option>
-              <option value="Report">Reporte</option>
-              <option value="Design">Diseño / Plano</option>
-              <option value="Other">Otro</option>
-            </select>
-          </div>
-          <div>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              onChange={handleUpload}
-              accept=".pdf,.docx,.jpg,.jpeg,.png"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              Subir Archivo
-            </button>
-          </div>
-        </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-start gap-3 text-sm">
@@ -326,13 +334,15 @@ export function DocumentManager({ projectId, token }: DocumentManagerProps) {
                         >
                           <Download className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(doc.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(doc.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

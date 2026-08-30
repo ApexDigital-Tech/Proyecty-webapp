@@ -30,7 +30,7 @@ export default function TabDocumentos({
         </div>
       </div>
       
-      <DocumentManager projectId={project.id} token={token} />
+      <DocumentManager projectId={project.id} token={token} userRole={userRole} />
     </div>
   );
 }

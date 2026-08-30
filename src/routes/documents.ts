@@ -349,6 +349,15 @@ router.delete('/documents/:id', requireAuth, async (req: AuthRequest, res: any) 
 
     if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
 
+    // Cumplimiento y Gobierno Documental: Solo DIRECTOR puede enviar a papelera. FINANCE, AUDITOR y FINANCIADOR tienen prohibido el borrado.
+    const userRole = req.user?.role as any;
+    if (userRole !== 'DIRECTOR') {
+      return res.status(403).json({
+        error: 'Prohibido: La eliminación o archivado de documentos requiere privilegios exclusivos de Dirección (DIRECTOR).',
+        code: 'DOCUMENT_DELETE_FORBIDDEN'
+      });
+    }
+
     const [doc] = await db.select().from(documents).where(
       and(eq(documents.id, docId), eq(documents.tenantId, tenantId))
     );
