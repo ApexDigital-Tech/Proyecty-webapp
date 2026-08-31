@@ -130,3 +130,28 @@ export interface ActivityLog {
   entityType?: string;
   createdAt?: string;
 }
+
+export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'reversed';
+
+export interface Expense {
+  id: number;
+  tenantId: number;
+  projectId: number;
+  budgetLineId: number;
+  amount: number;
+  currency: string;
+  exchangeRate: number;
+  baseAmount: number;
+  exchangeRateSource?: string;
+  exchangeRateDate?: string;
+  date: string;
+  title: string;
+  description?: string;
+  category?: string;
+  status: ExpenseStatus;
+  registeredBy: number;
+  approvedBy?: number | null;
+  createdAt?: string;
+  vouchers?: Voucher[];
+}
+

@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.ts';
 import {
-  getProjects, createProject, update, getProjectById, remove, getMembers, addMembers, removeMembers, addAgreements, addBudgetItems, getProjectLogs, addLogs, getEvents, addExpenses, getBudgetVersions, addBudgetVersion
+  getProjects, createProject, update, getProjectById, remove, getMembers, addMembers, removeMembers, addAgreements, addBudgetItems, getProjectLogs, addLogs, getEvents, getBudgetVersions, addBudgetVersion
 } from '../controllers/projects.controller.ts';
+import { createExpenseHandler } from '../controllers/expenses.controller.ts';
 import { requirePermission } from '../middleware/rbac.ts';
 
 const router = Router();
@@ -23,6 +24,6 @@ router.post('/:id/budget-versions', requireAuth, requirePermission('budgets', 'c
 router.get('/:id/logs', requireAuth, requirePermission('projects', 'read'), getProjectLogs);
 router.post('/:id/logs', requireAuth, requirePermission('projects', 'update'), addLogs);
 router.get('/:id/events', requireAuth, requirePermission('projects', 'read'), getEvents);
-router.post('/:projectId/expenses', requireAuth, requirePermission('expenses', 'create'), addExpenses);
+router.post('/:projectId/expenses', requireAuth, requirePermission('expenses', 'create'), createExpenseHandler);
 
 export default router;

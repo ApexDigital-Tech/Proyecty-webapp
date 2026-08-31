@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.ts';
 import { projects, projectMembers, agreements, disbursements, budgetLines, receiptsVouchers, documents, auditLogs, events, tasks, donors, users, projectLogs, clauses, expenses, budgetVersions, organizations } from '../db/schema.ts';
-import { eq, and, inArray, desc, gte, lte, asc , ilike, sql} from 'drizzle-orm';
+import { eq, and, or, inArray, desc, gte, lte, asc , ilike, sql} from 'drizzle-orm';
 import { AuthRequest } from '../middleware/auth.ts';
 import { logActivity } from '../db/audit.ts';
 import { withTenantContext, withRlsValidation } from '../utils/dbWrapper.ts';
