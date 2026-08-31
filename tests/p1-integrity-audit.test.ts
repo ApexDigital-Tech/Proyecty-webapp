@@ -71,11 +71,11 @@ async function runComprehensivePhase2Audit() {
     try {
       await approveExpense(orgId, expense.id, manager.dbId, 'approved');
     } catch (err: any) {
-      if (err.name === 'ConflictError' && err.message.includes('Segregación de funciones')) {
+      if (err.name === 'ForbiddenError' && err.message.includes('Segregación de funciones')) {
         autoApproveBlocked = true;
       }
     }
-    assert(autoApproveBlocked, 'Auto-aprobación del creador es BLOQUEADA con ConflictError (FIN-01)');
+    assert(autoApproveBlocked, 'Auto-aprobación del creador es BLOQUEADA con ForbiddenError (FIN-01)');
 
     // 1.4 Aprobación exitosa por revisor independiente (Director)
     const approvedExpense = await approveExpense(orgId, expense.id, director.dbId, 'approved');
