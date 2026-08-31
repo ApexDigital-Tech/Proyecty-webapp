@@ -4,18 +4,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db } from '../db/index.ts';
-import { documents, auditLogs } from '../db/schema.ts';
+import { documents, auditLogs, documentAnalysis } from '../db/schema.ts';
 import { requireAuth, AuthRequest } from '../middleware/auth.ts';
 import { eq, and, desc } from 'drizzle-orm';
-import { supabaseBackend as supabase } from '../lib/supabase-backend.ts';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { documentAnalysis } from '../db/schema.ts';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { getStorageAdapter } from '../lib/storage.ts';
 
 const router = express.Router();
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 
 // Multer config: Estricto 10MB y formatos autorizados (DOC-01)
 const storage = multer.memoryStorage();
@@ -84,24 +78,10 @@ router.post('/projects/:id/documents', requireAuth, upload.single('file'), async
     const safeName = originalName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storagePath = `${tenantId}/${projectId}/${timestamp}_v${docVersion}_${safeName}`;
 
-    // 4. Subir a Supabase Storage (o fallback seguro)
-    let fileUrl = '';
-    if (supabase) {
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(storagePath, file.buffer, {
-          contentType: mimeType,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        return res.status(500).json({ error: 'Error al almacenar el archivo en el bucket' });
-      }
-      fileUrl = `${supabaseUrl}/storage/v1/object/public/documents/${storagePath}`;
-    } else {
-      fileUrl = `https://storage.proyecty.org/${storagePath}`;
-    }
+    // 4. Subir mediante StorageAdapter (Local en test, Supabase en producción)
+    const storage = getStorageAdapter();
+    const uploadResult = await storage.upload('documents', storagePath, file.buffer, mimeType);
+    const fileUrl = uploadResult.url;
 
     // 5. Plazo y política de retención legal (5 años)
     const retentionUntil = new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString();
