@@ -20,6 +20,8 @@ import {
 import { eq, and, or, sql, inArray } from 'drizzle-orm';
 import { UserRole } from '../types.ts';
 import { invalidateDashboardCache } from './dashboard.service.ts';
+import { recalculateFinancialState } from './expenses.service.ts';
+import { calculatePhysicalProgress } from './schedule.service.ts';
 
 export const DEMO_ORG_NAME = 'VOSERDEM — Entorno demostrativo';
 
@@ -275,7 +277,7 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     status: 'Desembolsado',
   });
 
-  // 3.3 Budget Version & 4 Budget Lines for Project A ($150k total, $57k ejecutado inicial)
+  // 3.3 Budget Version & 4 Budget Lines for Project A (Inicialmente executedAmount = 0)
   const insertedBudgetVersionA = await db.insert(budgetVersions).values({
     tenantId: orgId,
     projectId: projectIdA,
@@ -296,9 +298,9 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       subcategory: 'Consultoría y Personal Técnico',
       approvedAmount: 60000.0,
       reformulatedAmount: 60000.0,
-      executedAmount: 24000.0,
-      balance: 36000.0,
-      progress: 40,
+      executedAmount: 0.0,
+      balance: 60000.0,
+      progress: 0,
       status: 'NORMAL',
     },
     {
@@ -309,9 +311,9 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       subcategory: 'Sistemas de Filtración y Obras',
       approvedAmount: 50000.0,
       reformulatedAmount: 50000.0,
-      executedAmount: 21500.0,
-      balance: 28500.0,
-      progress: 43,
+      executedAmount: 0.0,
+      balance: 50000.0,
+      progress: 0,
       status: 'NORMAL',
     },
     {
@@ -322,9 +324,9 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       subcategory: 'Talleres Comunitarios y Materiales',
       approvedAmount: 25000.0,
       reformulatedAmount: 25000.0,
-      executedAmount: 8500.0,
-      balance: 16500.0,
-      progress: 34,
+      executedAmount: 0.0,
+      balance: 25000.0,
+      progress: 0,
       status: 'NORMAL',
     },
     {
@@ -335,23 +337,25 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       subcategory: 'Auditoría Externa e Informes',
       approvedAmount: 15000.0,
       reformulatedAmount: 15000.0,
-      executedAmount: 3000.0,
-      balance: 12000.0,
-      progress: 20,
+      executedAmount: 0.0,
+      balance: 15000.0,
+      progress: 0,
       status: 'NORMAL',
     },
   ]).returning();
 
-  // 3.4 Seed Initial Approved Expenses + 1 Pending Expense ($6,000 for BL-02)
-  await db.insert(expenses).values([
+  // 3.4 Seed Initial Approved Expenses + 1 Pending Expense con baseAmount y exchangeRate
+  const insertedExpensesA = await db.insert(expenses).values([
     {
       tenantId: orgId,
       projectId: projectIdA,
       budgetLineId: insertedBudgetLinesA[0].id,
       title: 'Honorarios Técnicos Especialista Social — Trimestre 1',
       amount: 24000.0,
-      category: 'Talento Humano',
       currency: 'USD',
+      exchangeRate: 1.0,
+      baseAmount: 24000.0,
+      category: 'Talento Humano',
       date: new Date('2026-02-15T00:00:00Z'),
       status: 'approved',
       registeredBy: managerUser.dbId,
@@ -363,8 +367,10 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       budgetLineId: insertedBudgetLinesA[1].id,
       title: 'Adquisición de Lote 1 — Sistemas de Filtración Comunitarios',
       amount: 21500.0,
-      category: 'Infraestructura y Equipamiento',
       currency: 'USD',
+      exchangeRate: 1.0,
+      baseAmount: 21500.0,
+      category: 'Infraestructura y Equipamiento',
       date: new Date('2026-03-01T00:00:00Z'),
       status: 'approved',
       registeredBy: managerUser.dbId,
@@ -376,8 +382,10 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       budgetLineId: insertedBudgetLinesA[2].id,
       title: 'Desarrollo de Talleres Participativos y Material Didáctico',
       amount: 8500.0,
-      category: 'Capacitación y Talleres',
       currency: 'USD',
+      exchangeRate: 1.0,
+      baseAmount: 8500.0,
+      category: 'Capacitación y Talleres',
       date: new Date('2026-03-10T00:00:00Z'),
       status: 'approved',
       registeredBy: managerUser.dbId,
@@ -389,30 +397,117 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       budgetLineId: insertedBudgetLinesA[3].id,
       title: 'Auditoría Financiera de Medio Término',
       amount: 3000.0,
-      category: 'Monitoreo y Auditoría',
       currency: 'USD',
+      exchangeRate: 1.0,
+      baseAmount: 3000.0,
+      category: 'Monitoreo y Auditoría',
       date: new Date('2026-03-20T00:00:00Z'),
       status: 'approved',
       registeredBy: managerUser.dbId,
       approvedBy: directorUser.dbId,
     },
-    // Gasto pendiente de USD 6.000 en BL-02 registrado por el Responsable de Proyecto
+    // Gasto pendiente de USD 6.000 en BL-02 (NO se suma a la ejecución)
     {
       tenantId: orgId,
       projectId: projectIdA,
       budgetLineId: insertedBudgetLinesA[1].id,
       title: 'Adquisición de Lote 2 — Sistemas de Filtración Comunitarios',
       amount: 6000.0,
-      category: 'Infraestructura y Equipamiento',
       currency: 'USD',
+      exchangeRate: 1.0,
+      baseAmount: 6000.0,
+      category: 'Infraestructura y Equipamiento',
       date: new Date('2026-06-15T00:00:00Z'),
       status: 'pending',
       registeredBy: responsableUser.dbId,
       approvedBy: null,
     },
+  ]).returning();
+
+  // 3.5 Inserción de Comprobantes reales en receipts_vouchers vinculados a cada gasto
+  await db.insert(receiptsVouchers).values([
+    {
+      projectId: projectIdA,
+      expenseId: insertedExpensesA[0].id,
+      budgetLineId: insertedBudgetLinesA[0].id,
+      type: 'Factura',
+      amount: 24000.0,
+      currency: 'USD',
+      provider: 'Consultora Social & Desarrollo S.R.L.',
+      issueDate: new Date('2026-02-15T00:00:00Z'),
+      fileName: 'factura_honorarios_trimestre1.pdf',
+      fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
+      isVerified: true,
+      verifiedBy: directorUser.dbId,
+      description: 'Factura de honorarios técnicos profesionales debidamente validada',
+    },
+    {
+      projectId: projectIdA,
+      expenseId: insertedExpensesA[1].id,
+      budgetLineId: insertedBudgetLinesA[1].id,
+      type: 'Factura',
+      amount: 21500.0,
+      currency: 'USD',
+      provider: 'EcoTecnologías Hidráulicas S.A.',
+      issueDate: new Date('2026-03-01T00:00:00Z'),
+      fileName: 'factura_filtracion_lote1.pdf',
+      fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
+      isVerified: true,
+      verifiedBy: directorUser.dbId,
+      description: 'Factura comercial de compra e instalación de equipos de filtración',
+    },
+    {
+      projectId: projectIdA,
+      expenseId: insertedExpensesA[2].id,
+      budgetLineId: insertedBudgetLinesA[2].id,
+      type: 'Factura',
+      amount: 8500.0,
+      currency: 'USD',
+      provider: 'Instituto de Formación Comunitaria',
+      issueDate: new Date('2026-03-10T00:00:00Z'),
+      fileName: 'factura_talleres_comunitarios.pdf',
+      fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
+      isVerified: true,
+      verifiedBy: directorUser.dbId,
+      description: 'Factura de materiales y facilitación pedagógica para talleres',
+    },
+    {
+      projectId: projectIdA,
+      expenseId: insertedExpensesA[3].id,
+      budgetLineId: insertedBudgetLinesA[3].id,
+      type: 'Factura',
+      amount: 3000.0,
+      currency: 'USD',
+      provider: 'Auditoría & Control Contable S.A.',
+      issueDate: new Date('2026-03-20T00:00:00Z'),
+      fileName: 'factura_auditoria_externa.pdf',
+      fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
+      isVerified: true,
+      verifiedBy: directorUser.dbId,
+      description: 'Dictamen y factura de auditoría financiera de medio término',
+    },
+    {
+      projectId: projectIdA,
+      expenseId: insertedExpensesA[4].id,
+      budgetLineId: insertedBudgetLinesA[1].id,
+      type: 'Factura',
+      amount: 6000.0,
+      currency: 'USD',
+      provider: 'EcoTecnologías Hidráulicas S.A.',
+      issueDate: new Date('2026-06-15T00:00:00Z'),
+      fileName: 'factura_filtracion_lote2_pendiente.pdf',
+      fileUrl: '/fixtures/demo/comprobante_filtracion_demo.pdf',
+      isVerified: false,
+      description: 'Factura de respaldo pendiente para adquisición de Lote 2',
+    },
   ]);
 
-  // 3.5 Tasks & Dependencies for Project A (75% avance físico)
+  // 3.6 Recálculo Canónico Derivado (Única Fuente de Verdad para ejecución y saldos)
+  for (const bLine of insertedBudgetLinesA) {
+    await recalculateFinancialState(orgId, projectIdA, bLine.id, db);
+  }
+
+  // 3.7 Tasks & Dependencies for Project A (75% avance físico derivado)
   const insertedTasksA = await db.insert(tasks).values([
     {
       tenantId: orgId,
@@ -453,7 +548,16 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
     });
   }
 
-  // 3.6 Documents for Project A (2 PDFs ficticios con tamaño real y hash verificado)
+  // Derivar avance físico del proyecto
+  const projectTasks = await db.select({
+    weight: tasks.weight,
+    progress: tasks.progress,
+    status: tasks.status,
+  }).from(tasks).where(eq(tasks.projectId, projectIdA));
+  const calculatedPhysical = calculatePhysicalProgress(projectTasks);
+  await db.update(projects).set({ physicalProgress: calculatedPhysical }).where(eq(projects.id, projectIdA));
+
+  // 3.8 Documents for Project A
   await db.insert(documents).values([
     {
       tenantId: orgId,
@@ -490,8 +594,6 @@ export async function resetDemoTenantData(): Promise<{ success: boolean; message
       },
     },
   ]);
-
-  await db.update(projects).set({ physicalProgress: 75, financialProgress: 38 }).where(eq(projects.id, projectIdA));
 
   // =========================================================================
   // 4. PROYECTO B: PRJ-DEMO-2026-B (Control de Aislamiento e Independencia)
