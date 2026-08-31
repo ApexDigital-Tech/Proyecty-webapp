@@ -1,12 +1,24 @@
 import * as Sentry from '@sentry/node';
 
 export async function initSentry() {
+  const isTest = process.env.NODE_ENV === 'test';
+  
+  if (isTest) {
+    // En entorno test, Sentry no debe realizar conexiones externas
+    Sentry.init({
+      dsn: '',
+      enabled: false,
+      environment: 'test',
+    });
+    return;
+  }
+
   const integrations: any[] = [];
 
   if (
     process.env.SENTRY_DSN &&
-    process.env.SENTRY_PROFILING_ENABLED === "true" &&
-    process.env.NODE_ENV === "production"
+    process.env.SENTRY_PROFILING_ENABLED === 'true' &&
+    process.env.NODE_ENV === 'production'
   ) {
     try {
       const profilingModule = await import('@sentry/profiling-node');
@@ -19,11 +31,10 @@ export async function initSentry() {
   Sentry.init({
     dsn: process.env.SENTRY_DSN || '',
     integrations,
-    // Tracing
-    tracesSampleRate: 1.0, // Capture 100% of the transactions
-    // Set sampling rate for profiling - this is relative to tracesSampleRate
-    profilesSampleRate: 1.0,
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 1.0 : 0.0,
+    profilesSampleRate: process.env.NODE_ENV === 'production' ? 1.0 : 0.0,
     environment: process.env.NODE_ENV || 'development',
+    enabled: process.env.NODE_ENV === 'production',
   });
 }
 
