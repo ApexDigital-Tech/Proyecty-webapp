@@ -63,7 +63,7 @@ async function main() {
   // ──────────────────────────────────────────────
   console.log('\nPASO 1: Login como FINANCE...');
   const finLogin = await api('POST', '/api/auth/demo-session', { role: 'FINANCE' });
-  assert(finLogin.status === 200 && finLogin.data.token, 'Login Finance OK');
+  assert(finLogin.status === 200 && Boolean(finLogin.data.token), 'Login Finance OK');
   const finToken = finLogin.data.token!;
   console.log(`  → User: ${finLogin.data.user?.name} (${finLogin.data.user?.role})`);
 
@@ -127,7 +127,7 @@ async function main() {
   // ──────────────────────────────────────────────
   console.log('\nPASO 5: Login como DIRECTOR...');
   const dirLogin = await api('POST', '/api/auth/demo-session', { role: 'DIRECTOR' });
-  assert(dirLogin.status === 200 && dirLogin.data.token, 'Login Director OK');
+  assert(dirLogin.status === 200 && Boolean(dirLogin.data.token), 'Login Director OK');
   const dirToken = dirLogin.data.token!;
 
   // ──────────────────────────────────────────────
