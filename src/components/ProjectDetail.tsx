@@ -841,6 +841,7 @@ export default function ProjectDetail({
             handleReformulate={handleReformulate}
             token={token}
             onRefresh={loadProjectDetails}
+            userRole={userRole}
           />
         )}
 
