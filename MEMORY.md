@@ -1,57 +1,86 @@
-# MEMORIA DE PROYECTO — PROYECTY / DEMO VOSERDEM
+# MEMORIA DE PROYECTO — PROYECTY / FINANCIERO (FIN-CORE-02)
 
-Estado de fases:
-- R0: CERRADO.
-- R1A: CERRADO.
-- R1B: CERRADO.
-- R1C-A: CERRADO.
-- R1C: CERTIFICADO Y CERRADO.
-- DEMO-D0/D1/D1A: CERRADOS.
-- DEMO-D2V técnico: CERTIFICADO Y CERRADO.
-- AUDITORÍA DIRECTA VOSERDEM: CERTIFICADA Y CERRADA.
-- DEMO VOSERDEM: SUSPENDIDA temporalmente.
-- FIN-P0: IMPLEMENTADO — CERTIFICACIÓN INDEPENDIENTE PENDIENTE.
+## A. Decisión de Producto
 
-## 1. Causa Raíz del Incidente Financiero (Auditoría Forense P0)
-- Inconsistencia de estados (`'approved'`, `'pending'`, `'APPROVED'`, `'PENDING_APPROVAL'`) que impedía el cálculo unificado.
-- Escritura directa de valores hardcodeados en `budget_lines.executed_amount` y `projects.financial_progress` sin consultar los gastos aprobados reales.
-- Gastos aprobados antiguos con `base_amount = NULL` y `receipts_vouchers` vacío (0 registros), desconectados de la gobernanza documental.
-- Servidor local bloqueado en arranque por llamadas de red a Supabase Storage remoto no configurado localmente.
+PROYECTY será una plataforma de planificación, administración, ejecución y rendición financiera de proyectos sociales.
 
-## 2. Decisiones Arquitectónicas y Consolidación Canónica (FIN-P0)
-1. **Estados Financieros Canónicos**: Se imponen únicamente en minúsculas: `'pending' | 'approved' | 'rejected' | 'reversed'`.
-2. **Fórmulas Financieras Canónicas**:
-   - `executed_amount = SUM(COALESCE(base_amount, amount)) WHERE status = 'approved'` (para `tenant_id`, `project_id` y `budget_line_id`).
-   - `balance = reformulated_amount - executed_amount` (bloqueo transaccional contra saldo negativo).
-   - `financial_progress = (SUM(executed_amount) / approved_budget) * 100` (redondeado derivado).
-3. **Relación Gasto – Partida – Comprobante – Auditoría**: Vinculación atómica en `receipts_vouchers` (`expense_id`, `budget_line_id`, `project_id`, `file_url`, `is_verified`, hash SHA-256) evitando registros huérfanos.
-4. **Separación de Almacenamiento**: `LocalStorageAdapter` en `C:\temp\proyecty-storage` para entorno de test local; `SupabaseStorageAdapter` reservado para producción.
-5. **Segregación FIN-01 & RBAC**: El usuario que registra un gasto no puede aprobarlo (HTTP 403). `FINANCE` / `MANAGER` registran; `DIRECTOR` aprueba, rechaza y revierte.
+**Incluye**:
+- Financiadores
+- Convenios
+- Desembolsos
+- Planes anuales/semestrales
+- Importación de planes
+- Importación histórica
+- Partidas
+- Gastos
+- Comprobantes
+- Aprobación
+- Reportes
+- Exportaciones
+- Auditoría
+- Interoperabilidad contable
 
-## 3. Baseline VOSERDEM (Proyecto A: PRJ-DEMO-2026)
-- **Presupuesto Aprobado**: USD 150.000.
-- **Ejecutado Derivado**: USD 57.000.
-- **Avance Financiero**: 38%.
-- **Desglose de Partidas Derivadas**:
-  - **BL-01**: ejecutado 24.000; saldo 36.000 (40%).
-  - **BL-02**: ejecutado 21.500; saldo 28.500 (43%) [gasto pendiente de 6.000 excluido de ejecutado].
-  - **BL-03**: ejecutado 8.500; saldo 16.500 (34%).
-  - **BL-04**: ejecutado 3.000; saldo 12.000 (20%).
+**No incluye**:
+- Libro diario
+- Libro mayor
+- Impuestos
+- Conciliación bancaria
+- Activos fijos
+- Contabilidad empresarial completa
 
-## 4. Pendientes Obligatorios para la Próxima Sesión
-1. Auditar el contenido exacto de los cinco commits FIN-P0 (`897abab`, `707c0bb`, `26d0834`, `a632d9c`, `eb0c1fc`).
-2. Ejecutar `tsc --noEmit` con Node 20 portable.
-3. Ejecutar el pipeline integral desde un clon limpio.
-4. Realizar el recorrido humano desde `/internal-demo`.
-5. Visualizar el detalle de gastos en cada partida.
-6. Registrar un gasto con PDF desde la interfaz.
-7. Confirmar persistencia y descarga del comprobante.
-8. Aprobar como Director y verificar el recálculo.
-9. Revertir el gasto y comprobar la restauración exacta.
-10. Verificar auditoría inmutable y segregación de funciones.
-11. Reiniciar servidor y PostgreSQL y comprobar persistencia.
-12. Ejecutar Playwright mediante clics reales, sin inyección de sesión ni llamadas directas que omitan la UI.
-13. Certificar que ninguna prueba utiliza producción.
+---
 
-## 5. Regla Inflexible
-- Prohibición absoluta de conectar, modificar o desplegar en producción.
+## B. Causa Raíz Identificada
+
+El formulario de comprobantes (`TabComprobantes.tsx` via `ProjectDetail.tsx`) utiliza todavía:
+`POST /api/projects/:projectId/receiptsVouchers`
+
+Este endpoint legacy crea `receipts_vouchers` con `expense_id = NULL` y no utiliza el servicio atómico nuevo (`createExpense`).
+
+Por ello, los comprobantes registrados desde la interfaz no ingresan automáticamente en:
+- `expenses`
+- partidas (`budget_lines`)
+- bandeja de aprobación (`ApprovalQueue`)
+- reportes (`ReportsDashboard`)
+- auditoría financiera (`audit_logs`)
+
+---
+
+## C. Estado de las Entregas
+
+- `b950324`: Conservar provisionalmente; backend atómico parcial.
+- `0f1882c`: Conservar provisionalmente; backend de financiamiento parcial.
+- `e05daeb`: Incompleto; tablas no existen físicamente en PostgreSQL.
+- `b670cf3`: Incompleto; sin endpoint multipart ni interfaz UI.
+- `0789827`: Servicio aislado.
+- `3371147` y `a010f6c`: Exportación parcial; no genera `.xlsx` OpenXML ni PDF real.
+- `d2acb8c`: Prueba no descubierta por Playwright y sin interacción humana real.
+
+---
+
+## D. Regla para la Próxima Sesión
+
+**No comenzar Entregas 2–6 hasta cerrar completamente la Entrega 1 mediante interfaz real.**
+
+---
+
+## E. Pendientes Priorizados para la Próxima Sesión
+
+1. Verificar el servidor ejecutando exactamente el HEAD actual.
+2. Reiniciar el servidor por PID exacto y comprobar `GET /api/expenses`.
+3. Determinar si el 404 era servidor desactualizado o montaje incorrecto de ruta.
+4. Conectar `TabComprobantes` con el flujo atómico (`createExpense`).
+5. Evitar definitivamente comprobantes financieros huérfanos.
+6. Mostrar gasto #228 en `BL-02`.
+7. Mostrar gasto #228 en la bandeja del Director (`ApprovalQueue`).
+8. Restaurar Reportes y Analítica con datos reales.
+9. Probar aprobación y rechazo desde la interfaz UI.
+10. Verificar recálculo y auditoría.
+11. Crear un Playwright `.spec.ts` con clics y formularios reales.
+12. Certificar la Entrega 1.
+13. Solo después, completar Financiamiento.
+14. Crear migraciones físicas de planes e importaciones en PostgreSQL.
+15. Implementar rutas e interfaces de importación.
+16. Generar archivos XLSX, CSV y PDF reales.
+17. Validar persistencia después de reinicio.
+18. Actualizar documentación final únicamente con evidencia.
