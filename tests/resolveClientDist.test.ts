@@ -45,6 +45,20 @@ function runResolveTests() {
     assert.notStrictEqual(resolveClientDist(input), path.join(input, 'dist'));
   }
 
+  // 7. Verificación de extracción dinámica de assets de dist/index.html
+  {
+    const fs = require('fs');
+    const indexPath = path.join(__dirname, '../dist/index.html');
+    if (fs.existsSync(indexPath)) {
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      const match = html.match(/src="(\/assets\/[^"]+)"/);
+      assert.ok(match, 'dist/index.html debe contener un script de asset estático real');
+      const realAssetPath = match[1];
+      assert.ok(realAssetPath.startsWith('/assets/'), 'Ruta de asset real debe iniciar con /assets/');
+      assert.ok(realAssetPath.endsWith('.js'), 'Asset principal debe ser archivo .js');
+    }
+  }
+
   console.log('✅ resolveClientDist tests passed!');
 }
 

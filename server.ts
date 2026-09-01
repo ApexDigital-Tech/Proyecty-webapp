@@ -304,16 +304,16 @@ async function initializeViteAndListen() {
     
     app.get('*', (req, res, next) => {
       if (req.path.startsWith('/api')) return next();
-      if (req.path.startsWith('/assets')) return next();
-      if (req.path.startsWith('/fixtures')) return next();
 
       if (req.path === '/internal-demo' && process.env.ENABLE_INTERNAL_DEMO !== 'true' && process.env.NODE_ENV === 'production') {
         return res.redirect(302, '/');
       }
 
-      if (req.path.startsWith('/assets/') || req.path.startsWith('/fixtures/')) {
-        return res.status(404).send('Not found');
+      const ext = path.extname(req.path);
+      if (ext !== '' || req.path.startsWith('/assets/') || req.path.startsWith('/fixtures/')) {
+        return res.status(404).type('text/plain').send('Not found');
       }
+
       res.sendFile(path.join(clientDist, 'index.html'));
     });
     bootLog('05_STATIC_DIST_READY');
