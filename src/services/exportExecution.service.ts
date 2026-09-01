@@ -24,10 +24,14 @@ export const generateCanonicalCsvExport = async (tenantId: number, userId: numbe
     const vouchersList = await tx.select().from(receiptsVouchers).where(eq(receiptsVouchers.projectId, filters.projectId));
     const logsList = await tx.select().from(auditLogs).where(eq(auditLogs.tenantId, tenantId));
 
+    const executedTotal = expenseList
+      .filter((e) => e.status === 'approved')
+      .reduce((sum, e) => sum + Number(e.baseAmount || e.amount || 0), 0);
+
     let csvContent = `PROYECTY - RENDICIÓN DE CUENTAS FINANCIERA INSTITUCIONAL\n`;
     csvContent += `Proyecto: ${proj.name} (${proj.code})\n`;
     csvContent += `Presupuesto Aprobado: USD ${proj.approvedBudget}\n`;
-    csvContent += `Ejecutado Total: USD ${proj.executedTotal || 57000}\n`;
+    csvContent += `Ejecutado Total: USD ${executedTotal}\n`;
     csvContent += `Avance Financiero: ${proj.financialProgress}%\n\n`;
 
     csvContent += `ID,Partida,Concepto,Monto,Moneda,Monto Base USD,Estado,Registrado Por,Fecha\n`;
@@ -49,7 +53,7 @@ export const generateCanonicalCsvExport = async (tenantId: number, userId: numbe
           format: 'CSV',
           fileHash,
           recordCount: expenseList.length,
-          totalExecuted: proj.executedTotal,
+          totalExecuted,
         },
       },
       tx,
@@ -78,6 +82,10 @@ export const generateCanonicalMultiSheetExcelExport = async (tenantId: number, u
     const donorsList = await tx.select().from(donors).where(eq(donors.tenantId, tenantId));
     const logsList = await tx.select().from(auditLogs).where(eq(auditLogs.tenantId, tenantId));
 
+    const executedTotal = expenseList
+      .filter((e) => e.status === 'approved')
+      .reduce((sum, e) => sum + Number(e.baseAmount || e.amount || 0), 0);
+
     // Multi-Sheet Structure XML/TSV payload
     let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">\n`;
     
@@ -85,7 +93,7 @@ export const generateCanonicalMultiSheetExcelExport = async (tenantId: number, u
     xmlContent += `<Worksheet ss:Name="1. Resumen"><Table><Row><Cell><Data ss:Type="String">Indicador</Data></Cell><Cell><Data ss:Type="String">Valor</Data></Cell></Row>`;
     xmlContent += `<Row><Cell><Data ss:Type="String">Código Proyecto</Data></Cell><Cell><Data ss:Type="String">${proj.code}</Data></Cell></Row>`;
     xmlContent += `<Row><Cell><Data ss:Type="String">Presupuesto Aprobado USD</Data></Cell><Cell><Data ss:Type="Number">${proj.approvedBudget}</Data></Cell></Row>`;
-    xmlContent += `<Row><Cell><Data ss:Type="String">Ejecutado Aprobado USD</Data></Cell><Cell><Data ss:Type="Number">${proj.executedTotal || 57000}</Data></Cell></Row>`;
+    xmlContent += `<Row><Cell><Data ss:Type="String">Ejecutado Aprobado USD</Data></Cell><Cell><Data ss:Type="Number">${executedTotal}</Data></Cell></Row>`;
     xmlContent += `<Row><Cell><Data ss:Type="String">Avance Financiero %</Data></Cell><Cell><Data ss:Type="Number">${proj.financialProgress}</Data></Cell></Row>`;
     xmlContent += `</Table></Worksheet>\n`;
 
@@ -146,7 +154,7 @@ export const generateCanonicalMultiSheetExcelExport = async (tenantId: number, u
           format: 'XLSX_MULTI_SHEET',
           fileHash,
           sheetsCount: 11,
-          totalExecuted: proj.executedTotal,
+          totalExecuted,
         },
       },
       tx,
