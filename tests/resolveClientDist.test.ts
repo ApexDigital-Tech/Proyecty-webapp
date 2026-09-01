@@ -1,6 +1,11 @@
 import assert from 'node:assert';
+import fs from 'node:fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { resolveClientDist } from '../src/utils/resolveClientDist.ts';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function runResolveTests() {
   console.log('Running resolveClientDist tests...');
@@ -47,7 +52,6 @@ function runResolveTests() {
 
   // 7. Verificación de extracción dinámica de assets de dist/index.html
   {
-    const fs = require('fs');
     const indexPath = path.join(__dirname, '../dist/index.html');
     if (fs.existsSync(indexPath)) {
       const html = fs.readFileSync(indexPath, 'utf-8');
