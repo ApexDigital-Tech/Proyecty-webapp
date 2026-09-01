@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.ts';
 import { requirePermission } from '../middleware/rbac.ts';
 import {
+  getAllExpensesHandler,
   getProjectExpensesHandler,
   getBudgetLineExpensesHandler,
   createExpenseHandler,
@@ -13,6 +14,7 @@ import {
 const router = Router();
 
 // Endpoints canónicos para gastos
+router.get('/', requireAuth, requirePermission('expenses', 'read'), getAllExpensesHandler);
 router.get('/projects/:projectId/expenses', requireAuth, requirePermission('expenses', 'read'), getProjectExpensesHandler);
 router.get('/budget-lines/:budgetLineId/expenses', requireAuth, requirePermission('expenses', 'read'), getBudgetLineExpensesHandler);
 

@@ -1,5 +1,5 @@
 import { db } from '../db/index.ts';
-import { expenses, budgetLines, projects, receiptsVouchers, auditLogs } from '../db/schema.ts';
+import { expenses, budgetLines, projects, receiptsVouchers, documents, auditLogs } from '../db/schema.ts';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { CreateExpenseDto } from '../schemas/expenses.schema.ts';
 import { logger } from '../lib/logger.ts';
@@ -180,12 +180,54 @@ export const createExpense = async (
       })
       .returning();
 
+    // 4b. Inserción atómica del comprobante y documento de respaldo si fueron proporcionados
+    let createdVoucher = null;
+    if (data.voucherAttachment) {
+      const vAtt = data.voucherAttachment;
+      const [voucherRow] = await tx
+        .insert(receiptsVouchers)
+        .values({
+          projectId,
+          expenseId: newExpense.id,
+          budgetLineId,
+          type: vAtt.type || 'Factura',
+          amount,
+          currency,
+          provider: vAtt.provider || 'Proveedor Registrado',
+          issueDate: vAtt.issueDate ? new Date(vAtt.issueDate) : new Date(),
+          milestone: vAtt.milestone || null,
+          description: vAtt.description || data.description || data.title,
+          fileUrl: vAtt.fileUrl,
+          fileName: vAtt.fileName,
+          isVerified: false,
+        })
+        .returning();
+      createdVoucher = voucherRow;
+
+      await tx.insert(documents).values({
+        tenantId,
+        projectId,
+        name: vAtt.fileName,
+        originalName: vAtt.fileName,
+        mimeType: vAtt.mimeType || 'application/pdf',
+        size: '0',
+        type: 'Voucher',
+        fileUrl: vAtt.fileUrl,
+        metadata: {
+          sha256: vAtt.sha256 || 'N/A',
+          scanStatus: 'CLEAN',
+          expenseId: newExpense.id,
+          receiptVoucherId: voucherRow.id,
+        },
+      });
+    }
+
     // 5. Registro inmutable de auditoría
     await logAuditEvent(
       {
         tenantId,
         userId,
-        action: 'EXPENSE_CREATED',
+        action: data.voucherAttachment ? 'EXPENSE_CREATED_WITH_VOUCHER' : 'EXPENSE_CREATED',
         entity: 'expense',
         entityId: newExpense.id.toString(),
         metadata: {
@@ -196,13 +238,17 @@ export const createExpense = async (
           budgetLineId,
           projectId,
           registeredBy: userId,
+          voucherId: createdVoucher?.id || null,
         },
       },
       tx,
       { required: true }
     );
 
-    return newExpense;
+    return {
+      ...newExpense,
+      voucher: createdVoucher,
+    };
   });
 };
 

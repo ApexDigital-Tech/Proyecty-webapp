@@ -9,10 +9,28 @@ import {
   createExpense,
   getExpensesByProject,
   getExpensesByBudgetLine,
+  getExpensesByTenant,
   approveExpense,
   reverseExpense,
 } from '../services/expenses.service.ts';
 import { logger } from '../lib/logger.ts';
+
+export const getAllExpensesHandler = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
+
+    const expensesList = await getExpensesByTenant(tenantId);
+    return res.json(expensesList);
+  } catch (error) {
+    logger.error('Error in getAllExpensesHandler', { error });
+    next(error);
+  }
+};
 
 export const getProjectExpensesHandler = async (
   req: AuthRequest,

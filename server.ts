@@ -386,6 +386,12 @@ async function executeBackgroundInitializations() {
     await applyAuditLogsImmutability();
   }, 5000);
 
+  // D. Regularización atómica e idempotente del comprobante Ecotraffic #6
+  await runWithTimeout('09B_REGULARIZE_ECOTRAFFIC_VOUCHER', async () => {
+    const { regularizeEcotrafficVoucherTx } = await import('./src/db/migrations/ecotraffic-regularization.ts');
+    await regularizeEcotrafficVoucherTx();
+  }, 5000);
+
   bootLog('10_BOOT_COMPLETE');
   console.log('Database verification, immutability triggers and optional seeding complete.');
 }

@@ -16,6 +16,17 @@ export const createExpenseSchema = z.object({
   description: z.string().optional(),
   category: z.string().optional().default('General'),
   date: z.string().or(z.date()).optional(),
+  voucherAttachment: z.object({
+    fileUrl: z.string(),
+    fileName: z.string(),
+    mimeType: z.string().optional(),
+    sha256: z.string().optional(),
+    type: z.string().optional(),
+    provider: z.string().optional(),
+    issueDate: z.string().or(z.date()).optional(),
+    milestone: z.string().optional(),
+    description: z.string().optional(),
+  }).optional(),
 });
 
 export type CreateExpenseDto = z.infer<typeof createExpenseSchema>;
