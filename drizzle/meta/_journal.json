@@ -8,6 +8,13 @@
       "when": 1782509608323,
       "tag": "0000_flaky_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788275600000,
+      "tag": "0001_budget_plans_schema",
+      "breakpoints": true
     }
   ]
 }
