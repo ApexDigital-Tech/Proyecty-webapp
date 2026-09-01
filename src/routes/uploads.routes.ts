@@ -13,5 +13,7 @@ const upload = multer({
 
 router.post('/projects/:projectId/receiptsVouchers', requireAuth, upload.single('file'), uploadVoucher);
 router.post('/projects/:projectId/documents', requireAuth, upload.single('file'), uploadDocument);
+router.post('/uploads/voucher', requireAuth, upload.single('file'), uploadVoucher);
+router.post('/uploads/document', requireAuth, upload.single('file'), uploadDocument);
 
 export default router;

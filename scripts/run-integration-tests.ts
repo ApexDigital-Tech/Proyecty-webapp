@@ -12,8 +12,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
+const portableNodeDir = 'C:\\temp\\proyecty-toolchain\\node20\\node-v20.18.0-win-x64';
+if (!process.env.PATH?.includes(portableNodeDir)) {
+  process.env.PATH = `${portableNodeDir};${process.env.PATH}`;
+}
+
 const pgBin = 'C:\\temp\\proyecty-toolchain\\postgresql17\\pgsql\\bin';
-const pgDataTest = 'C:\\temp\\proyecty-toolchain\\pgdata-test';
+const pgDataTest = `C:\\temp\\proyecty-toolchain\\pgdata-test-${Date.now()}`;
 
 const suites = [
   'tests/resolveClientDist.test.ts',
@@ -65,14 +70,22 @@ console.log(`Guardias verificadas: ${guardChecksPassed}/${negativeCases.length} 
 
 // 2. Aprovisionamiento de Instancia Local Temporal PG17
 console.log('--- 2. Aprovisionando PostgreSQL 17 Local Aislado (Puerto 55432) ---');
-if (fs.existsSync(pgDataTest)) fs.rmSync(pgDataTest, { recursive: true, force: true });
+try {
+  execFileSync(path.join(pgBin, 'pg_ctl.exe'), ['stop', '-D', pgDataTest, '-m', 'immediate'], { encoding: 'utf8', stdio: 'ignore' });
+} catch {}
 
-execFileSync(path.join(pgBin, 'initdb.exe'), ['-D', pgDataTest, '-U', 'postgres', '--auth=trust'], { encoding: 'utf8' });
-fs.appendFileSync(path.join(pgDataTest, 'postgresql.conf'), "\nport = 55432\nlisten_addresses = '127.0.0.1'\n");
+try {
+  if (fs.existsSync(pgDataTest)) {
+    fs.rmSync(pgDataTest, { recursive: true, force: true });
+  }
+} catch {}
 
-const pgProc = spawn(path.join(pgBin, 'postgres.exe'), ['-D', pgDataTest], { detached: true, stdio: 'ignore' });
-pgProc.unref();
-sleep(3000);
+if (!fs.existsSync(pgDataTest)) {
+  execFileSync(path.join(pgBin, 'initdb.exe'), ['-D', pgDataTest, '-U', 'postgres', '--auth=trust'], { stdio: 'inherit' });
+  fs.appendFileSync(path.join(pgDataTest, 'postgresql.conf'), "\nport = 55432\nlisten_addresses = '127.0.0.1'\n");
+}
+
+execFileSync(path.join(pgBin, 'pg_ctl.exe'), ['start', '-D', pgDataTest, '-w'], { stdio: 'inherit' });
 
 let allSuitesPassed = false;
 
