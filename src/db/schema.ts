@@ -438,5 +438,43 @@ export const generatedReports = pgTable('generated_reports', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// --- IMPORT BATCHES & AUDIT ---
+export const importBatches = pgTable('import_batches', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // 'BUDGET_PLAN', 'HISTORICAL_EXPENSES'
+  fileName: text('file_name').notNull(),
+  fileHash: text('file_hash').notNull(),
+  totalRows: integer('total_rows').notNull().default(0),
+  validRows: integer('valid_rows').notNull().default(0),
+  rejectedRows: integer('rejected_rows').notNull().default(0),
+  totalAmount: doublePrecision('total_amount').notNull().default(0),
+  status: text('status').notNull().default('PENDING'), // 'PENDING', 'VALIDATED', 'APPLIED', 'REJECTED'
+  createdVersionId: integer('created_version_id').references(() => budgetVersions.id),
+  createdBy: integer('created_by').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const importRows = pgTable('import_rows', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => importBatches.id, { onDelete: 'cascade' }).notNull(),
+  rowNumber: integer('row_number').notNull(),
+  status: text('status').notNull().default('VALID'), // 'VALID', 'DUPLICATE', 'INVALID', 'WARNING'
+  externalId: text('external_id'),
+  rowData: jsonb('row_data').notNull(),
+  rowHash: text('row_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const importErrors = pgTable('import_errors', {
+  id: serial('id').primaryKey(),
+  batchId: integer('batch_id').references(() => importBatches.id, { onDelete: 'cascade' }).notNull(),
+  rowNumber: integer('row_number').notNull(),
+  field: text('field').notNull(),
+  errorMessage: text('error_message').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 
 
