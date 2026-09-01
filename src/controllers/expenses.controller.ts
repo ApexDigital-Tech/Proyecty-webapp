@@ -24,7 +24,15 @@ export const getAllExpensesHandler = async (
     const tenantId = req.user?.tenantId;
     if (!tenantId) return res.status(401).json({ error: 'No autorizado' });
 
-    const expensesList = await getExpensesByTenant(tenantId);
+    const projectId = req.query.projectId ? parseInt(req.query.projectId as string, 10) : undefined;
+    const budgetLineId = req.query.budgetLineId ? parseInt(req.query.budgetLineId as string, 10) : undefined;
+    const status = req.query.status ? (req.query.status as string) : undefined;
+
+    const expensesList = await getExpensesByTenant(tenantId, {
+      projectId: isNaN(projectId as number) ? undefined : projectId,
+      budgetLineId: isNaN(budgetLineId as number) ? undefined : budgetLineId,
+      status,
+    });
     return res.json(expensesList);
   } catch (error) {
     logger.error('Error in getAllExpensesHandler', { error });

@@ -1,5 +1,5 @@
 import { db } from '../db/index.ts';
-import { expenses, budgetLines, projects, receiptsVouchers, documents, auditLogs } from '../db/schema.ts';
+import { expenses, budgetLines, projects, receiptsVouchers, documents, auditLogs, users } from '../db/schema.ts';
 import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import { CreateExpenseDto } from '../schemas/expenses.schema.ts';
 import { logger } from '../lib/logger.ts';
@@ -245,6 +245,8 @@ export const createExpense = async (
       { required: true }
     );
 
+    invalidateDashboardCache(tenantId);
+
     return {
       ...newExpense,
       voucher: createdVoucher,
@@ -301,16 +303,93 @@ export const getExpensesByProject = async (
   });
 };
 
+import { invalidateDashboardCache } from './dashboard.service.ts';
+
 /**
- * Consulta de todos los gastos de la organización (para reportes y dashboards).
+ * Consulta de todos los gastos de la organización (para reportes, dashboards y cola de aprobación).
+ * Soporta filtrado por projectId, budgetLineId y status (independiente de mayúsculas/minúsculas).
  */
-export const getExpensesByTenant = async (tenantId: number) => {
+export const getExpensesByTenant = async (
+  tenantId: number,
+  filters?: { projectId?: number; budgetLineId?: number; status?: string }
+) => {
   return await withTenantContext(tenantId, async (tx) => {
-    return await tx
+    const conditions = [eq(expenses.tenantId, tenantId)];
+
+    if (filters?.projectId) {
+      conditions.push(eq(expenses.projectId, filters.projectId));
+    }
+    if (filters?.budgetLineId) {
+      conditions.push(eq(expenses.budgetLineId, filters.budgetLineId));
+    }
+    if (filters?.status && filters.status.trim() !== '') {
+      const s = filters.status.toLowerCase().trim();
+      if (s.includes('pending') || s === 'pending_approval') {
+        conditions.push(eq(expenses.status, 'pending'));
+      } else if (s.includes('approve') || s === 'approved') {
+        conditions.push(eq(expenses.status, 'approved'));
+      } else if (s.includes('reject') || s === 'rejected') {
+        conditions.push(eq(expenses.status, 'rejected'));
+      } else if (s.includes('reverse') || s === 'reversed') {
+        conditions.push(eq(expenses.status, 'reversed'));
+      }
+    }
+
+    const rawList = await tx
       .select()
       .from(expenses)
-      .where(eq(expenses.tenantId, tenantId))
+      .where(and(...conditions))
       .orderBy(desc(expenses.createdAt));
+
+    if (rawList.length === 0) return [];
+
+    const projectIds = [...new Set(rawList.map((e) => e.projectId))];
+    const budgetLineIds = [...new Set(rawList.map((e) => e.budgetLineId))];
+    const expenseIds = rawList.map((e) => e.id);
+    const userIds = [...new Set(rawList.map((e) => e.registeredBy).filter(Boolean))];
+
+    const projectList = projectIds.length > 0
+      ? await tx.select({ id: projects.id, code: projects.code, name: projects.name }).from(projects).where(inArray(projects.id, projectIds))
+      : [];
+    const budgetLineList = budgetLineIds.length > 0
+      ? await tx.select({ id: budgetLines.id, code: budgetLines.code, category: budgetLines.category, subcategory: budgetLines.subcategory }).from(budgetLines).where(inArray(budgetLines.id, budgetLineIds))
+      : [];
+    const userList = userIds.length > 0
+      ? await tx.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, userIds as number[]))
+      : [];
+    const voucherList = expenseIds.length > 0
+      ? await tx.select().from(receiptsVouchers).where(inArray(receiptsVouchers.expenseId, expenseIds))
+      : [];
+
+    const projectsMap = new Map(projectList.map((p) => [p.id, p]));
+    const budgetLinesMap = new Map(budgetLineList.map((b) => [b.id, b]));
+    const usersMap = new Map(userList.map((u) => [u.id, u]));
+    const vouchersMap = new Map<number, any[]>();
+    for (const v of voucherList) {
+      if (v.expenseId) {
+        const arr = vouchersMap.get(v.expenseId) || [];
+        arr.push(v);
+        vouchersMap.set(v.expenseId, arr);
+      }
+    }
+
+    return rawList.map((exp) => {
+      const prj = projectsMap.get(exp.projectId);
+      const bl = budgetLinesMap.get(exp.budgetLineId);
+      const usr = exp.registeredBy ? usersMap.get(exp.registeredBy) : null;
+      const vList = vouchersMap.get(exp.id) || [];
+
+      return {
+        ...exp,
+        projectCode: prj?.code || `PRJ-${exp.projectId}`,
+        projectName: prj?.name || `Proyecto #${exp.projectId}`,
+        budgetCode: bl?.code || `BL-${exp.budgetLineId}`,
+        budgetCategory: bl?.category || 'General',
+        budgetSubcategory: bl?.subcategory || 'General',
+        registeredByName: usr?.name || usr?.email || 'Finanzas',
+        vouchers: vList,
+      };
+    });
   });
 };
 
@@ -459,6 +538,8 @@ export const approveExpense = async (
       tx,
       { required: true }
     );
+
+    invalidateDashboardCache(tenantId);
 
     return updatedExpense;
   });
