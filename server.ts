@@ -47,6 +47,7 @@ import expensesRouter from './src/routes/expenses.routes.ts';
 import auditRouter from './src/routes/audit.routes.ts';
 import reportsRouter from './src/routes/reports.routes.ts';
 import storageRouter from './src/routes/storage.routes.ts';
+import fundingRouter from './src/routes/funding.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
 import { getStorageAdapter } from './src/lib/storage.ts';
 import {
@@ -226,6 +227,7 @@ app.use('/api/tasks', tasksRouter);
 // Rutas de finanzas, gastos y auditoría
 app.use('/api', expensesRouter);
 app.use('/api/expenses', expensesRouter);
+app.use('/api', fundingRouter);
 app.use('/api', legacyRouter);
 app.use('/api/audit-logs', auditRouter);
 app.get('/api/activity-logs', (req, res) => {
