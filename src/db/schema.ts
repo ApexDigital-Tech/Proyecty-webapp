@@ -50,6 +50,7 @@ export const donors = pgTable('donors', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
+  code: text('code'),
   type: text('type'), // 'Internacional', 'Gubernamental', 'Privado'
   contactEmail: text('contact_email'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -120,15 +121,37 @@ export const clauses = pgTable('clauses', {
 });
 
 // --- BUDGETS ---
+export const budgetPlans = pgTable('budget_plans', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  title: text('title').notNull(),
+  period: text('period').notNull().default('Anual'),
+  fiscalYear: integer('fiscal_year').notNull().default(2026),
+  status: text('status').notNull().default('ACTIVE'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const budgetVersions = pgTable('budget_versions', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  budgetPlanId: integer('budget_plan_id').references(() => budgetPlans.id),
   versionName: text('version_name').notNull(), // 'V1 - Inicial', 'V2 - Reformulado'
   versionNumber: integer('version_number').notNull().default(1),
   status: text('status').notNull().default('DRAFT'), // 'DRAFT', 'APPROVED', 'ARCHIVED'
   isApproved: boolean('is_approved').notNull().default(false),
   approvedBy: integer('approved_by').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const fundingAllocations = pgTable('funding_allocations', {
+  id: serial('id').primaryKey(),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
+  budgetLineId: integer('budget_line_id').references(() => budgetLines.id, { onDelete: 'cascade' }).notNull(),
+  agreementId: integer('agreement_id').references(() => agreements.id, { onDelete: 'cascade' }),
+  allocatedAmount: doublePrecision('allocated_amount').notNull(),
+  currency: text('currency').notNull().default('USD'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

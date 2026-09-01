@@ -46,7 +46,6 @@ export const createDonor = async (tenantId: number, userId: number, data: Create
         name: data.name,
         code: data.code || data.name.substring(0, 5).toUpperCase(),
         type: data.type || 'Bilateral',
-        country: data.country || 'Bolivia',
         contactEmail: data.contactEmail || null,
       })
       .returning();
