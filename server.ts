@@ -51,6 +51,9 @@ import fundingRouter from './src/routes/funding.routes.ts';
 import budgetPlanImportRouter from './src/routes/budgetPlanImport.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
 import { getStorageAdapter } from './src/lib/storage.ts';
+import { resolveClientDist } from './src/utils/resolveClientDist.ts';
+import { applyAuditLogsImmutability } from './scripts/apply-audit-immutability.ts';
+import { regularizeEcotrafficVoucherTx } from './src/db/migrations/ecotraffic-regularization.ts';
 import {
   projects,
   agreements,
@@ -297,7 +300,6 @@ async function initializeViteAndListen() {
   } else {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const { resolveClientDist } = await import('./src/utils/resolveClientDist.ts');
     const clientDist = resolveClientDist(__dirname);
     
     if (!fs.existsSync(path.join(clientDist, 'index.html')) || !fs.existsSync(path.join(clientDist, 'assets'))) {
@@ -393,13 +395,11 @@ async function executeBackgroundInitializations() {
 
   // D. Triggers de inmutabilidad en PostgreSQL
   await runWithTimeout('09_APPLY_IMMUTABILITY_TRIGGERS', async () => {
-    const { applyAuditLogsImmutability } = await import('./scripts/apply-audit-immutability.ts');
     await applyAuditLogsImmutability();
   }, 5000);
 
   // E. Regularización atómica e idempotente del comprobante Ecotraffic #6
   await runWithTimeout('09B_REGULARIZE_ECOTRAFFIC_VOUCHER', async () => {
-    const { regularizeEcotrafficVoucherTx } = await import('./src/db/migrations/ecotraffic-regularization.ts');
     await regularizeEcotrafficVoucherTx();
   }, 5000);
 
