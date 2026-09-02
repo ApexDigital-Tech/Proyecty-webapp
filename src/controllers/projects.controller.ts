@@ -157,7 +157,7 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
       const createdProject = await withTenantContext(req.user!.tenantId, async (tx) => {
         let finalDonorId: number | null = null;
         if (donor) {
-          const existingDonor = await tx.select().from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
+          const existingDonor = await tx.select({ id: donors.id }).from(donors).where(and(eq(donors.name, donor), eq(donors.tenantId, req.user!.tenantId))).limit(1);
           if (existingDonor.length > 0) {
             finalDonorId = existingDonor[0].id;
           } else {
@@ -165,7 +165,7 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
               tenantId: req.user!.tenantId,
               name: donor,
               type: 'Externo',
-            }).returning();
+            }).returning({ id: donors.id });
             finalDonorId = newDonor[0].id;
           }
         }
@@ -189,27 +189,8 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
 
         const cp = newProject[0];
 
-        // Create default budget version
-        const newBudgetVersion = await tx.insert(budgetVersions).values({
-          projectId: cp.id,
-          versionName: 'V1 - Inicial',
-          isApproved: true,
-        }).returning();
-        const budgetVersionId = newBudgetVersion[0].id;
-
-        await tx.insert(budgetLines).values({
-          projectId: cp.id,
-          budgetVersionId: budgetVersionId,
-          code: '1000',
-          category: 'Operación General',
-          subcategory: 'Gasto Administrativo Inicial',
-          approvedAmount: cp.approvedBudget,
-          reformulatedAmount: cp.approvedBudget,
-          executedAmount: 0,
-          balance: cp.approvedBudget,
-          progress: 0,
-          status: 'NORMAL'
-        });
+        // El plan presupuestario se importa y aprueba posteriormente. No se crea
+        // una partida genérica ficticia que pueda confundirse con el plan real.
 
         // Auto-create a basic Agreement placeholder
         await tx.insert(agreements).values({
@@ -217,6 +198,7 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
           counterparty: String(donor),
           signedDate: new Date(),
           amount: cp.approvedBudget,
+          currency: validatedBaseCurrency,
           durationMonths: 12,
           startDate: new Date(),
           endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
@@ -236,8 +218,8 @@ export const createProject = async (req: AuthRequest, res, next: NextFunction) =
     }
   } catch (err: any) {
     console.error('Error creating project:', err);
-    if (err.message?.includes('projects_code_unique')) {
-      return res.status(400).json({ error: 'Ya existe un proyecto con este código.' });
+    if (err?.code === '23505' && err?.constraint === 'projects_code_unique') {
+      return res.status(409).json({ error: 'Ya existe un proyecto con este código.' });
     }
     res.status(500).json({ error: 'Error al registrar el proyecto en la base de datos' });
   }
@@ -583,9 +565,15 @@ export const addBudgetItems = async (req: AuthRequest, res, next: NextFunction) 
     const approvedAmount = parseFloat(approved);
 
     const newItem = await withTenantContext(req.user!.tenantId, async (tx) => {
+      const [activeVersion] = await tx.select({ id: budgetVersions.id }).from(budgetVersions)
+        .where(and(eq(budgetVersions.projectId, projectId), eq(budgetVersions.status, 'APPROVED')))
+        .orderBy(desc(budgetVersions.versionNumber)).limit(1);
+      if (!activeVersion) {
+        throw Object.assign(new Error('El proyecto no tiene un plan presupuestario aprobado.'), { statusCode: 409 });
+      }
       return await tx.insert(budgetLines).values({
         projectId,
-        budgetVersionId: 1,
+        budgetVersionId: activeVersion.id,
         code,
         category,
         subcategory,
@@ -601,8 +589,9 @@ export const addBudgetItems = async (req: AuthRequest, res, next: NextFunction) 
     await logActivity(projectId, userName, `Creó la partida presupuestaria [${code}] - ${category} (${subcategory}) por $${approvedAmount.toLocaleString()}`);
 
     res.status(201).json(newItem[0]);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error adding budget item:', err);
+    if (err?.statusCode) return res.status(err.statusCode).json({ error: err.message });
     res.status(500).json({ error: 'Error al añadir partida presupuestaria' });
   }
 };

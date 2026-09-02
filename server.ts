@@ -48,6 +48,7 @@ import auditRouter from './src/routes/audit.routes.ts';
 import reportsRouter from './src/routes/reports.routes.ts';
 import storageRouter from './src/routes/storage.routes.ts';
 import fundingRouter from './src/routes/funding.routes.ts';
+import budgetPlanImportRouter from './src/routes/budgetPlanImport.routes.ts';
 import { errorHandler } from './src/middlewares/errorHandler.ts';
 import { getStorageAdapter } from './src/lib/storage.ts';
 import {
@@ -228,6 +229,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api', expensesRouter);
 app.use('/api/expenses', expensesRouter);
 app.use('/api', fundingRouter);
+app.use('/api', budgetPlanImportRouter);
 app.use('/api', legacyRouter);
 app.use('/api/audit-logs', auditRouter);
 app.get('/api/activity-logs', (req, res) => {
@@ -272,6 +274,7 @@ app.post('/api/admin/run-seed', async (req, res) => {
   }
 });
 
+
 app.use(errorHandler);
 
 bootLog('04_ROUTES_REGISTER_END');
@@ -282,7 +285,9 @@ bootLog('04_ROUTES_REGISTER_END');
 async function initializeViteAndListen() {
   bootLog('05_VITE_SETUP_START');
 
-  if (process.env.NODE_ENV === 'development') {
+  const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
+
+  if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -318,6 +323,10 @@ async function initializeViteAndListen() {
     });
     bootLog('05_STATIC_DIST_READY');
   }
+
+  // Desactivado: Las migraciones manuales (FIN-ABUELITAS-V2) fueron retiradas según el dictamen de auditoría.
+  // La integridad de la BD ahora recae exclusivamente en Drizzle-kit y su migración canónica 0000_new_devos.sql
+  bootLog('05A_FINANCIAL_PLAN_SCHEMA_SKIPPED', { reason: 'Delegated to Drizzle Phase 1' });
 
   bootLog('06_SERVER_LISTEN_START', { host: HOST, port: PORT });
 
@@ -382,13 +391,13 @@ async function executeBackgroundInitializations() {
     await seedDatabase();
   }, 5000);
 
-  // C. Triggers de inmutabilidad en PostgreSQL
+  // D. Triggers de inmutabilidad en PostgreSQL
   await runWithTimeout('09_APPLY_IMMUTABILITY_TRIGGERS', async () => {
     const { applyAuditLogsImmutability } = await import('./scripts/apply-audit-immutability.ts');
     await applyAuditLogsImmutability();
   }, 5000);
 
-  // D. Regularización atómica e idempotente del comprobante Ecotraffic #6
+  // E. Regularización atómica e idempotente del comprobante Ecotraffic #6
   await runWithTimeout('09B_REGULARIZE_ECOTRAFFIC_VOUCHER', async () => {
     const { regularizeEcotrafficVoucherTx } = await import('./src/db/migrations/ecotraffic-regularization.ts');
     await regularizeEcotrafficVoucherTx();

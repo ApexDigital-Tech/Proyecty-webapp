@@ -123,7 +123,7 @@ export const clauses = pgTable('clauses', {
 // --- BUDGETS ---
 export const budgetPlans = pgTable('budget_plans', {
   id: serial('id').primaryKey(),
-  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }),
+  tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   title: text('title').notNull(),
   period: text('period').notNull().default('Anual'),
@@ -162,6 +162,11 @@ export const budgetLines = pgTable('budget_lines', {
   code: text('code').notNull(),
   category: text('category').notNull(),
   subcategory: text('subcategory').notNull(),
+  description: text('description'),
+  unit: text('unit').notNull().default('Unidad'),
+  quantity: doublePrecision('quantity').notNull().default(1),
+  unitCost: doublePrecision('unit_cost').notNull().default(0),
+  currency: text('currency').notNull().default('USD'),
   approvedAmount: doublePrecision('approved_amount').notNull(),
   reformulatedAmount: doublePrecision('reformulated_amount').notNull().default(0),
   executedAmount: doublePrecision('executed_amount').notNull().default(0),

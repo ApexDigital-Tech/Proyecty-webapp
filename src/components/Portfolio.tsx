@@ -41,6 +41,7 @@ export default function Portfolio({
   const [name, setName] = React.useState('');
   const [donor, setDonor] = React.useState('');
   const [approvedBudget, setApprovedBudget] = React.useState('');
+  const [baseCurrency, setBaseCurrency] = React.useState<'BOB' | 'USD' | 'EUR'>('BOB');
   const [description, setDescription] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
 
@@ -117,6 +118,7 @@ export default function Portfolio({
           name,
           donor,
           approvedBudget: budgetVal,
+          baseCurrency,
           description,
           physicalProgress: 0,
           financialProgress: 0,
@@ -130,6 +132,7 @@ export default function Portfolio({
         setName('');
         setDonor('');
         setApprovedBudget('');
+        setBaseCurrency('BOB');
         setDescription('');
         if (onActivityLogged) onActivityLogged();
         // Reset to page 1 and fetch
@@ -293,7 +296,7 @@ export default function Portfolio({
                       Presupuesto Aprobado
                     </span>
                     <div className="text-xs font-mono font-bold text-slate-900 leading-none">
-                      ${Number(p.approvedBudget).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                      {p.baseCurrency === 'BOB' ? 'Bs ' : p.baseCurrency === 'EUR' ? '€ ' : '$'}{Number(p.approvedBudget).toLocaleString('es-ES', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
 
@@ -415,7 +418,7 @@ export default function Portfolio({
 
                 <div className="space-y-1">
                   <label className="block font-semibold text-slate-700">
-                    Presupuesto Asegurado ($ USD) (*)
+                    Presupuesto Asegurado (*)
                   </label>
                   <input
                     type="number"
@@ -424,6 +427,19 @@ export default function Portfolio({
                     onChange={(e) => setApprovedBudget(e.target.value)}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700">Moneda Base (*)</label>
+                  <select
+                    value={baseCurrency}
+                    onChange={(e) => setBaseCurrency(e.target.value as 'BOB' | 'USD' | 'EUR')}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="BOB">Bolivianos (Bs)</option>
+                    <option value="USD">Dólares estadounidenses (USD)</option>
+                    <option value="EUR">Euros (EUR)</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">

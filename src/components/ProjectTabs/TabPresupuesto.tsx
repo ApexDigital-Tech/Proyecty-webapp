@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, ChevronRight, CheckCircle2, Clock, XCircle, RotateCcw, FileText, Download, X, AlertCircle } from 'lucide-react';
+import { DollarSign, ChevronRight, CheckCircle2, Clock, XCircle, RotateCcw, FileText, Download, Upload, ShieldCheck, X, AlertCircle } from 'lucide-react';
 import ExpenseRegistrationModal from './ExpenseRegistrationModal.tsx';
 
 interface TabPresupuestoProps {
@@ -55,6 +55,10 @@ export default function TabPresupuesto({
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
   const [expenseActionError, setExpenseActionError] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const [planFile, setPlanFile] = useState<File | null>(null);
+  const [isImportingPlan, setIsImportingPlan] = useState(false);
+  const [planImportResult, setPlanImportResult] = useState<any | null>(null);
+  const [planImportError, setPlanImportError] = useState<string | null>(null);
 
   // Reversión diálogo
   const [reversingExpenseId, setReversingExpenseId] = useState<number | null>(null);
@@ -179,10 +183,69 @@ export default function TabPresupuesto({
   };
 
   const isDirector = userRole === 'DIRECTOR' || userRole === 'SUPERADMIN';
+  const canImportPlan = ['DIRECTOR', 'MANAGER', 'FINANCE'].includes(userRole || '');
+  const currency = project.baseCurrency || project.budgetLines?.[0]?.currency || 'USD';
+  const formatMoney = (value: number) => `${currency === 'BOB' ? 'Bs ' : currency === 'EUR' ? '€ ' : '$'}${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const handleDownloadTemplate = async () => {
+    setPlanImportError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/budget-plan/template/abuelitas`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('No se pudo descargar la plantilla.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `plan_abuelitas_${project.code}_2026.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      setPlanImportError(error.message);
+    }
+  };
+
+  const handleImportPlan = async () => {
+    if (!planFile) return setPlanImportError('Seleccione el archivo CSV del plan de gastos.');
+    setIsImportingPlan(true);
+    setPlanImportError(null);
+    setPlanImportResult(null);
+    try {
+      const body = new FormData();
+      body.append('file', planFile);
+      const response = await fetch(`/api/projects/${project.id}/budget-plan/import`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || result.errors?.map((item: any) => item.message).join('; ') || 'La importación fue rechazada.');
+      setPlanImportResult(result);
+      setPlanFile(null);
+      onRefresh();
+    } catch (error: any) {
+      setPlanImportError(error.message);
+    } finally {
+      setIsImportingPlan(false);
+    }
+  };
+
+  const handleApproveImportedPlan = async (versionId: number) => {
+    if (!window.confirm('El plan contiene advertencias del clasificador. ¿Confirma que fueron revisadas y desea aprobar esta versión?')) return;
+    setPlanImportError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/budget-plan/versions/${versionId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ acknowledgeClassifierWarnings: true }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No se pudo aprobar el plan.');
+      setPlanImportResult(result);
+      onRefresh();
+    } catch (error: any) {
+      setPlanImportError(error.message);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h4 className="text-xs font-bold text-[#00313b] uppercase tracking-wider">Control de Partidas Presupuestarias</h4>
           <p className="text-[11px] text-slate-400 font-sans">Haga clic en cualquier partida para auditar el detalle de gastos y comprobantes asociados</p>
@@ -201,6 +264,67 @@ export default function TabPresupuesto({
         )}
       </div>
 
+      {canImportPlan && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-blue-950">Importar Plan de Gastos Institucional</h4>
+              <p className="text-[10px] text-blue-700">Carga validada en borrador. Finanzas importa; el Director revisa y aprueba.</p>
+            </div>
+            <button onClick={handleDownloadTemplate} className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-white border border-blue-300 text-blue-800 rounded-lg text-xs font-bold">
+              <Download className="w-4 h-4" /> Plantilla Las Abuelitas 2026
+            </button>
+          </div>
+          <div className="flex flex-col md:flex-row gap-2">
+            <input type="file" accept=".csv,text/csv" onChange={(event) => setPlanFile(event.target.files?.[0] || null)} className="flex-1 bg-white border border-blue-200 rounded-lg p-2 text-xs" />
+            <button disabled={!planFile || isImportingPlan} onClick={handleImportPlan} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-xs font-bold">
+              <Upload className="w-4 h-4" /> {isImportingPlan ? 'Validando...' : 'Importar para aprobación'}
+            </button>
+          </div>
+          {planImportError && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{planImportError}</div>}
+          {planImportResult && (
+            <div className={`text-xs bg-white border rounded-lg p-3 space-y-1 ${planImportResult.status === 'PARTIAL_SUCCESS' ? 'border-amber-400 text-amber-950' : 'border-blue-200 text-blue-950'}`}>
+              <div className="font-bold flex items-center gap-1">
+                {planImportResult.status === 'PARTIAL_SUCCESS' && <AlertCircle className="w-4 h-4 text-amber-600" />}
+                Resultado: {planImportResult.status}
+              </div>
+              {planImportResult.totalRows !== undefined && <div>{planImportResult.validRows}/{planImportResult.totalRows} partidas válidas importadas · {planImportResult.currency || currency} {Number(planImportResult.totalAmount || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</div>}
+              
+              {planImportResult.errors && planImportResult.errors.length > 0 && (
+                <div className="mt-2 p-2 bg-red-50 rounded border border-red-100 max-h-32 overflow-y-auto">
+                  <span className="font-bold text-red-700 block mb-1">Filas descartadas:</span>
+                  {planImportResult.errors.map((error: any, index: number) => (
+                    <div key={index} className="text-red-600 text-[10px]">
+                      Fila {error.rowNumber}: {error.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {planImportResult.warnings?.length > 0 && (
+                <div className="mt-2 space-y-0.5">
+                  {planImportResult.warnings.map((warning: any, index: number) => (
+                    <div key={index} className="text-amber-700 text-[10px]">Advertencia fila {warning.rowNumber}: {warning.message}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {project.budgetVersions?.some((version: any) => version.status === 'DRAFT') && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <h4 className="text-xs font-bold text-amber-900">Planes pendientes de aprobación</h4>
+          {project.budgetVersions.filter((version: any) => version.status === 'DRAFT').map((version: any) => (
+            <div key={version.id} className="flex items-center justify-between bg-white border border-amber-200 rounded-lg p-3 text-xs">
+              <span><strong>{version.versionName}</strong> · Borrador</span>
+              {isDirector && <button onClick={() => handleApproveImportedPlan(version.id)} className="inline-flex items-center gap-1 bg-emerald-700 text-white px-3 py-1.5 rounded-md font-bold"><ShieldCheck className="w-3.5 h-3.5" /> Revisar y aprobar</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Table de Partidas con selección de detalle */}
       <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse text-xs">
@@ -208,6 +332,8 @@ export default function TabPresupuesto({
             <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase font-mono text-[9px] tracking-wider">
               <th className="p-3.5">Código</th>
               <th className="p-3.5">Categoría / Subcategoría</th>
+              <th className="p-3.5 text-right">Cant.</th>
+              <th className="p-3.5 text-right">P.U.</th>
               <th className="p-3.5 text-right">Aprobado Original</th>
               <th className="p-3.5 text-right">Reformulado</th>
               <th className="p-3.5 text-right">Ejecutado</th>
@@ -219,7 +345,7 @@ export default function TabPresupuesto({
           <tbody className="divide-y divide-slate-100">
             {project.budgetLines?.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-slate-400">Sin partidas cargadas.</td>
+                <td colSpan={10} className="p-6 text-center text-slate-400">Sin partidas cargadas.</td>
               </tr>
             ) : (
               project.budgetLines?.map((item: any) => (
@@ -234,11 +360,14 @@ export default function TabPresupuesto({
                   <td className="p-3.5">
                     <div className="font-bold text-[#00313b] text-xs">{item.category}</div>
                     <div className="text-[10px] text-slate-400">{item.subcategory}</div>
+                    {item.description && <div className="text-[9px] text-slate-500 mt-1">{item.description}</div>}
                   </td>
-                  <td className="p-3.5 text-right font-mono text-slate-500">${item.approvedAmount?.toLocaleString()}</td>
-                  <td className="p-3.5 text-right font-mono text-emerald-700 font-bold">${item.reformulatedAmount?.toLocaleString()}</td>
-                  <td className="p-3.5 text-right font-mono text-blue-600 font-bold">${item.executedAmount?.toLocaleString()}</td>
-                  <td className="p-3.5 text-right font-mono font-bold text-slate-700">${item.balance?.toLocaleString()}</td>
+                  <td className="p-3.5 text-right font-mono text-slate-600">{Number(item.quantity || 1).toLocaleString('es-BO')} {item.unit || 'Unidad'}</td>
+                  <td className="p-3.5 text-right font-mono text-slate-600">{formatMoney(item.unitCost || item.approvedAmount)}</td>
+                  <td className="p-3.5 text-right font-mono text-slate-500">{formatMoney(item.approvedAmount)}</td>
+                  <td className="p-3.5 text-right font-mono text-emerald-700 font-bold">{formatMoney(item.reformulatedAmount)}</td>
+                  <td className="p-3.5 text-right font-mono text-blue-600 font-bold">{formatMoney(item.executedAmount)}</td>
+                  <td className="p-3.5 text-right font-mono font-bold text-slate-700">{formatMoney(item.balance)}</td>
                   <td className="p-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleOpenBudgetLineDetail(item)}
@@ -324,25 +453,25 @@ export default function TabPresupuesto({
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
               <span className="text-[10px] font-mono uppercase text-slate-400 block">Presupuesto</span>
               <span className="text-sm font-bold font-mono text-[#00313b]">
-                ${(selectedBudgetLine.reformulatedAmount || selectedBudgetLine.approvedAmount)?.toLocaleString()}
+                {formatMoney(selectedBudgetLine.reformulatedAmount || selectedBudgetLine.approvedAmount)}
               </span>
             </div>
             <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <span className="text-[10px] font-mono uppercase text-emerald-600 block">Total Aprobado</span>
               <span className="text-sm font-bold font-mono text-emerald-700">
-                ${(selectedBudgetLine.executedAmount || lineTotals?.totalApprovedExpenses || 0)?.toLocaleString()}
+                {formatMoney(selectedBudgetLine.executedAmount || lineTotals?.totalApprovedExpenses || 0)}
               </span>
             </div>
             <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
               <span className="text-[10px] font-mono uppercase text-amber-600 block">Total Pendiente</span>
               <span className="text-sm font-bold font-mono text-amber-700">
-                ${(lineTotals?.totalPendingExpenses || 0)?.toLocaleString()}
+                {formatMoney(lineTotals?.totalPendingExpenses || 0)}
               </span>
             </div>
             <div className="bg-cyan-50 p-3 rounded-lg border border-cyan-100">
               <span className="text-[10px] font-mono uppercase text-cyan-700 block">Saldo Disponible</span>
               <span className="text-sm font-bold font-mono text-[#008fa0]">
-                ${(selectedBudgetLine.balance || lineTotals?.availableBalance || 0)?.toLocaleString()}
+                {formatMoney(selectedBudgetLine.balance || lineTotals?.availableBalance || 0)}
               </span>
             </div>
           </div>
@@ -456,7 +585,7 @@ export default function TabPresupuesto({
 
                     <div className="text-right space-y-1 flex-shrink-0">
                       <div className="font-mono font-bold text-sm text-[#00313b]">
-                        ${Number(exp.baseAmount ?? exp.amount)?.toLocaleString()} {exp.currency || 'USD'}
+                        {formatMoney(Number(exp.baseAmount ?? exp.amount))} {exp.currency || currency}
                       </div>
                       
                       {/* Acciones de Ciclo de Vida para Director */}
@@ -529,7 +658,7 @@ export default function TabPresupuesto({
             />
             <input
               type="number"
-              placeholder="Monto Aprobado ($)"
+              placeholder={`Monto Aprobado (${currency})`}
               value={budgetApproved}
               onChange={(e) => setBudgetApproved(e.target.value)}
               className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs outline-none"

@@ -1,4 +1,4 @@
-﻿# MEMORIA DE PROYECTO â€” PROYECTY / FINANCIERO (FIN-CORE-03)
+# MEMORIA DE PROYECTO â€” PROYECTY / FINANCIERO (FIN-CORE-03)
 
 ## A. DecisiÃ³n de Producto
 
@@ -70,6 +70,23 @@ pm run build) y arrancar el servidor en la base aislada proyecty_abuelitas_test.
 5. Ejecutar la prueba automatizada completa (proyecto, importación CSV, revisión de partidas, registro y aprobación de gastos).
 6. Verificar persistencia de base de datos tras reinicio y presentar evidencias (SQL de 11 partidas = Bs 333,400, git status, hash commit).
 
-## DICTAMEN DE AUDITORÃA: FIN-ABUELITAS-V2
-FIN-ABUELITAS-V2 rechazado. El servidor no iniciÃ³ debido a una inconsistencia estructural en la migraciÃ³n financiera. La prueba E2E no pudo ejecutarse. No se modificÃ³ producciÃ³n. Se recomienda congelar el backend actual y reconstruir el nÃºcleo relacional y financiero sobre un esquema PostgreSQL canÃ³nico, migraciones versionadas y pruebas reproducibles.
+## DICTAMEN DE AUDITORÍA: FIN-ABUELITAS-V2
+FIN-ABUELITAS-V2 rechazado. El servidor no inició debido a una inconsistencia estructural en la migración financiera. La prueba E2E no pudo ejecutarse. No se modificó producción. Se recomienda congelar el backend actual y reconstruir el núcleo relacional y financiero sobre un esquema PostgreSQL canónico, migraciones versionadas y pruebas reproducibles.
 
+---
+
+## E. Fase 2: Estabilización PMV y Despliegue Render (CERTIFICADO)
+
+1. **Persistencia de Navegación (Fix: Regreso involuntario a Inicio):**
+   - En `src/App.tsx`, se desacopló la renovación pasiva de tokens (`TOKEN_REFRESHED` de Supabase) del reseteo de navegación.
+   - `handleLoginSuccess` ahora recibe `resetNavigation: boolean = false`. Solo los inicios de sesión explícitos desde la UI resetean a `dashboard`.
+   - Se implementó persistencia en `sessionStorage` para `currentTab` y `selectedProjectId`. El usuario puede trabajar sin ser expulsado de sus pestañas/proyectos.
+
+2. **Acceso Local y Vite Dev Server:**
+   - En `server.ts`, se ajustó la condición de desarrollo (`process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'`) para que `npm run dev` active automáticamente el middleware Vite en vivo, resolviendo variables reales de `.env` y eliminando el fallo por host simulado de test (`127.0.0.1:54321`).
+   - Se recompiló `dist/` con credenciales de producción para Render.
+
+3. **Arquitectura de Despliegue (Render Web Service):**
+   - El despliegue de producción se gestiona a través de Render (`render.yaml`).
+   - Comando de compilación: `npm install --legacy-peer-deps && npm run build`.
+   - Comando de arranque: `npm start` (`node dist/server.js`).

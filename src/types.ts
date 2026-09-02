@@ -37,6 +37,7 @@ export interface Project {
   status: 'EJECUCIÓN' | 'ACTIVO' | 'PLANIFICACIÓN';
   riskLevel: 'Bajo' | 'Medio' | 'Alto';
   approvedBudget: number;
+  baseCurrency?: 'BOB' | 'USD' | 'EUR';
   physicalProgress: number;
   financialProgress: number;
   nextMilestoneDate?: string;

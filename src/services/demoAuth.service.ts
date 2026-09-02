@@ -45,7 +45,7 @@ export function generateDemoToken(user: {
   role: string;
   roleName: string;
   tenantId: number;
-}, expiresInMinutes: number = 15): string {
+}, expiresInMinutes: number = 120): string {
   const header = {
     alg: 'HS256',
     typ: 'JWT',

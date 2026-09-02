@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { logger } from './logger.ts';
+
+const require = createRequire(import.meta.url);
 
 export interface StorageUploadResult {
   url: string;

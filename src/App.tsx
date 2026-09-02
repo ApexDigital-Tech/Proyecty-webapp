@@ -121,9 +121,28 @@ export default function App() {
     };
   }, []);
 
-  // Navigation states
-  const [currentTab, setTab] = React.useState<string>('dashboard');
-  const [selectedProjectId, setSelectedProjectId] = React.useState<number | null>(null);
+  // Navigation states with session persistence
+  const [currentTab, setCurrentTabState] = React.useState<string>(() => {
+    return sessionStorage.getItem('proyecty_current_tab') || 'dashboard';
+  });
+  const [selectedProjectId, setSelectedProjectIdState] = React.useState<number | null>(() => {
+    const saved = sessionStorage.getItem('proyecty_selected_project_id');
+    return saved ? Number(saved) : null;
+  });
+
+  const setTab = React.useCallback((tab: string) => {
+    setCurrentTabState(tab);
+    sessionStorage.setItem('proyecty_current_tab', tab);
+  }, []);
+
+  const setSelectedProjectId = React.useCallback((id: number | null) => {
+    setSelectedProjectIdState(id);
+    if (id !== null) {
+      sessionStorage.setItem('proyecty_selected_project_id', String(id));
+    } else {
+      sessionStorage.removeItem('proyecty_selected_project_id');
+    }
+  }, []);
 
   // Dynamic database lists
   const [auditLogs, setAuditLogs] = React.useState<ActivityLog[]>([]);
@@ -154,7 +173,11 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = async (userToken: string, userInfo?: { name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string }) => {
+  const handleLoginSuccess = async (
+    userToken: string, 
+    userInfo?: { name: string; email: string; role: UserRole; tenantId?: string | number; uid?: string },
+    resetNavigation: boolean = false
+  ) => {
     localStorage.removeItem('user_role');
     localStorage.removeItem('auth_user');
     localStorage.setItem('proyecty_token', userToken);
@@ -180,15 +203,19 @@ export default function App() {
         setToken(userToken);
         setCurrentUser(authoritativeUser);
         setSessionNotice(null);
-        setTab('dashboard');
-        setSelectedProjectId(null);
+        if (resetNavigation) {
+          setTab('dashboard');
+          setSelectedProjectId(null);
+        }
       } else if (userInfo) {
         localStorage.setItem('proyecty_user', JSON.stringify(userInfo));
         setToken(userToken);
         setCurrentUser(userInfo);
         setSessionNotice(null);
-        setTab('dashboard');
-        setSelectedProjectId(null);
+        if (resetNavigation) {
+          setTab('dashboard');
+          setSelectedProjectId(null);
+        }
       } else {
         handleLogout(false);
       }
@@ -198,8 +225,10 @@ export default function App() {
         setToken(userToken);
         setCurrentUser(userInfo);
         setSessionNotice(null);
-        setTab('dashboard');
-        setSelectedProjectId(null);
+        if (resetNavigation) {
+          setTab('dashboard');
+          setSelectedProjectId(null);
+        }
       } else {
         handleLogout(false);
       }
@@ -207,6 +236,8 @@ export default function App() {
   };
 
   const handleLogout = (shouldSignOutSupabase: boolean = true) => {
+    sessionStorage.removeItem('proyecty_current_tab');
+    sessionStorage.removeItem('proyecty_selected_project_id');
     clearClientSession();
     setToken(null);
     setCurrentUser(null);
@@ -218,6 +249,7 @@ export default function App() {
         .catch(() => {});
     }
   };
+
 
   const handleRoleSwitch = (newRole: UserRole) => {
     if (!currentUser || !token) return;
@@ -255,7 +287,7 @@ export default function App() {
   };
 
   if (!token || !currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} sessionNotice={sessionNotice} />;
+    return <Login onLoginSuccess={(tok, usr) => handleLoginSuccess(tok, usr, true)} sessionNotice={sessionNotice} />;
   }
 
   // Find the selected project name for the Topbar breadcrumb
