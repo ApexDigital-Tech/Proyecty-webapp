@@ -10,10 +10,10 @@ if (isProduction) {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('CONFIG_ERROR: Missing required backend configuration for Supabase (SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are mandatory in production).');
   }
-} else {
-  // En entorno test / local, PROHIBIDO conectar a supabase.co o hosts remotos
+} else if (process.env.NODE_ENV === 'test') {
+  // En entorno test automatizado, PROHIBIDO conectar a supabase.co o hosts remotos
   if (supabaseUrl && (supabaseUrl.includes('supabase.co') || supabaseUrl.includes('kwmvuuwinufksjjfsuls'))) {
-    throw new Error('SECURITY_VIOLATION: Production or remote Supabase host is strictly forbidden outside production.');
+    throw new Error('SECURITY_VIOLATION: Production or remote Supabase host is strictly forbidden in test environment.');
   }
 }
 

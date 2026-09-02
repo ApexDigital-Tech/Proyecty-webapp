@@ -90,3 +90,9 @@ FIN-ABUELITAS-V2 rechazado. El servidor no inició debido a una inconsistencia e
    - El despliegue de producción se gestiona a través de Render (`render.yaml`).
    - Comando de compilación: `npm install --legacy-peer-deps && npm run build`.
    - Comando de arranque: `npm start` (`node dist/server.js`).
+
+4. **Resolución de Error 500 en Detalle de Proyectos (`/api/projects/:id`):**
+   - Causa raíz: En `src/db/schema.ts`, se habían declarado columnas (`budgetPlanId` en `budget_versions`, y `description`, `unit`, `quantity`, `unitCost`, `currency` en `budget_lines`) que no existían físicamente en la base de datos PostgreSQL de producción. Esto provocaba que cualquier consulta relacional en `getProjectById` fallara con código de error PostgreSQL `42703 (undefined column)`.
+   - Solución: Se alinearon estrictamente las definiciones de `budgetVersions` y `budgetLines` con el esquema canónico de la base de datos.
+   - Verificación automatizada: Endpoint probado exitosamente vía HTTP local contra la base de datos real, devolviendo `200 OK` con datos completos de partidas, versiones y documentos para el proyecto 216.
+

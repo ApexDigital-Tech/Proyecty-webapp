@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 if (process.env.VITE_SUPABASE_URL && !process.env.SUPABASE_URL) {
   process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL;
