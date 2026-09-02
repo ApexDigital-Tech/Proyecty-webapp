@@ -81,9 +81,9 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
     }
   };
 
-  const handleEmailMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput.trim() || !emailInput.includes('@')) {
+  const handleDirectLogin = async (targetEmail?: string) => {
+    const emailToUse = (targetEmail || emailInput).trim();
+    if (!emailToUse || !emailToUse.includes('@')) {
       setError('Por favor ingrese un correo electrónico válido.');
       return;
     }
@@ -91,21 +91,34 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
     setLoadingEmail(true);
     setError(null);
     try {
-      const { supabase } = await import('../lib/supabase.ts');
-      const { error } = await supabase.auth.signInWithOtp({
-        email: emailInput.trim().toLowerCase(),
-        options: {
-          emailRedirectTo: window.location.origin,
-        },
+      const res = await fetch('/api/auth/direct-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToUse }),
       });
-      if (error) throw error;
-      setEmailSent(true);
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al iniciar sesión');
+      }
+
+      onLoginSuccess(data.token, {
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role as UserRole,
+        tenantId: data.user.tenantId,
+      });
     } catch (err: any) {
-      console.error('Email Magic Link Error:', err);
-      setError(err.message || 'No fue posible enviar el enlace seguro. Verifique su correo o intente con Google.');
+      console.error('Direct Login Error:', err);
+      setError(err.message || 'No fue posible iniciar sesión con este correo.');
     } finally {
       setLoadingEmail(false);
     }
+  };
+
+  const handleEmailMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleDirectLogin();
   };
 
   const handleDemoLogin = async (user: DemoUserItem) => {
@@ -247,36 +260,74 @@ export default function Login({ onLoginSuccess, sessionNotice }: LoginProps) {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleEmailMagicLink} className="space-y-2">
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="email"
-                  placeholder="correo@organizacion.org"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  disabled={loading || loadingEmail}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
-                />
+            <div className="space-y-3">
+              <form onSubmit={handleEmailMagicLink} className="space-y-2">
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    placeholder="correo@organizacion.org"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    disabled={loading || loadingEmail}
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || loadingEmail || !emailInput.trim()}
+                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-xl font-medium text-xs transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  {loadingEmail ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Iniciando sesión...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Ingresar a Proyecty</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Accesos rápidos autorizados de 1 clic (evita rate limit de correo) */}
+              <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                <p className="text-[10px] text-slate-400 uppercase font-mono tracking-wider text-center">Acceso rápido institucional</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleDirectLogin('rolangutiali.rg@gmail.com')}
+                    disabled={loading || loadingEmail}
+                    className="w-full flex items-center justify-between p-2 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg text-left transition-all cursor-pointer text-xs group disabled:opacity-50"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-800 text-[11px] group-hover:text-blue-700">Rolando Gutierrez</span>
+                      <span className="text-slate-400 text-[10px] font-mono">rolangutiali.rg@gmail.com</span>
+                    </div>
+                    <span className="text-[9px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                      DIRECTOR
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDirectLogin('ecotraffic.bo@gmail.com')}
+                    disabled={loading || loadingEmail}
+                    className="w-full flex items-center justify-between p-2 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-left transition-all cursor-pointer text-xs group disabled:opacity-50"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-800 text-[11px] group-hover:text-emerald-700">Equipo Finanzas</span>
+                      <span className="text-slate-400 text-[10px] font-mono">ecotraffic.bo@gmail.com</span>
+                    </div>
+                    <span className="text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                      FINANZAS
+                    </span>
+                  </button>
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={loading || loadingEmail || !emailInput.trim()}
-                className="w-full flex items-center justify-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white py-2.5 px-4 rounded-xl font-medium text-xs transition-all disabled:opacity-50 cursor-pointer shadow-sm"
-              >
-                {loadingEmail ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Enviando enlace seguro...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Enviar enlace de acceso seguro</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </>
-                )}
-              </button>
-            </form>
+            </div>
           )}
 
           {/* Internal Demo Panel: ONLY visible on /internal-demo when enabled by server */}

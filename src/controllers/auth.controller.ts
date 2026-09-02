@@ -6,6 +6,9 @@ import {
   resetDemoTenantData,
 } from '../services/demoTenant.service.ts';
 import { generateDemoToken } from '../services/demoAuth.service.ts';
+import { db } from '../db/index.ts';
+import { users, roles } from '../db/schema.ts';
+import { eq } from 'drizzle-orm';
 
 export const getMe = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -107,5 +110,70 @@ export const handleResetDemo = async (req: Request, res: Response, next: NextFun
   } catch (err) {
     console.error('Error al reiniciar tenant demo:', err);
     next(err);
+  }
+};
+
+/**
+ * Acceso directo para usuarios institucionales sin requerir verificación por correo / OTP.
+ * Resuelve el bloqueo por rate limit (429) de proveedores externos de correo.
+ */
+export const directLogin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'El correo electrónico es requerido' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 1. Buscar el usuario en la BD de users junto con su rol
+    const userResult = await db.select({
+      user: users,
+      roleName: roles.name
+    }).from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+
+    if (userResult.length === 0) {
+      return res.status(404).json({ error: `Usuario con correo ${normalizedEmail} no registrado en el sistema` });
+    }
+
+    const dbUser = userResult[0].user;
+    let mappedRole = (userResult[0].roleName || 'Viewer').toUpperCase();
+    if (mappedRole.includes('DIRECTOR') || mappedRole.includes('SUPERADMIN') || mappedRole.includes('ADMIN')) {
+      mappedRole = 'DIRECTOR';
+    } else if (mappedRole.includes('FINAN')) {
+      mappedRole = 'FINANCE';
+    } else if (mappedRole.includes('MANAGER')) {
+      mappedRole = 'MANAGER';
+    }
+
+    const token = generateDemoToken({
+      uid: dbUser.uid,
+      userId: dbUser.id,
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: mappedRole,
+      roleName: userResult[0].roleName || mappedRole,
+      tenantId: dbUser.tenantId
+    }, 60 * 24 * 7); // 7 días de sesión activa
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: dbUser.id,
+        uid: dbUser.uid,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: mappedRole,
+        tenantId: dbUser.tenantId
+      }
+    });
+  } catch (err: any) {
+    console.error('Direct login error:', err);
+    res.status(500).json({ error: 'Error al iniciar sesión directa' });
   }
 };
