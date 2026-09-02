@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+if (process.env.VITE_SUPABASE_URL && !process.env.SUPABASE_URL) {
+  process.env.SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+}
+
 // En NODE_ENV=test: aislar completamente de credenciales remotas
 if (process.env.NODE_ENV === 'test') {
   if (process.env.VITE_SUPABASE_URL?.includes('supabase.co')) {

@@ -2,13 +2,13 @@ import ws from 'ws';
 import { createClient } from '@supabase/supabase-js';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 if (isProduction) {
   // En producción, credenciales son estrictamente obligatorias
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('CONFIG_ERROR: Missing required backend configuration for Supabase (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are mandatory in production).');
+    throw new Error('CONFIG_ERROR: Missing required backend configuration for Supabase (SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are mandatory in production).');
   }
 } else {
   // En entorno test / local, PROHIBIDO conectar a supabase.co o hosts remotos
