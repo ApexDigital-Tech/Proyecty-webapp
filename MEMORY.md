@@ -105,4 +105,21 @@ FIN-ABUELITAS-V2 rechazado. El servidor no inició debido a una inconsistencia e
    - Solución: Se eliminó la columna `code` de la definición Drizzle de `donors`.
    - Verificación automatizada: Suite QA integral (11/11 pruebas aprobadas al 100%) validando creación de proyecto, consulta relacional, partidas presupuestarias, registro de gastos, aprobación con segregación FIN-01 y descargas de reportes CSV/PDF.
 
+7. **Habilitación de Drag & Drop en Tablero Kanban (`PATCH /api/tasks/:id`):**
+   - Causa raíz: El frontend enviaba peticiones `PATCH` al mover tareas entre columnas (*Por Hacer*, *En Progreso*, *En Revisión*, *Completado*), pero `src/routes/tasks.routes.ts` solo tenía registrado `PUT`, respondiendo con HTTP 404.
+   - Solución: Se agregó `router.patch('/:id', requireAuth, updateTask)`.
+   - Verificación automatizada: Prueba E2E en `scripts/test-kanban-tasks.ts` confirmando creación en TODO, movimiento a IN_PROGRESS (avance 33%) y movimiento a DONE (avance 66%) con actualización de `completedAt`.
+
+---
+
+## F. Tareas Pendientes para Próxima Sesión / Revisión de Auditor Senior
+
+1. **Importación Masiva de Partidas Presupuestarias (CSV / Excel):**
+   - Verificar y validar el asistente de importación de presupuestos para proyectos nuevos y reformulados.
+2. **Revisión Integral de Seguridad & RLS por Nuevo Auditor Senior:**
+   - Entregar el código limpio, esquemas alineados y suite de pruebas al nuevo auditor.
+3. **Módulo de Comprobantes & Expediente Digital:**
+   - Validar la carga de documentos de respaldo con hash SHA-256 en almacenamiento Supabase Storage.
+
+
 
