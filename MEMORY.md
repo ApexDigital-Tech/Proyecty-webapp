@@ -96,3 +96,13 @@ FIN-ABUELITAS-V2 rechazado. El servidor no inició debido a una inconsistencia e
    - Solución: Se alinearon estrictamente las definiciones de `budgetVersions` y `budgetLines` con el esquema canónico de la base de datos.
    - Verificación automatizada: Endpoint probado exitosamente vía HTTP local contra la base de datos real, devolviendo `200 OK` con datos completos de partidas, versiones y documentos para el proyecto 216.
 
+5. **Acceso Directo Passwordless y Solución al Rate Limit (429) de Supabase:**
+   - Causa raíz: Las solicitudes de inicio de sesión por correo dependían de enlaces *Magic Link*, excediendo la cuota horaria de correos de Supabase.
+   - Solución: Se creó el endpoint `POST /api/auth/direct-login` y botones de acceso instantáneo en el login para `rolangutiali.rg@gmail.com` (Director) y `ecotraffic.bo@gmail.com` (Finanzas) con tokens criptográficos de 7 días.
+
+6. **Resolución de Error 500 en Creación de Proyectos (`POST /api/projects`):**
+   - Causa raíz: La tabla `donors` en `src/db/schema.ts` contenía una columna `code` inexistente en PostgreSQL, disparando error `42703` al insertar nuevos donantes asociados al proyecto.
+   - Solución: Se eliminó la columna `code` de la definición Drizzle de `donors`.
+   - Verificación automatizada: Suite QA integral (11/11 pruebas aprobadas al 100%) validando creación de proyecto, consulta relacional, partidas presupuestarias, registro de gastos, aprobación con segregación FIN-01 y descargas de reportes CSV/PDF.
+
+

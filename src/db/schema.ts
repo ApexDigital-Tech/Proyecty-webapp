@@ -50,7 +50,6 @@ export const donors = pgTable('donors', {
   id: serial('id').primaryKey(),
   tenantId: integer('tenant_id').references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   name: text('name').notNull(),
-  code: text('code'),
   type: text('type'), // 'Internacional', 'Gubernamental', 'Privado'
   contactEmail: text('contact_email'),
   createdAt: timestamp('created_at').defaultNow(),
